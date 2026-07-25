@@ -27,6 +27,7 @@ import {
   Copy,
   Link,
   Loader2,
+  LockKeyhole,
 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -187,6 +188,29 @@ export function DataTableRowActions<TData>({
     statusIcon = <Loader2 className='size-4 animate-spin' />
   } else if (isEnabled) {
     statusIcon = <PowerOff className='size-4' />
+  }
+
+  if (apiKey.pcc_agent) {
+    const readOnlyLabel = t(
+      'Managed by PccAgent authorization and cannot be modified here.'
+    )
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              role='img'
+              tabIndex={0}
+              aria-label={readOnlyLabel}
+              className='text-muted-foreground inline-flex size-8 items-center justify-center'
+            />
+          }
+        >
+          <LockKeyhole className='size-4' aria-hidden='true' />
+        </TooltipTrigger>
+        <TooltipContent>{readOnlyLabel}</TooltipContent>
+      </Tooltip>
+    )
   }
 
   return (

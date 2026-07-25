@@ -55,22 +55,37 @@ export function useAuthRedirect() {
   /**
    * Redirect to 2FA page
    */
-  const redirectTo2FA = () => {
-    navigate({ to: '/otp', replace: true })
+  const redirectTo2FA = (redirectTo?: string) => {
+    const target = sanitizeAuthRedirect(redirectTo, window.location.origin)
+    navigate({
+      to: '/otp',
+      search: target ? { redirect: target } : {},
+      replace: true,
+    })
   }
 
   /**
    * Redirect to login page
    */
-  const redirectToLogin = () => {
-    navigate({ to: '/sign-in', replace: true })
+  const redirectToLogin = (redirectTo?: string) => {
+    const target = sanitizeAuthRedirect(redirectTo, window.location.origin)
+    navigate({
+      to: '/sign-in',
+      search: target ? { redirect: target } : {},
+      replace: true,
+    })
   }
 
   /**
    * Redirect to register page
    */
-  const redirectToRegister = () => {
-    navigate({ to: '/sign-up', replace: true })
+  const redirectToRegister = (redirectTo?: string) => {
+    const target = sanitizeAuthRedirect(redirectTo, window.location.origin)
+    navigate({
+      to: '/sign-up',
+      search: target ? { redirect: target } : {},
+      replace: true,
+    })
   }
 
   return {

@@ -145,8 +145,15 @@ function ApiKeysMobileList({
                 <div className='truncate text-sm font-semibold'>
                   {apiKey.name}
                 </div>
-                <div className='text-muted-foreground text-[11px]'>
-                  {t('API Key')}
+                <div className='text-muted-foreground flex items-center gap-1.5 text-[11px]'>
+                  <span>{t('API Key')}</span>
+                  {apiKey.pcc_agent && (
+                    <StatusBadge
+                      label={t('PccAgent dedicated')}
+                      variant='info'
+                      copyable={false}
+                    />
+                  )}
                 </div>
               </div>
               {statusConfig && (
@@ -279,7 +286,7 @@ export function ApiKeysTable() {
   const { table } = useDataTable({
     data: apiKeys,
     columns,
-    enableRowSelection: true,
+    enableRowSelection: (row) => !row.original.pcc_agent,
     columnFilters,
     columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
     globalFilter,

@@ -132,6 +132,8 @@ const createGroupSchema = (t: Translate) =>
     }),
     DefaultUseAutoGroup: z.boolean(),
     GroupSpecialUsableGroup: createJsonStringField(t),
+    DesktopClaudeGroup: z.string().min(1),
+    DesktopCodexGroup: z.string().min(1),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -208,6 +210,8 @@ export function RatioSettingsCard({
     GroupSpecialUsableGroup: normalizeJsonString(
       groupDefaults.GroupSpecialUsableGroup
     ),
+    DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
+    DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
   })
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
@@ -245,6 +249,8 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: formatJsonForTextarea(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
+      DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
     },
   })
 
@@ -294,6 +300,8 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: normalizeJsonString(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
+      DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
     }
 
     groupForm.reset({
@@ -306,6 +314,8 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: formatJsonForTextarea(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
+      DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
     })
   }, [groupDefaults, groupForm])
 
@@ -364,12 +374,16 @@ export function RatioSettingsCard({
         GroupSpecialUsableGroup: normalizeJsonString(
           values.GroupSpecialUsableGroup
         ),
+        DesktopClaudeGroup: values.DesktopClaudeGroup,
+        DesktopCodexGroup: values.DesktopCodexGroup,
       }
 
       // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
       const apiKeyMap: Record<string, string> = {
         GroupSpecialUsableGroup:
           'group_ratio_setting.group_special_usable_group',
+        DesktopClaudeGroup: 'desktop_agent_setting.claude_group',
+        DesktopCodexGroup: 'desktop_agent_setting.codex_group',
       }
 
       const updates = (
@@ -382,6 +396,7 @@ export function RatioSettingsCard({
         const apiKey = apiKeyMap[key] || key
         await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
       }
+      groupNormalizedDefaults.current = normalized
     },
     [updateOption]
   )

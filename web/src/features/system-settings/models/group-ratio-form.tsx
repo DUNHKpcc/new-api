@@ -43,6 +43,14 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -70,6 +78,8 @@ type GroupFormValues = {
   AutoGroups: string
   DefaultUseAutoGroup: boolean
   GroupSpecialUsableGroup: string
+  DesktopClaudeGroup: string
+  DesktopCodexGroup: string
 }
 
 type GroupRatioFormProps = {
@@ -104,6 +114,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   const watchedGroupRatio = form.watch('GroupRatio')
   const watchedUserUsableGroups = form.watch('UserUsableGroups')
   const watchedTopupGroupRatio = form.watch('TopupGroupRatio')
+  const watchedDesktopClaudeGroup = form.watch('DesktopClaudeGroup')
+  const watchedDesktopCodexGroup = form.watch('DesktopCodexGroup')
   const groupNames = useMemo(() => {
     const ratioMap = safeJsonParse<Record<string, number>>(watchedGroupRatio, {
       fallback: {},
@@ -122,9 +134,17 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         ...Object.keys(ratioMap),
         ...Object.keys(usableMap),
         ...Object.keys(topupMap),
+        watchedDesktopClaudeGroup,
+        watchedDesktopCodexGroup,
       ]),
-    ]
-  }, [watchedGroupRatio, watchedUserUsableGroups, watchedTopupGroupRatio])
+    ].filter((name) => name && name !== 'auto')
+  }, [
+    watchedGroupRatio,
+    watchedUserUsableGroups,
+    watchedTopupGroupRatio,
+    watchedDesktopClaudeGroup,
+    watchedDesktopCodexGroup,
+  ])
 
   return (
     <div className='space-y-6'>
@@ -161,6 +181,100 @@ export const GroupRatioForm = memo(function GroupRatioForm({
             {isSaving ? t('Saving...') : t('Save group ratios')}
           </Button>
         </SettingsPageActionsPortal>
+        <section className='border-border space-y-4 border-b pb-6'>
+          <div>
+            <h3 className='text-sm font-medium'>
+              {t('PccAgent authorization key groups')}
+            </h3>
+            <p className='text-muted-foreground mt-1 text-sm'>
+              {t(
+                'These settings only control the two keys created by PccAgent browser authorization. Existing keys, group ratios, and user group rules are unchanged.'
+              )}
+            </p>
+            <p className='text-muted-foreground mt-1 text-sm'>
+              {t(
+                'The selected groups must already be available to the authorizing user.'
+              )}
+            </p>
+          </div>
+          <div className='grid gap-4 md:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='DesktopClaudeGroup'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Claude key group')}</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => field.onChange(value ?? 'auto')}
+                  >
+                    <FormControl>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        <SelectItem value='auto'>
+                          {t('Automatic group selection')}
+                        </SelectItem>
+                        {groupNames.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {t(
+                      'Applied only to the Claude key created after a user approves PccAgent.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='DesktopCodexGroup'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Codex key group')}</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => field.onChange(value ?? 'auto')}
+                  >
+                    <FormControl>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        <SelectItem value='auto'>
+                          {t('Automatic group selection')}
+                        </SelectItem>
+                        {groupNames.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {t(
+                      'Applied only to the Codex key created after a user approves PccAgent.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </section>
         {editMode === 'visual' ? (
           <div className='space-y-6'>
             <GroupRatioVisualEditor

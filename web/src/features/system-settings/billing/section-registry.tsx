@@ -49,6 +49,8 @@ const getGroupDefaults = (settings: BillingSettings) => ({
   DefaultUseAutoGroup: settings.DefaultUseAutoGroup,
   GroupSpecialUsableGroup:
     settings['group_ratio_setting.group_special_usable_group'],
+  DesktopClaudeGroup: settings['desktop_agent_setting.claude_group'],
+  DesktopCodexGroup: settings['desktop_agent_setting.codex_group'],
 })
 
 const BILLING_SECTIONS = [

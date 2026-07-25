@@ -16,16 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 
-import { Otp } from '@/features/auth/otp'
+import { DesktopAuthorizationScreen } from '@/features/desktop-authorization'
 
 const searchSchema = z.object({
-  redirect: z.string().optional(),
+  request: z.string().min(1),
 })
 
-export const Route = createFileRoute('/(auth)/otp')({
-  component: Otp,
+export const Route = createFileRoute('/_authenticated/desktop/authorize')({
   validateSearch: searchSchema,
+  component: DesktopAuthorizationRoute,
 })
+
+function DesktopAuthorizationRoute() {
+  const { request } = Route.useSearch()
+  return <DesktopAuthorizationScreen requestToken={request} />
+}

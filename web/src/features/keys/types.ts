@@ -45,6 +45,8 @@ export const apiKeySchema = z.object({
   model_limits_enabled: z.boolean(),
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
+  pcc_agent: z.boolean().optional().default(false),
+  pcc_agent_engine: z.enum(['claude', 'codex']).optional(),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>

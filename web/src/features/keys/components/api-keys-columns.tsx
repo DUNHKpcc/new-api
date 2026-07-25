@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
+import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { BadgeCell, TruncatedCell } from '@/components/data-table'
@@ -88,6 +89,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
           indeterminate={table.getIsSomePageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label='Select all'
+          disabled={!table.getRowModel().rows.some((row) => row.getCanSelect())}
           className='translate-y-[2px]'
         />
       ),
@@ -96,6 +98,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label='Select row'
+          disabled={!row.getCanSelect()}
           className='translate-y-[2px]'
         />
       ),
@@ -106,10 +109,26 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
     {
       accessorKey: 'name',
       header: t('Name'),
-      cell: ({ row }) => (
-        <span className='font-medium'>{row.getValue('name')}</span>
-      ),
-      size: 180,
+      cell: ({ row }) => {
+        const apiKey = row.original
+        return (
+          <div className='flex min-w-0 items-center gap-1.5'>
+            <span className='min-w-0 truncate font-medium'>
+              {row.getValue('name')}
+            </span>
+            {apiKey.pcc_agent && (
+              <StatusBadge
+                label={t('PccAgent dedicated')}
+                icon={ShieldCheck}
+                variant='info'
+                copyable={false}
+                className='shrink-0'
+              />
+            )}
+          </div>
+        )
+      },
+      size: 280,
       meta: { mobileTitle: true },
     },
     {
