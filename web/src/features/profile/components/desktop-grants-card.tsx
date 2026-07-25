@@ -22,6 +22,7 @@ import dayjs from 'dayjs'
 import { Laptop, Loader2, Unplug } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { FaMicrosoft } from 'react-icons/fa6'
 import { toast } from 'sonner'
 
 import {
@@ -39,6 +40,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -136,9 +138,25 @@ export function DesktopGrantsCard() {
           </EmptyMedia>
           <EmptyTitle>{t('No authorized desktop devices')}</EmptyTitle>
           <EmptyDescription>
-            {t('Devices you authorize for PCC Agent will appear here.')}
+            {t('Apps you authorize for PccAgent will appear here.')}
           </EmptyDescription>
         </EmptyHeader>
+        <EmptyContent>
+          <Button
+            variant='outline'
+            size='sm'
+            render={
+              <a
+                href='https://apps.microsoft.com/detail/9pf5ff13cbhp?hl=zh-CN&gl=CN'
+                target='_blank'
+                rel='noopener noreferrer'
+              />
+            }
+          >
+            <FaMicrosoft data-icon='microsoft-store' aria-hidden='true' />
+            {t('Download PccAgent from Microsoft Store')}
+          </Button>
+        </EmptyContent>
       </Empty>
     )
   } else {
@@ -210,7 +228,7 @@ export function DesktopGrantsCard() {
       <TitledCard
         title={t('Authorized desktop devices')}
         description={t(
-          'Review and revoke PCC Agent devices connected to your account.'
+          'Review and revoke PccAgent apps connected to your account.'
         )}
         icon={<PccAgentLogo className='size-full rounded-lg' />}
         iconClassName='bg-transparent p-0'
