@@ -144,6 +144,36 @@ Redis 限流使用原子 Lua 固定窗口，替代旧的近似滑动窗口 List 
 
 PAT 不是浏览器登录会话，不能调用登录会话管理接口，也不能签发绑定具体登录会话的 Security Proof。
 
+## PCC Agent 桌面授权
+
+PCC Agent 使用固定公开客户端 `pcc-agent-desktop` 的 Authorization Code + PKCE 流程。公开客户端没有 `client_secret`，只接受 `S256`，首发回调严格限制为：
+
+```text
+http://127.0.0.1:{1024-65535}/oauth/callback/{至少 16 字节的 base64url nonce}
+```
+
+不接受 `localhost`、IPv6 回环、局域网地址、userinfo、查询参数、fragment、自定义 URI Scheme 或低权限端口。客户端 `state` 必须至少包含 32 字节随机数据。授权请求有效期为 10 分钟，授权码有效期为 2 分钟，两者均只能消费一次；换码成功分别签发 Claude、Codex 两个桌面 Token，有效期均为 90 天，不签发 refresh token。
+
+| 接口 | 鉴权 | 用途 |
+| --- | --- | --- |
+| `POST /api/desktop/oauth/authorization-requests` | 无；专用 IP 限流 | 创建短时授权请求并返回 `/desktop/authorize?request=...` |
+| `GET /api/desktop/oauth/authorization-requests/:request_token` | 真实浏览器 Session | 读取设备、权限、允许模型和到期时间 |
+| `POST /api/desktop/oauth/authorize` | 真实浏览器 Session | 明确同意或拒绝；PAT 不能代表用户决定 |
+| `POST /api/desktop/oauth/token` | 无；授权码、PKCE 和设备标识 | 一次性交换 Claude/Codex 两个 90 天受限 Token |
+| `GET /api/desktop/account` | 有效桌面 Token，`account.read` | 读取脱敏账户、额度、订阅、模型和授权摘要 |
+| `GET /api/desktop/usage` | 有效桌面 Token，`usage.read` | 分页读取最小化用量记录 |
+| `POST /api/desktop/oauth/revoke` | 当前桌面 Token | 幂等撤销当前设备授权 |
+| `GET /api/user/desktop-grants` | 真实浏览器 Session | 查看当前用户的桌面设备授权 |
+| `DELETE /api/user/desktop-grants/:public_id` | 真实浏览器 Session | 撤销指定设备授权 |
+
+用户点击允许时只创建 pending `DesktopGrant` 和一次性授权码。服务端在授权码、PKCE、redirect、设备标识和原浏览器 Session 全部校验通过后，才在同一事务中创建 Claude、Codex 两个受限普通 API Token 并激活 Grant。设备重新授权会撤销同一用户、客户端和设备标识下的旧 Grant 及其两个 Token；使用其中任意一个 Token 撤销设备授权时也会同时撤销二者。用户被禁用或删除时会撤销其全部桌面授权。
+
+两个桌面 Token 的模型集合和用户组由服务端根据账户策略独立计算，客户端不能请求扩权。管理员可在“计费设置 -> 分组定价”中分别设置 Claude Key 分组和 Codex Key 分组；对应配置键是 `desktop_agent_setting.claude_group` 与 `desktop_agent_setting.codex_group`，默认值均为 `auto`。固定分组必须已经对授权用户可用，否则换码会返回 `DESKTOP_TOKEN_GROUP_UNAVAILABLE` 且不会创建 Token。这两项只控制后续浏览器授权产生的两个 Key，不会修改现有 Key、分组倍率、用户分组规则或计费逻辑。`PCC_DESKTOP_MODEL_ALLOWLIST` 可进一步与账户可用模型取交集；`DESKTOP_GRANT_ACTIVE_LIMIT` 控制每个用户的活跃桌面设备上限，默认 `10`。桌面 Token 可以在各自的模型和分组限制内调用 Relay，并只可访问 `account.read`、`usage.read` 两个桌面只读接口；不能调用面板会话、通用 Token 管理、管理后台或支付写接口。用户自己的 `/api/token` 列表和搜索会展示这两个 Token，并以 `pcc_agent`、`pcc_agent_engine` 标记为 PccAgent 专用；密钥沿用现有掩码、按需查看和复制逻辑。通用更新、启停和删除接口拒绝修改这些 Token，撤销仍必须通过设备授权管理完成。
+
+`DesktopGrant` 只保存由 `SESSION_SECRET` 派生 HMAC 处理后的设备标识、显示元数据、权限、状态、关联 Claude/Codex Token ID 和审计时间，不保存原始设备 ID、PKCE verifier、授权码或 Token 明文。所有桌面授权 API 和 `/desktop/authorize` 页面都返回 `Cache-Control: no-store`、禁止被 iframe 嵌入并使用 `Referrer-Policy: no-referrer`。日志只能记录授权公开 ID、状态和机器错误码，不得记录 request token、授权码、verifier、redirect 查询参数或桌面 Token。
+
+桌面授权不会创建用户、增加额度、写入订阅或触发支付。新用户仍需先完成现有注册、邮箱验证和登录，再返回授权页决定。`GENERATE_DEFAULT_TOKEN` 与桌面授权无关；面向消费者的部署应保持关闭，桌面流程不会读取、复用或返回注册时可能创建的默认 Token。
+
 ## 临时鉴权流程与二次验证
 
 OAuth state、2FA pending、Passkey ceremony、Telegram bind 等临时状态存放在 `auth_flows`。客户端只持有随机 `flow_token`，数据库仅保存 HMAC 摘要；流程具有用途、provider、intent、用户和登录会话绑定，并且只能原子消费一次。OAuth 注册的 affiliate code 也随登录 AuthFlow 保存。
@@ -164,9 +194,10 @@ Proof 同时绑定用户、登录会话、用户鉴权版本、会话版本和 s
 
 - 旧 `session` Cookie 不再使用；升级后现有面板登录会失效，用户需要重新登录。
 - 数据库迁移会新增 `user_sessions`、`auth_flows`、`external_identity_claims` 和 `users.auth_version`，并为已有用户初始化鉴权版本、回填 Telegram 账号唯一归属；若历史数据中同一 Telegram ID 已绑定多个用户，迁移会拒绝继续启动，需先消除歧义。
+- 数据库迁移会新增 `desktop_grants`，并为已有表增加可空的 `codex_token_id`。Claude/Codex 桌面 Token 继续存放在 `tokens`，通过 Grant 建立设备、同意状态和撤销审计关联，并在 API 密钥页面作为 PccAgent 专用只读 Key 展示。历史上只有 `token_id` 的单 Token Grant 继续兼容读取和撤销。
 - 数据库迁移会为 Session 签发计数和分批清理新增索引；已有 `user_sessions` 很大时应为首次启动预留维护窗口。
 - `user_sessions.previous_refresh_hash` 会从定长 `char(64)` 迁移为 `varchar(64)`。应用会兼容读取历史定长字段留下的空格填充；迁移后的目标结构必须保持幂等，连续启动不应反复执行列类型变更。
-- 仅 master 节点定时清理过期登录会话、超过配置保留期的 revoked 会话和已过保留期的 AuthFlow。
+- 仅 master 节点定时清理过期登录会话、超过配置保留期的 revoked 会话、已过保留期的 AuthFlow 和未完成换码的旧 pending DesktopGrant。
 - 未配置 `TRUSTED_PROXIES` 时会兼容信任回环和常见私网代理；使用公网负载均衡器、`100.64.0.0/10`、链路本地地址或自定义 CNI 网段的部署仍需显式配置。需要严格忽略所有转发头时设置为 `none`。
 - Redis 限流从近似滑动窗口改为原子固定窗口，存在明确的边界双倍突发语义。
 - 用户级模型成功请求限流的 UTC 时间戳在滚动升级期间存在一个窗口的混合格式过渡，期间可能临时误放行或误拒绝。
