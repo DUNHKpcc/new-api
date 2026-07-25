@@ -31,6 +31,19 @@ func buildMaskedTokenResponses(tokens []*model.Token) []*model.Token {
 	return maskedTokens
 }
 
+func rejectPccAgentTokenMutation(c *gin.Context, userId int, tokenIds []int) bool {
+	managed, err := model.HasDesktopGrantToken(userId, tokenIds)
+	if err != nil {
+		common.ApiError(c, err)
+		return true
+	}
+	if managed {
+		common.ApiErrorI18n(c, i18n.MsgTokenPccAgentReadOnly)
+		return true
+	}
+	return false
+}
+
 func GetAllTokens(c *gin.Context) {
 	userId := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
@@ -39,7 +52,7 @@ func GetAllTokens(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	total, _ := model.CountUserTokens(userId)
+	total, _ := model.CountAllUserTokens(userId)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
 	common.ApiSuccess(c, pageInfo)
@@ -236,6 +249,9 @@ func AddToken(c *gin.Context) {
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt("id")
+	if rejectPccAgentTokenMutation(c, userId, []int{id}) {
+		return
+	}
 	err := model.DeleteTokenById(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -256,6 +272,9 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if rejectPccAgentTokenMutation(c, userId, []int{token.Id}) {
+		return
+	}
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
@@ -271,7 +290,7 @@ func UpdateToken(c *gin.Context) {
 			return
 		}
 	}
-	cleanToken, err := model.GetTokenByIds(token.Id, userId)
+	cleanToken, err := model.GetEditableTokenByIds(token.Id, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -323,6 +342,9 @@ func DeleteTokenBatch(c *gin.Context) {
 		return
 	}
 	userId := c.GetInt("id")
+	if rejectPccAgentTokenMutation(c, userId, tokenBatch.Ids) {
+		return
+	}
 	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
 	if err != nil {
 		common.ApiError(c, err)

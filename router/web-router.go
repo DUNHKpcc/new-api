@@ -25,6 +25,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	router.Use(middleware.DesktopPageSecurityHeaders())
 	router.Use(static.Serve("/", frontendFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
@@ -32,7 +33,11 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 			controller.RelayNotFound(c)
 			return
 		}
-		c.Header("Cache-Control", "no-cache")
+		if c.Request.URL.Path == "/desktop/authorize" || strings.HasPrefix(c.Request.URL.Path, "/desktop/authorize/") {
+			c.Header("Cache-Control", "no-store")
+		} else {
+			c.Header("Cache-Control", "no-cache")
+		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
 	})
 }

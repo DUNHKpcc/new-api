@@ -19,13 +19,13 @@ import (
 	"gorm.io/gorm"
 )
 
-var commonGroupCol string
-var commonKeyCol string
-var commonTrueVal string
-var commonFalseVal string
+var commonGroupCol = "`group`"
+var commonKeyCol = "`key`"
+var commonTrueVal = "1"
+var commonFalseVal = "0"
 
-var logKeyCol string
-var logGroupCol string
+var logKeyCol = "`key`"
+var logGroupCol = "`group`"
 
 func initCol() {
 	// init common column names
@@ -267,6 +267,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := ensureDesktopGrantCodexTokenColumnSQLite(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -274,6 +277,7 @@ func migrateDB() error {
 		&User{},
 		&UserSession{},
 		&AuthFlow{},
+		&DesktopGrant{},
 		&ExternalIdentityClaim{},
 		&PasskeyCredential{},
 		&Option{},
@@ -337,6 +341,7 @@ func migrateDBFast() error {
 		{&User{}, "User"},
 		{&UserSession{}, "UserSession"},
 		{&AuthFlow{}, "AuthFlow"},
+		{&DesktopGrant{}, "DesktopGrant"},
 		{&ExternalIdentityClaim{}, "ExternalIdentityClaim"},
 		{&PasskeyCredential{}, "PasskeyCredential"},
 		{&Option{}, "Option"},
@@ -505,6 +510,15 @@ func clickHouseCreateTableHasTTL(createTableSQL string) bool {
 type sqliteColumnDef struct {
 	Name string
 	DDL  string
+}
+
+func ensureDesktopGrantCodexTokenColumnSQLite() error {
+	if !common.UsingMainDatabase(common.DatabaseTypeSQLite) ||
+		!DB.Migrator().HasTable(&DesktopGrant{}) ||
+		DB.Migrator().HasColumn(&DesktopGrant{}, "codex_token_id") {
+		return nil
+	}
+	return DB.Exec("ALTER TABLE `desktop_grants` ADD COLUMN `codex_token_id` integer").Error
 }
 
 func ensureSubscriptionPlanTableSQLite() error {

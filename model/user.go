@@ -861,6 +861,9 @@ func (user *User) Delete() error {
 		if err != nil {
 			return err
 		}
+		if err := revokeAllDesktopGrantsWithTx(tx, user.Id, "user_deleted"); err != nil {
+			return err
+		}
 		return tx.Delete(user).Error
 	}); err != nil {
 		return err
@@ -869,6 +872,9 @@ func (user *User) Delete() error {
 		return err
 	}
 	if _, err := RevokeAllUserSessions(user.Id, "user_deleted"); err != nil {
+		return err
+	}
+	if err := InvalidateUserTokensCache(user.Id); err != nil {
 		return err
 	}
 	return invalidateUserCache(user.Id)
@@ -921,6 +927,7 @@ func deleteUserAuthenticationData(tx *gorm.DB, userId int) error {
 		&UserSession{},
 		&AuthFlow{},
 		&PasskeyCredential{},
+		&DesktopGrant{},
 		&Token{},
 	} {
 		if err := tx.Unscoped().Where("user_id = ?", userId).Delete(authenticationData).Error; err != nil {

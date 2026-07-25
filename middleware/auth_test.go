@@ -29,7 +29,7 @@ func setupDashboardAuthMiddlewareTest(t *testing.T) {
 	previousSecret := common.SessionSecret
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Token{}, &model.DesktopGrant{}))
 	model.DB = db
 	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
@@ -103,6 +103,65 @@ func TestUserAuthAllowsOpaqueDottedPAT(t *testing.T) {
 	}
 	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &body))
 	assert.Equal(t, user.Id, body.ID)
+}
+
+func TestSessionIdentityRejectsPAT(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	createMiddlewarePATUser(t, "desktop-pat-user", "desktop.pat")
+	router := gin.New()
+	router.GET("/protected", UserAuth(), func(c *gin.Context) {
+		if _, ok := GetSessionAuthIdentity(c); !ok {
+			c.Status(http.StatusForbidden)
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer desktop.pat")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusForbidden, response.Code)
+}
+
+func TestTokenAuthReadOnlyRejectsDesktopGrantToken(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	user := createMiddlewarePATUser(t, "desktop-token-user", "unrelated-pat")
+	token := &model.Token{
+		UserId:      user.Id,
+		Key:         "desktoptoken",
+		Name:        "PCC Agent",
+		Status:      common.TokenStatusEnabled,
+		ExpiredTime: time.Now().Add(time.Hour).Unix(),
+	}
+	require.NoError(t, model.DB.Create(token).Error)
+	activeSlot := 1
+	require.NoError(t, model.DB.Create(&model.DesktopGrant{
+		PublicId:     "desktop-grant-public-id",
+		UserId:       user.Id,
+		ClientId:     service.DesktopClientID,
+		DeviceIdHash: "desktop-device-hash",
+		DeviceName:   "Desktop device",
+		TokenId:      &token.Id,
+		Scopes:       service.DesktopAuthorizationScopes,
+		Status:       model.DesktopGrantStatusActive,
+		ActiveSlot:   &activeSlot,
+		CreatedTime:  time.Now().Unix(),
+		ExpiredTime:  time.Now().Add(time.Hour).Unix(),
+	}).Error)
+	router := gin.New()
+	router.GET("/protected", TokenAuthReadOnly(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer sk-"+token.Key)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "DESKTOP_SCOPE_DENIED")
 }
 
 func TestUserAuthNeverFallsBackForRecognizedInvalidInternalJWT(t *testing.T) {

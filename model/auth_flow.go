@@ -22,6 +22,8 @@ const (
 	AuthFlowPurposePasskeyStepUp     = "passkey_step_up"
 	AuthFlowPurposeTelegramBind      = "telegram_bind"
 	AuthFlowPurposeTelegramAssertion = "telegram_assertion"
+	AuthFlowPurposeDesktopRequest    = "desktop_authorization_request"
+	AuthFlowPurposeDesktopCode       = "desktop_authorization_code"
 	AuthFlowIntentLogin              = "login"
 	AuthFlowIntentBind               = "bind"
 	AuthFlowTokenBytes               = 32
@@ -94,6 +96,16 @@ func authFlowTokenHash(token string) string {
 }
 
 func CreateAuthFlow(input AuthFlowCreate) (string, *AuthFlow, error) {
+	return CreateAuthFlowWithTx(DB, input)
+}
+
+// CreateAuthFlowWithTx creates an authentication flow in the caller's
+// transaction so the one-time flow and its related authorization state commit
+// atomically.
+func CreateAuthFlowWithTx(tx *gorm.DB, input AuthFlowCreate) (string, *AuthFlow, error) {
+	if tx == nil {
+		return "", nil, ErrAuthFlowInvalid
+	}
 	if strings.TrimSpace(input.Purpose) == "" || input.ExpiresAt.IsZero() || !input.ExpiresAt.After(time.Now()) {
 		return "", nil, ErrAuthFlowInvalid
 	}
@@ -112,7 +124,7 @@ func CreateAuthFlow(input AuthFlowCreate) (string, *AuthFlow, error) {
 		Payload:   input.Payload,
 		ExpiresAt: input.ExpiresAt,
 	}
-	if err := DB.Create(flow).Error; err != nil {
+	if err := tx.Create(flow).Error; err != nil {
 		return "", nil, err
 	}
 	return token, flow, nil

@@ -14,8 +14,11 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -29,13 +32,16 @@ type tokenAPIResponse struct {
 
 type tokenPageResponse struct {
 	Items []tokenResponseItem `json:"items"`
+	Total int                 `json:"total"`
 }
 
 type tokenResponseItem struct {
-	ID     int    `json:"id"`
-	Name   string `json:"name"`
-	Key    string `json:"key"`
-	Status int    `json:"status"`
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	Key            string `json:"key"`
+	Status         int    `json:"status"`
+	PccAgent       bool   `json:"pcc_agent"`
+	PccAgentEngine string `json:"pcc_agent_engine"`
 }
 
 type tokenKeyResponse struct {
@@ -99,7 +105,7 @@ func openTokenControllerTestDB(t *testing.T) *gorm.DB {
 func migrateTokenControllerTestDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 
-	if err := db.AutoMigrate(&model.Token{}); err != nil {
+	if err := db.AutoMigrate(&model.Token{}, &model.DesktopGrant{}); err != nil {
 		t.Fatalf("failed to migrate token table: %v", err)
 	}
 }
@@ -179,6 +185,25 @@ func seedToken(t *testing.T, db *gorm.DB, userID int, name string, rawKey string
 		t.Fatalf("failed to create token: %v", err)
 	}
 	return token
+}
+
+func seedPccAgentGrant(t *testing.T, db *gorm.DB, userID int, claudeToken, codexToken *model.Token) {
+	t.Helper()
+	activeSlot := 1
+	require.NoError(t, db.Create(&model.DesktopGrant{
+		PublicId:     fmt.Sprintf("pcc-grant-%d", userID),
+		UserId:       userID,
+		ClientId:     service.DesktopClientID,
+		DeviceIdHash: fmt.Sprintf("pcc-device-%d", userID),
+		DeviceName:   "PccAgent test device",
+		TokenId:      &claudeToken.Id,
+		CodexTokenId: &codexToken.Id,
+		Scopes:       service.DesktopAuthorizationScopes,
+		Status:       model.DesktopGrantStatusActive,
+		ActiveSlot:   &activeSlot,
+		CreatedTime:  1,
+		ExpiredTime:  9999999999,
+	}).Error)
 }
 
 func newAuthenticatedContext(t *testing.T, method string, target string, body any, userID int) (*gin.Context, *httptest.ResponseRecorder) {
@@ -415,6 +440,113 @@ func TestGetAllTokensMasksKeyInResponse(t *testing.T) {
 	if strings.Contains(recorder.Body.String(), token.Key) {
 		t.Fatalf("list response leaked raw token key: %s", recorder.Body.String())
 	}
+}
+
+func TestGetAllTokensIncludesPccAgentMetadataAndMaskedKeys(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "pccclaude12345678")
+	codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "pcccodex123456789")
+	seedPccAgentGrant(t, db, 1, claude, codex)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/?p=1&size=10", nil, 1)
+	GetAllTokens(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var page tokenPageResponse
+	require.NoError(t, common.Unmarshal(response.Data, &page))
+	assert.Equal(t, 2, page.Total)
+	require.Len(t, page.Items, 2)
+
+	engines := make(map[string]tokenResponseItem, len(page.Items))
+	for _, item := range page.Items {
+		require.True(t, item.PccAgent)
+		engines[item.PccAgentEngine] = item
+	}
+	assert.Equal(t, claude.GetMaskedKey(), engines["claude"].Key)
+	assert.Equal(t, codex.GetMaskedKey(), engines["codex"].Key)
+	assert.NotContains(t, recorder.Body.String(), claude.Key)
+	assert.NotContains(t, recorder.Body.String(), codex.Key)
+}
+
+func TestPccAgentTokenKeyCanBeRead(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "readpccclaude123")
+	codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "readpcccodex1234")
+	seedPccAgentGrant(t, db, 1, claude, codex)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/"+strconv.Itoa(claude.Id)+"/key", nil, 1)
+	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(claude.Id)}}
+	GetTokenKey(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var keyData tokenKeyResponse
+	require.NoError(t, common.Unmarshal(response.Data, &keyData))
+	assert.Equal(t, claude.Key, keyData.Key)
+}
+
+func TestPccAgentTokensRejectGenericMutations(t *testing.T) {
+	t.Run("status update", func(t *testing.T) {
+		db := setupTokenControllerTestDB(t)
+		claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "updatepccclaude")
+		codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "updatepcccodex1")
+		seedPccAgentGrant(t, db, 1, claude, codex)
+
+		ctx, recorder := newAuthenticatedContext(
+			t,
+			http.MethodPut,
+			"/api/token/?status_only=true",
+			map[string]any{"id": claude.Id, "status": common.TokenStatusDisabled},
+			1,
+		)
+		UpdateToken(ctx)
+
+		response := decodeAPIResponse(t, recorder)
+		assert.False(t, response.Success)
+		var persisted model.Token
+		require.NoError(t, db.First(&persisted, claude.Id).Error)
+		assert.Equal(t, common.TokenStatusEnabled, persisted.Status)
+	})
+
+	t.Run("single delete", func(t *testing.T) {
+		db := setupTokenControllerTestDB(t)
+		claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "deletepccclaude")
+		codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "deletepcccodex1")
+		seedPccAgentGrant(t, db, 1, claude, codex)
+
+		ctx, recorder := newAuthenticatedContext(t, http.MethodDelete, "/api/token/"+strconv.Itoa(claude.Id)+"/", nil, 1)
+		ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(claude.Id)}}
+		DeleteToken(ctx)
+
+		response := decodeAPIResponse(t, recorder)
+		assert.False(t, response.Success)
+		var persisted model.Token
+		require.NoError(t, db.First(&persisted, claude.Id).Error)
+	})
+
+	t.Run("batch delete", func(t *testing.T) {
+		db := setupTokenControllerTestDB(t)
+		claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "batchpccclaude1")
+		codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "batchpcccodex123")
+		regular := seedToken(t, db, 1, "Regular", "batchregularkey1")
+		seedPccAgentGrant(t, db, 1, claude, codex)
+
+		ctx, recorder := newAuthenticatedContext(
+			t,
+			http.MethodPost,
+			"/api/token/batch",
+			map[string]any{"ids": []int{regular.Id, codex.Id}},
+			1,
+		)
+		DeleteTokenBatch(ctx)
+
+		response := decodeAPIResponse(t, recorder)
+		assert.False(t, response.Success)
+		var persisted []model.Token
+		require.NoError(t, db.Where("id IN ?", []int{regular.Id, codex.Id}).Find(&persisted).Error)
+		assert.Len(t, persisted, 2)
+	})
 }
 
 func TestSearchTokensMasksKeyInResponse(t *testing.T) {

@@ -55,6 +55,22 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/:provider", middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.TryUserAuth(), controller.HandleOAuth)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
 
+		desktopOAuthRoute := apiRouter.Group("/desktop/oauth")
+		desktopOAuthRoute.Use(middleware.DesktopAuthorizationSecurityHeaders())
+		{
+			desktopOAuthRoute.POST("/authorization-requests", middleware.DesktopAuthorizationStartRateLimit(), anonymousRequestBodyLimit, controller.CreateDesktopAuthorizationRequest)
+			desktopOAuthRoute.GET("/authorization-requests/:request_token", middleware.UserAuth(), middleware.DesktopAuthorizationDecisionRateLimit(), controller.GetDesktopAuthorizationRequest)
+			desktopOAuthRoute.POST("/authorize", middleware.UserAuth(), middleware.DesktopAuthorizationDecisionRateLimit(), controller.DecideDesktopAuthorization)
+			desktopOAuthRoute.POST("/token", middleware.DesktopTokenExchangeRateLimit(), anonymousRequestBodyLimit, controller.ExchangeDesktopAuthorizationCode)
+			desktopOAuthRoute.POST("/revoke", middleware.DesktopTokenExchangeRateLimit(), controller.RevokeDesktopAuthorization)
+		}
+		desktopRoute := apiRouter.Group("/desktop")
+		desktopRoute.Use(middleware.DesktopAuthorizationSecurityHeaders(), middleware.DesktopTokenReadRateLimit())
+		{
+			desktopRoute.GET("/account", middleware.DesktopTokenAuth("account.read"), controller.GetDesktopAccount)
+			desktopRoute.GET("/usage", middleware.DesktopTokenAuth("usage.read"), controller.GetDesktopUsage)
+		}
+
 		apiRouter.POST("/stripe/webhook", anonymousRequestBodyLimit, controller.StripeWebhook)
 		apiRouter.POST("/creem/webhook", anonymousRequestBodyLimit, controller.CreemWebhook)
 		apiRouter.POST("/waffo/webhook", anonymousRequestBodyLimit, controller.WaffoWebhook)
@@ -85,6 +101,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/sessions", middleware.DisableCache(), controller.GetLoginSessions)
 				selfRoute.DELETE("/sessions/:sid", middleware.DisableCache(), controller.DeleteLoginSession)
 				selfRoute.POST("/sessions/revoke-others", middleware.DisableCache(), controller.RevokeOtherLoginSessions)
+				selfRoute.GET("/desktop-grants", middleware.DisableCache(), controller.ListDesktopGrants)
+				selfRoute.DELETE("/desktop-grants/:public_id", middleware.DisableCache(), controller.DeleteDesktopGrant)
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self", controller.GetSelf)
 				selfRoute.GET("/models", controller.GetUserModels)

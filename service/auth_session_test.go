@@ -32,7 +32,7 @@ func setupAuthSessionTestDB(t *testing.T) *model.User {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.AuthFlow{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.AuthFlow{}, &model.DesktopGrant{}))
 	model.DB = db
 	common.RedisEnabled = false
 	common.UserSessionActiveLimit = common.DefaultUserSessionActiveLimit
@@ -275,6 +275,26 @@ func TestCleanupAuthArtifactsRemovesOnlyExpiredRecords(t *testing.T) {
 		TokenHash: "recent-flow", Purpose: model.AuthFlowPurposeTwoFALogin,
 		ExpiresAt: now.Add(time.Minute),
 	}).Error)
+	require.NoError(t, model.DB.Create(&model.DesktopGrant{
+		PublicId:     "expired-pending-grant",
+		UserId:       1,
+		ClientId:     DesktopClientID,
+		DeviceIdHash: "expired-device-hash",
+		DeviceName:   "Expired device",
+		Scopes:       DesktopAuthorizationScopes,
+		Status:       model.DesktopGrantStatusPending,
+		CreatedTime:  oldExpiry.Unix(),
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.DesktopGrant{
+		PublicId:     "recent-pending-grant",
+		UserId:       1,
+		ClientId:     DesktopClientID,
+		DeviceIdHash: "recent-device-hash",
+		DeviceName:   "Recent device",
+		Scopes:       DesktopAuthorizationScopes,
+		Status:       model.DesktopGrantStatusPending,
+		CreatedTime:  now.Unix(),
+	}).Error)
 
 	cleanupAuthArtifacts()
 
@@ -285,6 +305,10 @@ func TestCleanupAuthArtifactsRemovesOnlyExpiredRecords(t *testing.T) {
 	require.NoError(t, model.DB.Find(&flows).Error)
 	require.Len(t, flows, 1)
 	assert.Equal(t, "recent-flow", flows[0].TokenHash)
+	var grants []model.DesktopGrant
+	require.NoError(t, model.DB.Find(&grants).Error)
+	require.Len(t, grants, 1)
+	assert.Equal(t, "recent-pending-grant", grants[0].PublicId)
 }
 
 func TestCleanupAuthArtifactsContinuesWithRevokedCleanupAfterExpiredBatchFailure(t *testing.T) {

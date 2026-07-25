@@ -39,6 +39,7 @@ func TestMain(m *testing.M) {
 		&User{},
 		&UserSession{},
 		&AuthFlow{},
+		&DesktopGrant{},
 		&ExternalIdentityClaim{},
 		&Token{},
 		&PasskeyCredential{},
@@ -69,6 +70,7 @@ func truncateTables(t *testing.T) {
 	t.Cleanup(func() {
 		DB.Exec("DELETE FROM tasks")
 		DB.Exec("DELETE FROM auth_flows")
+		DB.Exec("DELETE FROM desktop_grants")
 		DB.Exec("DELETE FROM external_identity_claims")
 		DB.Exec("DELETE FROM user_sessions")
 		DB.Exec("DELETE FROM passkey_credentials")

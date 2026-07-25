@@ -28,6 +28,8 @@ type Token struct {
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
+	PccAgent           bool           `json:"pcc_agent" gorm:"-"`
+	PccAgentEngine     string         `json:"pcc_agent_engine,omitempty" gorm:"-"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
@@ -80,9 +82,60 @@ func (token *Token) GetIpLimits() []string {
 
 func GetAllUserTokens(userId int, startIdx int, num int) ([]*Token, error) {
 	var tokens []*Token
-	var err error
-	err = DB.Where("user_id = ?", userId).Order("id desc").Limit(num).Offset(startIdx).Find(&tokens).Error
+	err := DB.Model(&Token{}).
+		Where("user_id = ?", userId).
+		Order("id desc").
+		Limit(num).
+		Offset(startIdx).
+		Find(&tokens).Error
+	if err != nil {
+		return nil, err
+	}
+	err = attachPccAgentTokenMetadata(tokens)
 	return tokens, err
+}
+
+func excludeDesktopGrantTokens(query *gorm.DB) *gorm.DB {
+	return query.Where(
+		"NOT EXISTS (SELECT 1 FROM desktop_grants WHERE desktop_grants.token_id = tokens.id OR desktop_grants.codex_token_id = tokens.id)",
+	)
+}
+
+func attachPccAgentTokenMetadata(tokens []*Token) error {
+	tokenByID := make(map[int]*Token, len(tokens))
+	tokenIDs := make([]int, 0, len(tokens))
+	for _, token := range tokens {
+		if token == nil || token.Id <= 0 {
+			continue
+		}
+		tokenByID[token.Id] = token
+		tokenIDs = append(tokenIDs, token.Id)
+	}
+	if len(tokenIDs) == 0 {
+		return nil
+	}
+
+	var grants []DesktopGrant
+	if err := DB.Select("token_id", "codex_token_id").
+		Where("token_id IN ? OR codex_token_id IN ?", tokenIDs, tokenIDs).
+		Find(&grants).Error; err != nil {
+		return err
+	}
+	for i := range grants {
+		if grants[i].TokenId != nil {
+			if token := tokenByID[*grants[i].TokenId]; token != nil {
+				token.PccAgent = true
+				token.PccAgentEngine = "claude"
+			}
+		}
+		if grants[i].CodexTokenId != nil {
+			if token := tokenByID[*grants[i].CodexTokenId]; token != nil {
+				token.PccAgent = true
+				token.PccAgentEngine = "codex"
+			}
+		}
+	}
+	return nil
 }
 
 // sanitizeLikePattern 校验并清洗用户输入的 LIKE 搜索模式。
@@ -189,6 +242,10 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 		common.SysError("failed to search tokens: " + err.Error())
 		return nil, 0, errors.New("搜索令牌失败")
 	}
+	if err = attachPccAgentTokenMetadata(tokens); err != nil {
+		common.SysError("failed to identify PccAgent tokens: " + err.Error())
+		return nil, 0, errors.New("搜索令牌失败")
+	}
 	return tokens, total, nil
 }
 
@@ -237,8 +294,21 @@ func GetTokenByIds(id int, userId int) (*Token, error) {
 		return nil, errors.New("id 或 userId 为空！")
 	}
 	token := Token{Id: id, UserId: userId}
-	var err error = nil
-	err = DB.First(&token, "id = ? and user_id = ?", id, userId).Error
+	err := DB.First(&token, "id = ? and user_id = ?", id, userId).Error
+	if err != nil {
+		return &token, err
+	}
+	err = attachPccAgentTokenMetadata([]*Token{&token})
+	return &token, err
+}
+
+func GetEditableTokenByIds(id int, userId int) (*Token, error) {
+	if id == 0 || userId == 0 {
+		return nil, errors.New("id 或 userId 为空！")
+	}
+	token := Token{Id: id, UserId: userId}
+	err := excludeDesktopGrantTokens(DB.Model(&Token{})).
+		First(&token, "id = ? and user_id = ?", id, userId).Error
 	return &token, err
 }
 
@@ -372,7 +442,7 @@ func DeleteTokenById(id int, userId int) (err error) {
 		return errors.New("id 或 userId 为空！")
 	}
 	token := Token{Id: id, UserId: userId}
-	err = DB.Where(token).First(&token).Error
+	err = excludeDesktopGrantTokens(DB.Model(&Token{})).Where(token).First(&token).Error
 	if err != nil {
 		return err
 	}
@@ -442,7 +512,17 @@ func decreaseTokenQuota(id int, quota int) (err error) {
 // CountUserTokens returns total number of tokens for the given user, used for pagination
 func CountUserTokens(userId int) (int64, error) {
 	var total int64
-	err := DB.Model(&Token{}).Where("user_id = ?", userId).Count(&total).Error
+	err := excludeDesktopGrantTokens(DB.Model(&Token{})).
+		Where("user_id = ?", userId).
+		Count(&total).Error
+	return total, err
+}
+
+func CountAllUserTokens(userId int) (int64, error) {
+	var total int64
+	err := DB.Model(&Token{}).
+		Where("user_id = ?", userId).
+		Count(&total).Error
 	return total, err
 }
 
@@ -455,12 +535,22 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 	tx := DB.Begin()
 
 	var tokens []Token
-	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Find(&tokens).Error; err != nil {
+	if err := excludeDesktopGrantTokens(tx.Model(&Token{})).
+		Where("user_id = ? AND id IN (?)", userId, ids).
+		Find(&tokens).Error; err != nil {
 		tx.Rollback()
 		return 0, err
 	}
 
-	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Delete(&Token{}).Error; err != nil {
+	if len(tokens) == 0 {
+		tx.Rollback()
+		return 0, nil
+	}
+	tokenIds := make([]int, 0, len(tokens))
+	for i := range tokens {
+		tokenIds = append(tokenIds, tokens[i].Id)
+	}
+	if err := tx.Where("user_id = ? AND id IN (?)", userId, tokenIds).Delete(&Token{}).Error; err != nil {
 		tx.Rollback()
 		return 0, err
 	}
@@ -482,7 +572,8 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 
 func GetTokenKeysByIds(ids []int, userId int) ([]Token, error) {
 	var tokens []Token
-	err := DB.Select("id", commonKeyCol).
+	err := DB.Model(&Token{}).
+		Select("id", commonKeyCol).
 		Where("user_id = ? AND id IN (?)", userId, ids).
 		Find(&tokens).Error
 	return tokens, err
@@ -518,6 +609,24 @@ func invalidateTokensCache(tokens []Token) error {
 			continue
 		}
 		if err := cacheDeleteToken(t.Key); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// InvalidateTokenKeysCache removes selected API tokens from Redis after the
+// database transaction that revoked them has committed.
+func InvalidateTokenKeysCache(keys []string) error {
+	if !common.RedisEnabled {
+		return nil
+	}
+	var firstErr error
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if err := cacheDeleteToken(key); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}

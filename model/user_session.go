@@ -67,6 +67,42 @@ func (session *UserSession) AfterFind(_ *gorm.DB) error {
 	return nil
 }
 
+// ValidateActiveUserSessionWithTx locks the authoritative user and session
+// records so a flow exchange cannot race a security change or revocation.
+func ValidateActiveUserSessionWithTx(tx *gorm.DB, userID int, sid string) error {
+	if tx == nil || userID <= 0 || strings.TrimSpace(sid) == "" {
+		return ErrUserSessionInvalid
+	}
+	var user User
+	if err := lockForUpdate(tx).
+		Select("id", "status", "auth_version").
+		Where("id = ?", userID).
+		First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserSessionInactive
+		}
+		return err
+	}
+	var session UserSession
+	if err := lockForUpdate(tx).
+		Where("sid = ? AND user_id = ?", sid, userID).
+		First(&session).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserSessionInactive
+		}
+		return err
+	}
+	now := time.Now().Unix()
+	if user.Status != common.UserStatusEnabled ||
+		user.AuthVersion != session.UserAuthVersion ||
+		session.Status != UserSessionStatusActive ||
+		session.RevokedAt != 0 ||
+		session.ExpiresAt <= now {
+		return ErrUserSessionInactive
+	}
+	return nil
+}
+
 type userSessionCacheEntry struct {
 	SID             string
 	UserID          int

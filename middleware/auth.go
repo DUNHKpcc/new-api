@@ -341,12 +341,46 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 			c.Abort()
 			return
 		}
+		if rejectDesktopGrantToken(c, token.UserId, token.Id) {
+			return
+		}
 
 		c.Set("id", token.UserId)
 		c.Set("token_id", token.Id)
 		c.Set("token_key", token.Key)
 		c.Next()
 	}
+}
+
+// RejectDesktopGrantToken keeps desktop credentials on Relay and their
+// dedicated read-only endpoints instead of allowing legacy token utilities.
+func RejectDesktopGrantToken() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if rejectDesktopGrantToken(c, c.GetInt("id"), c.GetInt("token_id")) {
+			return
+		}
+		c.Next()
+	}
+}
+
+func rejectDesktopGrantToken(c *gin.Context, userId, tokenId int) bool {
+	isDesktopToken, err := model.IsDesktopGrantToken(userId, tokenId)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to classify desktop token %d: %v", tokenId, err))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"error":             "DESKTOP_INTERNAL_ERROR",
+			"error_description": http.StatusText(http.StatusInternalServerError),
+		})
+		return true
+	}
+	if !isDesktopToken {
+		return false
+	}
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+		"error":             "DESKTOP_SCOPE_DENIED",
+		"error_description": http.StatusText(http.StatusForbidden),
+	})
+	return true
 }
 
 func TokenAuth() func(c *gin.Context) {

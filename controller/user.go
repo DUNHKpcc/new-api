@@ -1245,6 +1245,12 @@ func ManageUser(c *gin.Context) {
 			return
 		}
 	}
+	if req.Action == "disable" {
+		if err := service.RevokeAllUserDesktopGrants(user.Id, "user_disabled"); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	// Update/UpdateWithTx has already published the new user hash and revoked
 	// browser sessions exactly once. Only PAT/relay token caches still need an
 	// explicit invalidation; deleting the user hash here would discard the
