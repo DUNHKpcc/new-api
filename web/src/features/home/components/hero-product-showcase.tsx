@@ -40,8 +40,14 @@ export function HeroProductShowcase() {
       {heroProductShowcaseMedia.map((item) => {
         const Icon = item.icon
         const href = 'href' in item ? item.href : undefined
+        const labelIconSrc =
+          'labelIconSrc' in item ? item.labelIconSrc : undefined
         const storeIconSrc =
           'storeIconSrc' in item ? item.storeIconSrc : undefined
+        const linkLabel =
+          item.id === 'desktop'
+            ? t('Download PccAgent from Microsoft Store')
+            : t('View Pricing')
 
         return (
           <figure
@@ -64,8 +70,8 @@ export function HeroProductShowcase() {
                   href={href}
                   target='_blank'
                   rel='noopener noreferrer'
-                  aria-label={t('Download PccAgent from Microsoft Store')}
-                  title={t('Download PccAgent from Microsoft Store')}
+                  aria-label={linkLabel}
+                  title={linkLabel}
                   className='focus-visible:ring-primary absolute inset-0 z-20 rounded-[8px] focus-visible:ring-2 focus-visible:ring-offset-4 focus-visible:outline-none'
                 />
               ) : null}
@@ -75,26 +81,35 @@ export function HeroProductShowcase() {
                   item.labelClassName
                 )}
               >
-                <Icon
-                  aria-hidden='true'
-                  className='text-primary size-3.5 shrink-0'
-                />
+                {labelIconSrc ? (
+                  <img
+                    src={labelIconSrc}
+                    alt=''
+                    aria-hidden='true'
+                    width={28}
+                    height={28}
+                    className='size-3.5 shrink-0'
+                  />
+                ) : (
+                  <Icon
+                    aria-hidden='true'
+                    className='text-primary size-3.5 shrink-0'
+                  />
+                )}
                 <span>{labels[item.id]}</span>
-                {href ? (
+                {storeIconSrc ? (
                   <>
                     <span aria-hidden='true' className='text-border'>
                       ·
                     </span>
-                    {storeIconSrc ? (
-                      <img
-                        src={storeIconSrc}
-                        alt=''
-                        aria-hidden='true'
-                        width={16}
-                        height={16}
-                        className='size-3.5 shrink-0'
-                      />
-                    ) : null}
+                    <img
+                      src={storeIconSrc}
+                      alt=''
+                      aria-hidden='true'
+                      width={16}
+                      height={16}
+                      className='size-3.5 shrink-0'
+                    />
                     <span>PccAgent</span>
                     <Download
                       aria-hidden='true'

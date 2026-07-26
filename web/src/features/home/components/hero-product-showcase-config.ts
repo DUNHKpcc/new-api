@@ -31,12 +31,13 @@ interface ShowcaseMedia {
   labelClassName: string
   animationDelay: string
   href?: string
+  labelIconSrc?: string
   storeIconSrc?: string
 }
 
 export const heroProductShowcaseClasses = {
   stage:
-    'relative mx-auto mt-10 hidden h-[min(40vw,44svh,30rem)] min-h-[20rem] w-full max-w-7xl min-[700px]:block',
+    'relative mx-auto mt-24 hidden h-[min(40vw,44svh,30rem)] min-h-[20rem] w-full max-w-7xl min-[700px]:block',
   image: 'block h-auto w-full select-none object-contain',
   imageFrame:
     'rounded-[8px] border border-black/10 shadow-[0_28px_80px_-30px_rgba(15,23,42,0.38)]',
@@ -49,11 +50,12 @@ export const heroProductShowcaseMedia = [
     width: 1800,
     height: 1178,
     icon: Globe2,
-    positionClassName:
-      '-top-[35px] left-1/2 z-10 w-[66%] min-[1100px]:w-[66%]',
+    positionClassName: '-top-[35px] left-1/2 z-10 w-[66%] min-[1100px]:w-[66%]',
     surfaceClassName: '-translate-x-1/2 group-hover:-translate-y-2',
     labelClassName: 'top-3 left-3',
     animationDelay: '280ms',
+    href: 'https://api.dpccgaming.xyz/pricing',
+    labelIconSrc: '/landing/dpcc-api-favicon.png',
   },
   {
     id: 'desktop',

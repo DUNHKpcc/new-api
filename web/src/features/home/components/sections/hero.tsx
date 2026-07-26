@@ -82,7 +82,7 @@ export function Hero(props: HeroProps) {
           <span className='text-primary'>{t('Vast Range of AI Models')}</span>
         </h1>
         <div
-          className='landing-animate-fade-up mt-8 flex flex-wrap items-center justify-center gap-3 opacity-0 min-[700px]:relative min-[700px]:-top-4 min-[700px]:z-40'
+          className='landing-animate-fade-up mt-8 flex flex-wrap items-center justify-center gap-3 opacity-0 min-[700px]:relative min-[700px]:top-[9px] min-[700px]:z-40'
           style={{ animationDelay: '60ms' }}
         >
           {props.isAuthenticated ? (

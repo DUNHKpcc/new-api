@@ -30,6 +30,7 @@ describe('home hero product showcase', () => {
 
     assert.ok(stageClasses.includes('hidden'))
     assert.ok(stageClasses.includes('min-[700px]:block'))
+    assert.ok(stageClasses.includes('mt-24'))
   })
 
   test('preserves each supplied image aspect ratio while scaling responsively', () => {
@@ -60,6 +61,13 @@ describe('home hero product showcase', () => {
       'https://apps.microsoft.com/detail/9pf5ff13cbhp?hl=zh-CN&gl=CN'
     )
     assert.equal(desktop?.storeIconSrc, '/landing/microsoft-store.png')
+  })
+
+  test('links the web preview to the public pricing page', () => {
+    const web = heroProductShowcaseMedia.find((item) => item.id === 'web')
+
+    assert.equal(web?.href, 'https://api.dpccgaming.xyz/pricing')
+    assert.equal(web?.labelIconSrc, '/landing/dpcc-api-favicon.png')
   })
 
   test('keeps the web title visible and the mini-program label above its image', () => {
