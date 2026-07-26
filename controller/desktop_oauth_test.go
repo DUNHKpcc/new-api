@@ -128,12 +128,14 @@ func setupDesktopHTTPWorkflow(t *testing.T) desktopHTTPFixture {
 	oauth.GET("/authorization-requests/:request_token", browserSession, GetDesktopAuthorizationRequest)
 	oauth.POST("/authorize", browserSession, DecideDesktopAuthorization)
 	oauth.POST("/token", ExchangeDesktopAuthorizationCode)
+	oauth.POST("/confirm", ConfirmDesktopAuthorization)
 	oauth.POST("/revoke", RevokeDesktopAuthorization)
 
 	desktop := router.Group("/api/desktop")
 	desktop.Use(middleware.DesktopAuthorizationSecurityHeaders())
 	desktop.GET("/account", middleware.DesktopTokenAuth("account.read"), GetDesktopAccount)
 	desktop.GET("/usage", middleware.DesktopTokenAuth("usage.read"), GetDesktopUsage)
+	desktop.GET("/usage/summary", middleware.DesktopTokenAuth("usage.read"), GetDesktopUsageSummary)
 
 	router.GET("/api/user/desktop-grants", browserSession, ListDesktopGrants)
 	relayIdentity := func(c *gin.Context) {
@@ -384,6 +386,21 @@ func TestDesktopAuthorizationHTTPWorkflowRegression(t *testing.T) {
 	assert.Equal(t, 12, usage.Items[0].PromptTokens)
 	assert.Equal(t, 8, usage.Items[0].CompletionTokens)
 
+	summaryResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodGet,
+		"/api/desktop/usage/summary",
+		nil,
+		"Bearer "+exchanged.Tokens.Codex.AccessToken,
+	)
+	require.Equal(t, http.StatusOK, summaryResponse.Code, summaryResponse.Body.String())
+	summary := decodeDesktopHTTPResponse[service.DesktopUsageSummary](t, summaryResponse)
+	assert.Equal(t, service.DesktopContractVersion, summary.ContractVersion)
+	assert.Equal(t, int64(1), summary.Totals.RequestCount)
+	assert.Equal(t, int64(20), summary.Totals.PromptTokens+summary.Totals.CompletionTokens)
+	assert.False(t, summary.Truncated)
+
 	grantsResponse := performDesktopJSON(
 		t,
 		fixture.router,
@@ -427,4 +444,105 @@ func TestDesktopAuthorizationHTTPWorkflowRegression(t *testing.T) {
 	require.Len(t, revokedTokens, 2)
 	assert.Equal(t, common.TokenStatusDisabled, revokedTokens[0].Status)
 	assert.Equal(t, common.TokenStatusDisabled, revokedTokens[1].Status)
+}
+
+func TestDesktopAuthorizationHTTPProtocolV2Confirmation(t *testing.T) {
+	fixture := setupDesktopHTTPWorkflow(t)
+	startResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodPost,
+		"/api/desktop/oauth/authorization-requests",
+		fixture.request,
+		"",
+	)
+	require.Equal(t, http.StatusCreated, startResponse.Code, startResponse.Body.String())
+	started := decodeDesktopHTTPResponse[service.DesktopAuthorizationRequestResult](t, startResponse)
+
+	decisionResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodPost,
+		"/api/desktop/oauth/authorize",
+		map[string]string{
+			"request_token": started.RequestToken,
+			"decision":      "allow",
+		},
+		"",
+	)
+	require.Equal(t, http.StatusOK, decisionResponse.Code, decisionResponse.Body.String())
+	decision := decodeDesktopHTTPResponse[service.DesktopAuthorizationDecisionResult](t, decisionResponse)
+	callback, err := url.Parse(decision.RedirectURI)
+	require.NoError(t, err)
+	protocolVersion := service.DesktopContractVersion
+	exchangeResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodPost,
+		"/api/desktop/oauth/token",
+		service.DesktopTokenExchangeInput{
+			GrantType:       "authorization_code",
+			ClientID:        service.DesktopClientID,
+			Code:            callback.Query().Get("code"),
+			RedirectURI:     fixture.request.RedirectURI,
+			CodeVerifier:    fixture.verifier,
+			DeviceID:        fixture.request.DeviceID,
+			ProtocolVersion: &protocolVersion,
+		},
+		"",
+	)
+	require.Equal(t, http.StatusOK, exchangeResponse.Code, exchangeResponse.Body.String())
+	exchanged := decodeDesktopHTTPResponse[service.DesktopTokenExchangeResult](t, exchangeResponse)
+	assert.True(t, exchanged.ConfirmationRequired)
+	require.NotEmpty(t, exchanged.ConfirmationToken)
+
+	pendingGrantsResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodGet,
+		"/api/user/desktop-grants",
+		nil,
+		"",
+	)
+	require.Equal(t, http.StatusOK, pendingGrantsResponse.Code, pendingGrantsResponse.Body.String())
+	var pendingGrantsEnvelope struct {
+		Success bool                 `json:"success"`
+		Data    []model.DesktopGrant `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(pendingGrantsResponse.Body.Bytes(), &pendingGrantsEnvelope))
+	require.True(t, pendingGrantsEnvelope.Success)
+	assert.Empty(t, pendingGrantsEnvelope.Data,
+		"unconfirmed grants must remain hidden from the legacy authorized-device list")
+
+	beforeConfirmation := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodGet,
+		"/api/desktop/account",
+		nil,
+		"Bearer "+exchanged.Tokens.Claude.AccessToken,
+	)
+	assert.Equal(t, http.StatusUnauthorized, beforeConfirmation.Code)
+
+	for range 2 {
+		confirmationResponse := performDesktopJSON(
+			t,
+			fixture.router,
+			http.MethodPost,
+			"/api/desktop/oauth/confirm",
+			map[string]string{"confirmation_token": exchanged.ConfirmationToken},
+			"",
+		)
+		require.Equal(t, http.StatusNoContent, confirmationResponse.Code, confirmationResponse.Body.String())
+	}
+
+	afterConfirmation := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodGet,
+		"/api/desktop/account",
+		nil,
+		"Bearer "+exchanged.Tokens.Claude.AccessToken,
+	)
+	assert.Equal(t, http.StatusOK, afterConfirmation.Code, afterConfirmation.Body.String())
 }

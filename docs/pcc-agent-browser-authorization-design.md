@@ -13,8 +13,8 @@
 2. Agent 向 New API 创建一个 10 分钟有效的授权请求，然后用系统浏览器打开 New API 授权页。
 3. 用户使用 New API 现有登录能力登录；新用户使用现有注册和邮箱验证能力创建账号，再自动返回授权页。
 4. 用户明确同意后，New API 创建该设备的 pending `DesktopGrant` 和一次性授权码，但暂不创建 API Token。
-5. 浏览器把 2 分钟有效、只能使用一次的授权码送回本机回调。Agent 使用 PKCE 换码成功时，New API 才原子创建 Claude、Codex 两个受模型、用途、用户和有效期约束的普通用户 API Token，并激活 Grant。
-6. 两个 Token 只返回一次，只保存在 Electron 主进程控制的 OS 凭据保护存储中。渲染进程、`settings.json`、URL、日志和浏览器均不得获得 Token。
+5. 浏览器把 2 分钟有效、只能使用一次的授权码送回本机回调。Agent 使用 PKCE 和 `protocol_version=2` 换码时，New API 原子创建 Claude、Codex 两个受限但尚未启用的 Token，并返回一次性确认令牌。
+6. Agent 先把两个 Token 和确认令牌写入 Electron 主进程控制的 OS 凭据保护存储，再调用确认接口。New API 只在确认成功后启用新 Token 并撤销同设备旧 Grant；2 分钟内未确认的 Token 自动撤销。旧版未发送协议版本或发送版本 1 时仍保持原有即时激活语义。
 7. 平台 Channel/Provider 主密钥始终只存在于 New API 服务端；桌面端获得的不是后台 PAT、浏览器会话、管理员凭据或支付凭据。
 
 第一阶段只支持 loopback redirect。自定义 URI Scheme 作为后续兼容能力，不作为首发主路径。首发不引入 OAuth refresh token；受限 Token 默认 90 天有效，客户端在到期前引导重新授权。这样可以显著减少 New API 的协议面和高价值长期凭据。
@@ -134,10 +134,12 @@ sequenceDiagram
     N->>N: 原子创建 pending DesktopGrant、一次性 code
     N-->>B: 302 到 127.0.0.1，携带 code + state
     B->>A: loopback callback
-    A->>N: code + verifier 交换
-    N->>N: 原子创建受限 Token并激活 Grant
-    N-->>A: 一次性返回受限 API Token
+    A->>N: code + verifier + protocol_version=2 交换
+    N->>N: 原子创建 disabled 受限 Token
+    N-->>A: 一次性返回 Token + confirmation_token
     A->>A: OS 凭据保护存储
+    A->>N: 确认凭据已持久化
+    N->>N: 启用新 Token并撤销同设备旧 Grant
     A->>N: Bearer 受限 Token 调用 Relay/账户只读接口
     N->>P: 使用服务端 Channel 主凭据
 ```
@@ -309,21 +311,23 @@ Guest 不可用：
   "code": "opaque-one-time-code",
   "redirect_uri": "http://127.0.0.1:49152/oauth/callback/4Mv...",
   "code_verifier": "43-to-128-character-verifier",
-  "device_id": "installation-uuid"
+  "device_id": "installation-uuid",
+  "protocol_version": 2
 }
 ```
 
 交换必须精确验证 client、redirect、设备哈希和 PKCE，并在同一事务中：
 
 1. 原子消费授权码。
-2. 锁定同一用户、客户端、设备的已有 active Grant。
-3. 创建服务端策略决定的 Claude、Codex 两个受限 API Token。
-4. 撤销旧 active Grant 的全部 Token，激活新的 pending Grant。
+2. 创建服务端策略决定的 Claude、Codex 两个 disabled 受限 API Token。
+3. 将 pending Grant 转为 `awaiting_confirmation`，绑定 2 分钟有效的确认摘要。
+4. 在同一事务内读取账户快照；旧 active Grant 此时保持可用。
 
-任何一步失败都回滚，旧 active Grant 继续可用。成功后只返回一次：
+任何一步失败都回滚，旧 active Grant 继续可用。成功后 Token 只返回一次：
 
 ```json
 {
+  "contract_version": 2,
   "token_type": "Bearer",
   "tokens": {
     "claude": {
@@ -339,13 +343,23 @@ Guest 不可用：
   },
   "expires_in": 7776000,
   "scope": "relay account.read usage.read",
+  "confirmation_required": true,
+  "confirmation_token": "opaque-one-time-confirmation",
+  "confirmation_expires_in": 120,
   "account": {
+    "contract_version": 2,
     "display_name": "Alice",
     "quota": 123456,
+    "used_quota": 654321,
     "subscription_state": "active"
   }
 }
 ```
+
+客户端必须在严格安全存储写入成功后调用 `POST /api/desktop/oauth/confirm`，请求体为
+`{"confirmation_token":"..."}`。确认事务重新检查设备上限，启用两枚新 Token，并撤销同设备旧 Grant。
+确认接口幂等；确认过期后返回稳定错误码，清理任务会禁用未确认 Token。为了保持已经发布的
+PccAgent 和 origin 链路兼容，省略 `protocol_version` 或显式发送 `1` 时继续使用原有即时激活流程。
 
 不得返回：
 
@@ -367,7 +381,26 @@ Guest 不可用：
 `GET /api/desktop/usage`
 
 - 使用 `usage.read`。
-- 返回服务端聚合、分页的当前用户用量；不复用需要 PAT 的完整 Dashboard 日志接口。
+- 保留原有 `page`/`page_size` 分页，兼容已发布客户端。
+- `pagination=cursor` 时使用不透明 `cursor`，返回 `has_more`、`next_cursor` 和 `truncated`。
+
+`GET /api/desktop/usage/summary`
+
+- 使用 `usage.read`。
+- 服务端按总量、UTC 日和模型聚合，并按 30 分钟活动间隔计算最长任务时长；返回明确的
+  `truncated`、`days_truncated`、`models_truncated`、`activity_truncated` 与
+  `legacy_cache_truncated`。
+- 新日志使用稳定的 `cache_tokens`、`cache_creation_tokens` 列；历史日志在有界兼容读取中解析
+  `other`，超过兼容上限时显式标记截断。
+
+兼容字段按下列窗口收敛：
+
+- `contract_version=2` 的账户邮箱规范字段为 `email`（值始终脱敏）；客户端对 `masked_email`
+  的双读只用于版本 1 响应。
+- `contract_version=2` 的缓存统计规范字段为显式 cache 列；`other` JSON 只服务历史日志。
+- 协议版本 1 的即时激活、`masked_email` 双读和历史 `other` 解析均不得早于 2027-01-31
+  移除；到期后仍需先确认连续 90 天无旧客户端请求或兼容字段命中，再单独评审移除。
+- `truncated` 及各细分截断标志用于发现兼容读取是否仍超出边界；不得把截断结果当成完整统计。
 
 这两个接口应通过 Token 对应的 active `DesktopGrant` 再做一次 scope/status 检查，不能仅凭通用 `TokenAuth` 放行。
 
@@ -433,8 +466,10 @@ Guest 不可用：
 | `token_id` | 激活后关联的 Claude API Token；兼容旧版单 Token Grant，可空且唯一 |
 | `codex_token_id` | 激活后关联的 Codex API Token，可空且唯一 |
 | `scopes` | 服务端定义的稳定 scope 集合 |
-| `status` | `pending`、`active`、`revoked`、`expired` |
+| `status` | `pending`、`awaiting_confirmation`、`active`、`revoked`、`expired` |
 | `active_slot` | active 时为 `1`，其他状态为 `NULL` |
+| `version` | Redis 活动/拒绝缓存的单调版本 |
+| `confirmation_hash` / `confirmation_expires_at` | 确认令牌摘要与短时有效期，不保存原值 |
 | `created_time` | 授权时间 |
 | `last_used_time` | 限频更新的最近使用 |
 | `expired_time` | 与 Token 一致 |
@@ -442,7 +477,9 @@ Guest 不可用：
 
 使用 `(user_id, client_id, device_id_hash, active_slot)` 唯一索引保证同一设备最多一个 active Grant。SQLite、MySQL 5.7.8 和 PostgreSQL 9.6 都允许 unique index 中存在多行 `NULL`，因此 pending/revoked 行的 `active_slot=NULL`，只有 active 行写 `1`。交换时仍使用 `lockForUpdate(tx)` 锁定旧 active Grant，先撤销其 Claude/Codex Token，再激活新 Grant。过期未交换的 pending Grant 可由定时清理软删除，它从未持有 Token。
 
-`DesktopGrant` 必须加入用户硬删除的认证数据清理。撤销事务提交后清除关联 Token 的 Redis cache。不得保存原始 Token、PKCE verifier 或原始 device ID。
+`DesktopGrant` 必须加入用户硬删除的认证数据清理。活动 Grant 使用带版本号的 5 秒 Redis 短缓存；
+撤销事务提交后先发布拒绝状态，再清除关联 Token cache，延迟的旧 active 写入不能覆盖新拒绝版本。
+不得保存原始 Token、PKCE verifier、确认令牌或原始 device ID。
 
 ### 7.3 受限 API Token 策略
 
@@ -460,7 +497,7 @@ Guest 不可用：
 
 这两个新增配置只决定浏览器授权产生的两个 Token 的 `Group`，所选分组必须已经对授权用户可用，否则服务端拒绝签发。它们不会修改已有 Token、`GroupRatio`、`GroupGroupRatio`、`UserUsableGroups`、用户所属分组或计费倍率；Token 后续仍经过现有分组权限、模型限制和计费链路。
 
-用户自己的 API 密钥页面继续使用现有 Token 明细展示这两个 Key，包括掩码、按需查看/复制、状态、分组、模型限制、累计用量、创建时间、最后使用时间和过期时间。列表响应额外返回 `pcc_agent: true` 与 `pcc_agent_engine: "claude" | "codex"`，前端明确标记为“PccAgent 专用”。这些 Key 在通用 Token 管理中只读：不得编辑、启停或删除，也不得进入批量删除；设备撤销继续作为唯一失效入口，并同时撤销同一 Grant 的两个 Key。
+用户自己的 API 密钥页面继续使用现有 Token 明细展示这两个 Key 的掩码、状态、分组、模型限制、累计用量、创建时间、最后使用时间和过期时间。列表响应额外返回 `pcc_agent: true` 与 `pcc_agent_engine: "claude" | "codex"`，前端明确标记为“PccAgent 专用”。这些 Key 在通用 Token 管理中只读且不可再次读取或复制完整密钥：不得进入单个/批量密钥读取、编辑、启停或删除接口；设备撤销继续作为唯一失效入口，并同时撤销同一 Grant 的两个 Key。
 
 ### 7.4 权限角色
 

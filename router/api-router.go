@@ -62,6 +62,7 @@ func SetApiRouter(router *gin.Engine) {
 			desktopOAuthRoute.GET("/authorization-requests/:request_token", middleware.UserAuth(), middleware.DesktopAuthorizationDecisionRateLimit(), controller.GetDesktopAuthorizationRequest)
 			desktopOAuthRoute.POST("/authorize", middleware.UserAuth(), middleware.DesktopAuthorizationDecisionRateLimit(), controller.DecideDesktopAuthorization)
 			desktopOAuthRoute.POST("/token", middleware.DesktopTokenExchangeRateLimit(), anonymousRequestBodyLimit, controller.ExchangeDesktopAuthorizationCode)
+			desktopOAuthRoute.POST("/confirm", middleware.DesktopTokenExchangeRateLimit(), anonymousRequestBodyLimit, controller.ConfirmDesktopAuthorization)
 			desktopOAuthRoute.POST("/revoke", middleware.DesktopTokenExchangeRateLimit(), controller.RevokeDesktopAuthorization)
 		}
 		desktopRoute := apiRouter.Group("/desktop")
@@ -69,6 +70,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			desktopRoute.GET("/account", middleware.DesktopTokenAuth("account.read"), controller.GetDesktopAccount)
 			desktopRoute.GET("/usage", middleware.DesktopTokenAuth("usage.read"), controller.GetDesktopUsage)
+			desktopRoute.GET("/usage/summary", middleware.DesktopTokenAuth("usage.read"), controller.GetDesktopUsageSummary)
 		}
 
 		apiRouter.POST("/stripe/webhook", anonymousRequestBodyLimit, controller.StripeWebhook)

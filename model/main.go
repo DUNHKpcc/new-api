@@ -423,6 +423,14 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
 		return err
 	}
+	for _, statement := range []string{
+		"ALTER TABLE logs ADD COLUMN IF NOT EXISTS cache_tokens Int32 DEFAULT 0 AFTER completion_tokens",
+		"ALTER TABLE logs ADD COLUMN IF NOT EXISTS cache_creation_tokens Int32 DEFAULT 0 AFTER cache_tokens",
+	} {
+		if err := LOG_DB.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 
@@ -463,6 +471,8 @@ CREATE TABLE IF NOT EXISTS logs (
 	quota Int32 DEFAULT 0,
 	prompt_tokens Int32 DEFAULT 0,
 	completion_tokens Int32 DEFAULT 0,
+	cache_tokens Int32 DEFAULT 0,
+	cache_creation_tokens Int32 DEFAULT 0,
 	use_time Int32 DEFAULT 0,
 	is_stream UInt8 DEFAULT 0,
 	channel_id Int32 DEFAULT 0,

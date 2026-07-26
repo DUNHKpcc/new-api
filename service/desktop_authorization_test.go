@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -190,6 +191,7 @@ func TestDesktopAuthorizationCreatesTwoRestrictedTokensOnceAndRevokesBoth(t *tes
 	assert.Equal(t, DesktopAuthorizationScopes, result.Scope)
 	assert.Equal(t, []string{"gpt-desktop"}, result.Account.AllowedModels)
 	assert.Equal(t, fixture.startQuota, result.Account.Quota)
+	assert.Equal(t, fixture.user.UsedQuota, result.Account.UsedQuota)
 	assert.Equal(t, "Alice MacBook", result.Account.DeviceName)
 
 	var storedUser model.User
@@ -238,6 +240,156 @@ func TestDesktopAuthorizationCreatesTwoRestrictedTokensOnceAndRevokesBoth(t *tes
 	assert.ErrorIs(t, err, ErrDesktopTokenInvalid)
 }
 
+func TestDesktopAuthorizationProtocolV2ActivatesOnlyAfterConfirmation(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	code, _ := authorizeDesktopFixture(t, fixture)
+	protocolVersion := DesktopContractVersion
+
+	result, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:       "authorization_code",
+		ClientID:        DesktopClientID,
+		Code:            code,
+		RedirectURI:     fixture.request.RedirectURI,
+		CodeVerifier:    fixture.verifier,
+		DeviceID:        fixture.request.DeviceID,
+		ProtocolVersion: &protocolVersion,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, DesktopContractVersion, result.ContractVersion)
+	assert.True(t, result.ConfirmationRequired)
+	assert.NotEmpty(t, result.ConfirmationToken)
+	assert.Equal(t, int64(DesktopConfirmationTTL/time.Second), result.ConfirmationExpiresIn)
+
+	var storedTokens []model.Token
+	require.NoError(t, model.DB.Where("user_id = ?", fixture.user.Id).Order("id").Find(&storedTokens).Error)
+	require.Len(t, storedTokens, 2)
+	assert.Equal(t, common.TokenStatusDisabled, storedTokens[0].Status)
+	assert.Equal(t, common.TokenStatusDisabled, storedTokens[1].Status)
+
+	_, err = AuthenticateDesktopAccessToken(result.Tokens.Claude.AccessToken, "account.read")
+	assert.ErrorIs(t, err, ErrDesktopTokenInvalid)
+
+	require.NoError(t, ConfirmDesktopAuthorization(result.ConfirmationToken))
+	require.NoError(t, ConfirmDesktopAuthorization(result.ConfirmationToken), "confirmation must be idempotent")
+	require.NoError(t, model.DB.Model(&model.DesktopGrant{}).
+		Where("public_id = ?", result.Account.GrantPublicID).
+		Update("confirmation_expires_at", time.Now().Add(-time.Minute).Unix()).Error)
+	require.NoError(t, ConfirmDesktopAuthorization(result.ConfirmationToken),
+		"an already active grant remains confirmable after the staging deadline")
+
+	access, err := AuthenticateDesktopAccessToken(result.Tokens.Claude.AccessToken, "account.read")
+	require.NoError(t, err)
+	assert.Equal(t, model.DesktopGrantStatusActive, access.Grant.Status)
+	assert.NotZero(t, access.Grant.ConfirmedTime)
+
+	require.NoError(t, model.DB.Where("user_id = ?", fixture.user.Id).Order("id").Find(&storedTokens).Error)
+	assert.Equal(t, common.TokenStatusEnabled, storedTokens[0].Status)
+	assert.Equal(t, common.TokenStatusEnabled, storedTokens[1].Status)
+}
+
+func TestDesktopAuthorizationProtocolV2KeepsPreviousDeviceCredentialUntilConfirmation(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	firstCode, _ := authorizeDesktopFixture(t, fixture)
+	first, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:    "authorization_code",
+		ClientID:     DesktopClientID,
+		Code:         firstCode,
+		RedirectURI:  fixture.request.RedirectURI,
+		CodeVerifier: fixture.verifier,
+		DeviceID:     fixture.request.DeviceID,
+	})
+	require.NoError(t, err)
+
+	secondCode, _ := authorizeDesktopFixture(t, fixture)
+	protocolVersion := DesktopContractVersion
+	second, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:       "authorization_code",
+		ClientID:        DesktopClientID,
+		Code:            secondCode,
+		RedirectURI:     fixture.request.RedirectURI,
+		CodeVerifier:    fixture.verifier,
+		DeviceID:        fixture.request.DeviceID,
+		ProtocolVersion: &protocolVersion,
+	})
+	require.NoError(t, err)
+
+	_, err = AuthenticateDesktopAccessToken(first.Tokens.Claude.AccessToken, "account.read")
+	require.NoError(t, err)
+	_, err = AuthenticateDesktopAccessToken(second.Tokens.Claude.AccessToken, "account.read")
+	assert.ErrorIs(t, err, ErrDesktopTokenInvalid)
+
+	require.NoError(t, ConfirmDesktopAuthorization(second.ConfirmationToken))
+	_, err = AuthenticateDesktopAccessToken(first.Tokens.Claude.AccessToken, "account.read")
+	assert.ErrorIs(t, err, ErrDesktopTokenInvalid)
+	_, err = AuthenticateDesktopAccessToken(first.Tokens.Codex.AccessToken, "account.read")
+	assert.ErrorIs(t, err, ErrDesktopTokenInvalid)
+	_, err = AuthenticateDesktopAccessToken(second.Tokens.Claude.AccessToken, "account.read")
+	require.NoError(t, err)
+	_, err = AuthenticateDesktopAccessToken(second.Tokens.Codex.AccessToken, "account.read")
+	require.NoError(t, err)
+}
+
+func TestDesktopAuthorizationProtocolV2RechecksDeviceLimitAtConfirmation(t *testing.T) {
+	t.Setenv("DESKTOP_GRANT_ACTIVE_LIMIT", "1")
+	firstFixture := setupDesktopAuthorizationTest(t)
+	secondFixture := firstFixture
+	secondFixture.request.DeviceID = "a63a0ac7-06d3-49f0-99cb-0105017d6b48"
+	secondFixture.request.DeviceName = "Second device"
+
+	firstCode, _ := authorizeDesktopFixture(t, firstFixture)
+	secondCode, _ := authorizeDesktopFixture(t, secondFixture)
+	protocolVersion := DesktopContractVersion
+	first, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:       "authorization_code",
+		ClientID:        DesktopClientID,
+		Code:            firstCode,
+		RedirectURI:     firstFixture.request.RedirectURI,
+		CodeVerifier:    firstFixture.verifier,
+		DeviceID:        firstFixture.request.DeviceID,
+		ProtocolVersion: &protocolVersion,
+	})
+	require.NoError(t, err)
+	second, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:       "authorization_code",
+		ClientID:        DesktopClientID,
+		Code:            secondCode,
+		RedirectURI:     secondFixture.request.RedirectURI,
+		CodeVerifier:    secondFixture.verifier,
+		DeviceID:        secondFixture.request.DeviceID,
+		ProtocolVersion: &protocolVersion,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, ConfirmDesktopAuthorization(first.ConfirmationToken))
+	assert.ErrorIs(t, ConfirmDesktopAuthorization(second.ConfirmationToken), ErrDesktopDeviceLimit)
+	_, err = AuthenticateDesktopAccessToken(second.Tokens.Claude.AccessToken, "account.read")
+	assert.ErrorIs(t, err, ErrDesktopTokenInvalid)
+}
+
+func TestDesktopGrantStateAlsoGuardsGenericRelayAuthentication(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	code, _ := authorizeDesktopFixture(t, fixture)
+	result, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:    "authorization_code",
+		ClientID:     DesktopClientID,
+		Code:         code,
+		RedirectURI:  fixture.request.RedirectURI,
+		CodeVerifier: fixture.verifier,
+		DeviceID:     fixture.request.DeviceID,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, model.DB.Model(&model.DesktopGrant{}).
+		Where("user_id = ?", fixture.user.Id).
+		Updates(map[string]any{
+			"status":      model.DesktopGrantStatusRevoked,
+			"active_slot": nil,
+		}).Error)
+
+	_, err = model.ValidateUserToken(strings.TrimPrefix(result.Tokens.Claude.AccessToken, "sk-"))
+	assert.ErrorIs(t, err, model.ErrTokenInvalid)
+}
+
 func TestDesktopAuthorizationWrongVerifierDoesNotConsumeCode(t *testing.T) {
 	fixture := setupDesktopAuthorizationTest(t)
 	code, _ := authorizeDesktopFixture(t, fixture)
@@ -256,6 +408,134 @@ func TestDesktopAuthorizationWrongVerifierDoesNotConsumeCode(t *testing.T) {
 	input.CodeVerifier = fixture.verifier
 	_, err = ExchangeDesktopAuthorizationCode(input)
 	require.NoError(t, err)
+}
+
+func TestDesktopAuthorizationAccountReadFailureDoesNotConsumeCode(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	code, _ := authorizeDesktopFixture(t, fixture)
+	input := DesktopTokenExchangeInput{
+		GrantType:    "authorization_code",
+		ClientID:     DesktopClientID,
+		Code:         code,
+		RedirectURI:  fixture.request.RedirectURI,
+		CodeVerifier: fixture.verifier,
+		DeviceID:     fixture.request.DeviceID,
+	}
+
+	require.NoError(t, model.DB.Migrator().DropTable(&model.UserSubscription{}))
+	_, err := ExchangeDesktopAuthorizationCode(input)
+	require.Error(t, err)
+
+	require.NoError(t, model.DB.AutoMigrate(&model.UserSubscription{}))
+	_, err = ExchangeDesktopAuthorizationCode(input)
+	require.NoError(t, err)
+}
+
+func TestDesktopUsagePreservesLegacyLogTypesAndExplicitCacheCounts(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	now := time.Now().Unix()
+	require.NoError(t, model.DB.Create(&model.Log{
+		UserId:           fixture.user.Id,
+		CreatedAt:        now,
+		Type:             model.LogTypeTopup,
+		PromptTokens:     100,
+		CompletionTokens: 200,
+		Other:            `{"cache_tokens":300}`,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.Log{
+		UserId:           fixture.user.Id,
+		CreatedAt:        now,
+		Type:             model.LogTypeConsume,
+		ModelName:        "legacy-model",
+		Quota:            13,
+		PromptTokens:     2,
+		CompletionTokens: 3,
+		Other:            `{"cache_tokens":5,"cache_creation_tokens":7,"cache_write_tokens":11}`,
+		RequestId:        "legacy-request",
+		IsStream:         true,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.Log{
+		UserId:              fixture.user.Id,
+		CreatedAt:           now - 86400,
+		Type:                model.LogTypeConsume,
+		ModelName:           "stable-model",
+		Quota:               17,
+		PromptTokens:        7,
+		CompletionTokens:    9,
+		CacheTokens:         19,
+		CacheCreationTokens: 23,
+		Other:               `{"cache_tokens":99,"cache_write_tokens":101}`,
+		RequestId:           "stable-request",
+	}).Error)
+
+	result, err := GetDesktopUsage(fixture.user.Id, 1, 100, 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), result.Total)
+	require.Len(t, result.Items, 3)
+	itemsByRequest := make(map[string]DesktopUsageItem, len(result.Items))
+	logTypes := make(map[int]int)
+	for _, item := range result.Items {
+		logTypes[item.Type]++
+		itemsByRequest[item.RequestID] = item
+	}
+	assert.Equal(t, 2, logTypes[model.LogTypeConsume])
+	assert.Equal(t, 1, logTypes[model.LogTypeTopup],
+		"the original page API must retain its pre-v2 all-log behavior")
+	assert.Equal(t, 5, itemsByRequest["legacy-request"].CacheTokens)
+	assert.Equal(t, 11, itemsByRequest["legacy-request"].CacheCreationTokens)
+	assert.Equal(t, 19, itemsByRequest["stable-request"].CacheTokens)
+	assert.Equal(t, 23, itemsByRequest["stable-request"].CacheCreationTokens)
+
+	summary, err := GetDesktopUsageSummary(fixture.user.Id, now-86400, now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), summary.Totals.RequestCount)
+	assert.Equal(t, int64(30), summary.Totals.Quota)
+	assert.Equal(t, int64(9), summary.Totals.PromptTokens)
+	assert.Equal(t, int64(12), summary.Totals.CompletionTokens)
+	assert.Equal(t, int64(24), summary.Totals.CacheTokens)
+	assert.Equal(t, int64(34), summary.Totals.CacheCreationTokens)
+	assert.Equal(t, int64(1), summary.Totals.StreamCount)
+	assert.Len(t, summary.ByDay, 2)
+	assert.Len(t, summary.ByModel, 2)
+	assert.Equal(t, int64(0), summary.LongestTaskSeconds)
+	assert.False(t, summary.ActivityTruncated)
+	assert.False(t, summary.Truncated)
+
+	firstPage, err := GetDesktopUsageByCursor(fixture.user.Id, "", 1, 0, 0)
+	require.NoError(t, err)
+	require.Len(t, firstPage.Items, 1)
+	assert.True(t, firstPage.HasMore)
+	require.NotEmpty(t, firstPage.NextCursor)
+	secondPage, err := GetDesktopUsageByCursor(fixture.user.Id, firstPage.NextCursor, 1, 0, 0)
+	require.NoError(t, err)
+	require.Len(t, secondPage.Items, 1)
+	assert.False(t, secondPage.HasMore)
+	assert.NotEqual(t, firstPage.Items[0].RequestID, secondPage.Items[0].RequestID)
+}
+
+func TestDesktopUsageSummaryComputesLongestTaskFromBoundedActivity(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	start := time.Now().Unix() - 10000
+	for index, createdAt := range []int64{
+		start,
+		start + 600,
+		start + 1200,
+		start + 4000,
+		start + 4300,
+	} {
+		require.NoError(t, model.LOG_DB.Create(&model.Log{
+			UserId:    fixture.user.Id,
+			CreatedAt: createdAt,
+			Type:      model.LogTypeConsume,
+			RequestId: "longest-task-" + strconv.Itoa(index),
+		}).Error)
+	}
+
+	summary, err := GetDesktopUsageSummary(fixture.user.Id, start, start+5000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1200), summary.LongestTaskSeconds)
+	assert.False(t, summary.ActivityTruncated)
+	assert.False(t, summary.Truncated)
 }
 
 func TestDesktopAuthorizationRequiresTheOriginalBrowserSessionAtExchange(t *testing.T) {
@@ -423,6 +703,10 @@ func TestDesktopTokensAreReadOnlyInGenericTokenManagement(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, managedToken.PccAgent)
 	assert.Equal(t, "claude", managedToken.PccAgentEngine)
+	billingToken, err := model.GetTokenById(desktopAccess.Token.Id)
+	require.NoError(t, err)
+	assert.True(t, billingToken.PccAgent, "billing lookups must preserve desktop token cache metadata")
+	assert.Equal(t, "claude", billingToken.PccAgentEngine)
 	err = model.DeleteTokenById(desktopAccess.Token.Id, fixture.user.Id)
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	_, err = AuthenticateDesktopAccessToken(result.Tokens.Claude.AccessToken, "account.read")

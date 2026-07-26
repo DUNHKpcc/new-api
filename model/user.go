@@ -855,13 +855,15 @@ func (user *User) Delete() error {
 		return errors.New("id 为空！")
 	}
 	var nextAuthVersion int64
+	var revokedDesktopGrants []DesktopGrant
 	if err := DB.Transaction(func(tx *gorm.DB) error {
 		var err error
 		nextAuthVersion, err = IncrementUserAuthVersionWithTx(tx, user.Id)
 		if err != nil {
 			return err
 		}
-		if err := revokeAllDesktopGrantsWithTx(tx, user.Id, "user_deleted"); err != nil {
+		revokedDesktopGrants, err = revokeAllDesktopGrantsWithTx(tx, user.Id, "user_deleted")
+		if err != nil {
 			return err
 		}
 		return tx.Delete(user).Error
@@ -870,6 +872,11 @@ func (user *User) Delete() error {
 	}
 	if err := publishCommittedUserAuthVersion(user.Id, nextAuthVersion); err != nil {
 		return err
+	}
+	for i := range revokedDesktopGrants {
+		if err := publishDesktopGrantState(&revokedDesktopGrants[i]); err != nil {
+			return err
+		}
 	}
 	if _, err := RevokeAllUserSessions(user.Id, "user_deleted"); err != nil {
 		return err

@@ -280,6 +280,15 @@ func ValidateUserToken(key string) (token *Token, err error) {
 			}
 			return token, ErrTokenInvalid
 		}
+		if token.PccAgent {
+			if _, grantErr := GetActiveDesktopGrantByTokenId(token.Id); grantErr != nil {
+				if !errors.Is(grantErr, ErrDesktopGrantInactive) &&
+					!errors.Is(grantErr, ErrDesktopGrantInvalid) {
+					return token, fmt.Errorf("%w: %v", ErrDatabase, grantErr)
+				}
+				return token, ErrTokenInvalid
+			}
+		}
 		return token, nil
 	}
 	common.SysLog("ValidateUserToken: failed to get token: " + err.Error())
@@ -319,6 +328,9 @@ func GetTokenById(id int) (*Token, error) {
 	token := Token{Id: id}
 	var err error = nil
 	err = DB.First(&token, "id = ?", id).Error
+	if err == nil {
+		err = attachPccAgentTokenMetadata([]*Token{&token})
+	}
 	if shouldUpdateRedis(true, err) {
 		gopool.Go(func() {
 			if err := cacheSetToken(token); err != nil {
@@ -350,6 +362,9 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 	}
 	fromDB = true
 	err = DB.Where(commonKeyCol+" = ?", key).First(&token).Error
+	if err == nil {
+		err = attachPccAgentTokenMetadata([]*Token{token})
+	}
 	return token, err
 }
 
@@ -572,7 +587,7 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 
 func GetTokenKeysByIds(ids []int, userId int) ([]Token, error) {
 	var tokens []Token
-	err := DB.Model(&Token{}).
+	err := excludeDesktopGrantTokens(DB.Model(&Token{})).
 		Select("id", commonKeyCol).
 		Where("user_id = ? AND id IN (?)", userId, ids).
 		Find(&tokens).Error

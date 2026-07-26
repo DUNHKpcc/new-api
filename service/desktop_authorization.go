@@ -26,6 +26,7 @@ const (
 	DesktopAuthorizationRequestTTL = 10 * time.Minute
 	DesktopAuthorizationCodeTTL    = 2 * time.Minute
 	DesktopAccessTokenTTL          = 90 * 24 * time.Hour
+	DesktopConfirmationTTL         = 2 * time.Minute
 
 	desktopRedirectNonceMinBytes = 16
 	desktopStateMinBytes         = 32
@@ -36,17 +37,19 @@ const (
 )
 
 var (
-	ErrDesktopInvalidRequest    = errors.New("desktop authorization request is invalid")
-	ErrDesktopUnsupportedClient = errors.New("desktop client is not supported")
-	ErrDesktopInvalidRedirect   = errors.New("desktop redirect URI is invalid")
-	ErrDesktopInvalidPKCE       = errors.New("desktop PKCE proof is invalid")
-	ErrDesktopRequestExpired    = errors.New("desktop authorization request has expired")
-	ErrDesktopRequestConsumed   = errors.New("desktop authorization request has already been consumed")
-	ErrDesktopDeviceLimit       = errors.New("desktop device limit reached")
-	ErrDesktopTokenInvalid      = errors.New("desktop access token is invalid")
-	ErrDesktopScopeDenied       = errors.New("desktop access token scope is denied")
-	ErrDesktopBrowserSession    = errors.New("desktop authorization requires a browser session")
-	ErrDesktopGroupUnavailable  = errors.New("desktop token group is unavailable to this user")
+	ErrDesktopInvalidRequest      = errors.New("desktop authorization request is invalid")
+	ErrDesktopUnsupportedClient   = errors.New("desktop client is not supported")
+	ErrDesktopInvalidRedirect     = errors.New("desktop redirect URI is invalid")
+	ErrDesktopInvalidPKCE         = errors.New("desktop PKCE proof is invalid")
+	ErrDesktopRequestExpired      = errors.New("desktop authorization request has expired")
+	ErrDesktopRequestConsumed     = errors.New("desktop authorization request has already been consumed")
+	ErrDesktopDeviceLimit         = errors.New("desktop device limit reached")
+	ErrDesktopTokenInvalid        = errors.New("desktop access token is invalid")
+	ErrDesktopScopeDenied         = errors.New("desktop access token scope is denied")
+	ErrDesktopBrowserSession      = errors.New("desktop authorization requires a browser session")
+	ErrDesktopGroupUnavailable    = errors.New("desktop token group is unavailable to this user")
+	ErrDesktopConfirmationInvalid = errors.New("desktop token confirmation is invalid")
+	ErrDesktopConfirmationExpired = errors.New("desktop token confirmation has expired")
 
 	desktopBase64URLPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 	desktopVerifierPattern  = regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
@@ -115,12 +118,13 @@ type DesktopAuthorizationDecisionResult struct {
 }
 
 type DesktopTokenExchangeInput struct {
-	GrantType    string `json:"grant_type"`
-	ClientID     string `json:"client_id"`
-	Code         string `json:"code"`
-	RedirectURI  string `json:"redirect_uri"`
-	CodeVerifier string `json:"code_verifier"`
-	DeviceID     string `json:"device_id"`
+	GrantType       string `json:"grant_type"`
+	ClientID        string `json:"client_id"`
+	Code            string `json:"code"`
+	RedirectURI     string `json:"redirect_uri"`
+	CodeVerifier    string `json:"code_verifier"`
+	DeviceID        string `json:"device_id"`
+	ProtocolVersion *int   `json:"protocol_version,omitempty"`
 }
 
 type DesktopAccountSubscription struct {
@@ -129,10 +133,12 @@ type DesktopAccountSubscription struct {
 }
 
 type DesktopAccount struct {
+	ContractVersion   int                        `json:"contract_version"`
 	DisplayName       string                     `json:"display_name"`
 	Email             string                     `json:"email"`
 	Status            int                        `json:"status"`
 	Quota             int                        `json:"quota"`
+	UsedQuota         int                        `json:"used_quota"`
 	Subscription      DesktopAccountSubscription `json:"subscription"`
 	SubscriptionState string                     `json:"subscription_state"`
 	AllowedModels     []string                   `json:"allowed_models"`
@@ -143,11 +149,15 @@ type DesktopAccount struct {
 }
 
 type DesktopTokenExchangeResult struct {
-	TokenType string                    `json:"token_type"`
-	Tokens    DesktopEngineAccessTokens `json:"tokens"`
-	ExpiresIn int64                     `json:"expires_in"`
-	Scope     string                    `json:"scope"`
-	Account   DesktopAccount            `json:"account"`
+	ContractVersion       int                       `json:"contract_version"`
+	TokenType             string                    `json:"token_type"`
+	Tokens                DesktopEngineAccessTokens `json:"tokens"`
+	ExpiresIn             int64                     `json:"expires_in"`
+	Scope                 string                    `json:"scope"`
+	ConfirmationRequired  bool                      `json:"confirmation_required"`
+	ConfirmationToken     string                    `json:"confirmation_token,omitempty"`
+	ConfirmationExpiresIn int64                     `json:"confirmation_expires_in,omitempty"`
+	Account               DesktopAccount            `json:"account"`
 }
 
 type DesktopEngineAccessToken struct {
@@ -168,23 +178,50 @@ type DesktopAccess struct {
 }
 
 type DesktopUsageItem struct {
-	CreatedAt        int64  `json:"created_at"`
-	Type             int    `json:"type"`
-	ModelName        string `json:"model_name"`
-	Quota            int    `json:"quota"`
-	PromptTokens     int    `json:"prompt_tokens"`
-	CompletionTokens int    `json:"completion_tokens"`
-	UseTime          int    `json:"use_time"`
-	IsStream         bool   `json:"is_stream"`
-	Group            string `json:"group"`
-	RequestID        string `json:"request_id,omitempty"`
+	CreatedAt           int64  `json:"created_at"`
+	Type                int    `json:"type"`
+	ModelName           string `json:"model_name"`
+	Quota               int    `json:"quota"`
+	PromptTokens        int    `json:"prompt_tokens"`
+	CompletionTokens    int    `json:"completion_tokens"`
+	CacheTokens         int    `json:"cache_tokens,omitempty"`
+	CacheCreationTokens int    `json:"cache_creation_tokens,omitempty"`
+	UseTime             int    `json:"use_time"`
+	IsStream            bool   `json:"is_stream"`
+	Group               string `json:"group"`
+	RequestID           string `json:"request_id,omitempty"`
 }
 
 type DesktopUsagePage struct {
-	Page     int                `json:"page"`
-	PageSize int                `json:"page_size"`
-	Total    int64              `json:"total"`
-	Items    []DesktopUsageItem `json:"items"`
+	ContractVersion int                `json:"contract_version"`
+	Page            int                `json:"page"`
+	PageSize        int                `json:"page_size"`
+	Total           int64              `json:"total"`
+	HasMore         bool               `json:"has_more"`
+	NextCursor      string             `json:"next_cursor,omitempty"`
+	Truncated       bool               `json:"truncated"`
+	Items           []DesktopUsageItem `json:"items"`
+}
+
+type desktopUsageCursor struct {
+	ID        int    `json:"id,omitempty"`
+	CreatedAt int64  `json:"created_at"`
+	RequestID string `json:"request_id,omitempty"`
+}
+
+type DesktopUsageSummary struct {
+	ContractVersion    int                                `json:"contract_version"`
+	StartTimestamp     int64                              `json:"start_timestamp"`
+	EndTimestamp       int64                              `json:"end_timestamp"`
+	Totals             model.DesktopUsageAggregate        `json:"totals"`
+	ByDay              []model.DesktopUsageDayAggregate   `json:"by_day"`
+	ByModel            []model.DesktopUsageModelAggregate `json:"by_model"`
+	LongestTaskSeconds int64                              `json:"longest_task_seconds"`
+	Truncated          bool                               `json:"truncated"`
+	DaysTruncated      bool                               `json:"days_truncated"`
+	ModelsTruncated    bool                               `json:"models_truncated"`
+	LegacyTruncated    bool                               `json:"legacy_cache_truncated"`
+	ActivityTruncated  bool                               `json:"activity_truncated"`
 }
 
 func CreateDesktopAuthorizationRequest(input DesktopAuthorizationRequestInput, authorizationOrigin string) (*DesktopAuthorizationRequestResult, error) {
@@ -356,6 +393,14 @@ func ExchangeDesktopAuthorizationCode(input DesktopTokenExchangeInput) (*Desktop
 		strings.TrimSpace(input.Code) == "" || strings.TrimSpace(input.DeviceID) == "" {
 		return nil, ErrDesktopInvalidRequest
 	}
+	protocolVersion := 1
+	if input.ProtocolVersion != nil {
+		protocolVersion = *input.ProtocolVersion
+	}
+	if protocolVersion != 1 && protocolVersion != DesktopContractVersion {
+		return nil, ErrDesktopInvalidRequest
+	}
+	confirmationRequired := protocolVersion == DesktopContractVersion
 	if err := validateDesktopRedirectURI(input.RedirectURI); err != nil {
 		return nil, err
 	}
@@ -408,8 +453,20 @@ func ExchangeDesktopAuthorizationCode(input DesktopTokenExchangeInput) (*Desktop
 	claudePolicy.ExpiredTime = expiresAt
 	codexPolicy.Key = codexKey
 	codexPolicy.ExpiredTime = expiresAt
+	confirmationToken := ""
+	confirmationExpiresAt := int64(0)
+	confirmationHash := ""
+	if confirmationRequired {
+		confirmationToken, err = common.GenerateKey()
+		if err != nil {
+			return nil, err
+		}
+		confirmationHash = common.GenerateHMAC(confirmationToken)
+		confirmationExpiresAt = time.Now().Add(DesktopConfirmationTTL).Unix()
+	}
 
 	var activation *model.DesktopGrantActivationResult
+	var account *DesktopAccount
 	_, err = model.ConsumeAuthFlowWithAction(input.Code, model.AuthFlowMatch{
 		Purpose:   model.AuthFlowPurposeDesktopCode,
 		Provider:  DesktopClientID,
@@ -418,6 +475,9 @@ func ExchangeDesktopAuthorizationCode(input DesktopTokenExchangeInput) (*Desktop
 	}, func(tx *gorm.DB, _ *model.AuthFlow) error {
 		if sessionErr := model.ValidateActiveUserSessionWithTx(tx, payload.UserID, payload.SessionID); sessionErr != nil {
 			return sessionErr
+		}
+		if lockErr := model.LockDesktopGrantUserWithTx(tx, payload.UserID); lockErr != nil {
+			return lockErr
 		}
 		maxActiveDevices := common.GetEnvOrDefault("DESKTOP_GRANT_ACTIVE_LIMIT", 10)
 		if maxActiveDevices <= 0 {
@@ -441,28 +501,60 @@ func ExchangeDesktopAuthorizationCode(input DesktopTokenExchangeInput) (*Desktop
 			return ErrDesktopDeviceLimit
 		}
 		var activateErr error
-		activation, activateErr = model.ActivateDesktopGrantWithTokensTx(
+		if confirmationRequired {
+			activation, activateErr = model.StageDesktopGrantWithTokensTx(
+				tx,
+				payload.GrantPublicID,
+				payload.UserID,
+				claudePolicy,
+				codexPolicy,
+				confirmationHash,
+				confirmationExpiresAt,
+			)
+		} else {
+			activation, activateErr = model.ActivateDesktopGrantWithTokensTx(
+				tx,
+				payload.GrantPublicID,
+				payload.UserID,
+				claudePolicy,
+				codexPolicy,
+			)
+		}
+		if activateErr != nil {
+			return activateErr
+		}
+		account, activateErr = buildDesktopAccountWithDB(
 			tx,
-			payload.GrantPublicID,
-			payload.UserID,
-			claudePolicy,
-			codexPolicy,
+			activation.ClaudeToken,
+			activation.Grant,
+			activation.CodexToken,
 		)
 		return activateErr
 	})
 	if err != nil {
 		return nil, mapDesktopAuthFlowError(err)
 	}
+	if err := model.PublishDesktopGrantActivation(activation); err != nil {
+		common.SysError("failed to publish desktop grant activation: " + err.Error())
+		revokedKeys, revokeErr := model.RevokeDesktopGrant(payload.UserID, activation.Grant.PublicId, "cache_publish_failed")
+		revokedKeys = append(revokedKeys, activation.RevokedTokenKeys...)
+		_ = model.InvalidateTokenKeysCache(revokedKeys)
+		if revokeErr != nil {
+			common.SysError("failed to roll back desktop grant after cache publication failure: " + revokeErr.Error())
+		}
+		return nil, err
+	}
 	if err := model.InvalidateTokenKeysCache(activation.RevokedTokenKeys); err != nil {
 		common.SysLog("failed to invalidate reauthorized desktop token cache: " + err.Error())
 	}
 
-	account, err := BuildDesktopAccount(activation.ClaudeToken, activation.Grant, activation.CodexToken)
-	if err != nil {
-		return nil, err
+	confirmationExpiresIn := int64(0)
+	if confirmationRequired {
+		confirmationExpiresIn = int64(DesktopConfirmationTTL / time.Second)
 	}
 	return &DesktopTokenExchangeResult{
-		TokenType: "Bearer",
+		ContractVersion: DesktopContractVersion,
+		TokenType:       "Bearer",
 		Tokens: DesktopEngineAccessTokens{
 			Claude: DesktopEngineAccessToken{
 				AccessToken:   "sk-" + activation.ClaudeToken.Key,
@@ -475,10 +567,44 @@ func ExchangeDesktopAuthorizationCode(input DesktopTokenExchangeInput) (*Desktop
 				AllowedModels: activation.CodexToken.GetModelLimits(),
 			},
 		},
-		ExpiresIn: int64(DesktopAccessTokenTTL / time.Second),
-		Scope:     DesktopAuthorizationScopes,
-		Account:   *account,
+		ExpiresIn:             int64(DesktopAccessTokenTTL / time.Second),
+		Scope:                 DesktopAuthorizationScopes,
+		ConfirmationRequired:  confirmationRequired,
+		ConfirmationToken:     confirmationToken,
+		ConfirmationExpiresIn: confirmationExpiresIn,
+		Account:               *account,
 	}, nil
+}
+
+func ConfirmDesktopAuthorization(confirmationToken string) error {
+	confirmationToken = strings.TrimSpace(confirmationToken)
+	if confirmationToken == "" {
+		return ErrDesktopConfirmationInvalid
+	}
+	maxActiveDevices := common.GetEnvOrDefault("DESKTOP_GRANT_ACTIVE_LIMIT", 10)
+	if maxActiveDevices <= 0 {
+		maxActiveDevices = 10
+	}
+	activation, err := model.ConfirmDesktopGrant(
+		common.GenerateHMAC(confirmationToken),
+		maxActiveDevices,
+	)
+	switch {
+	case errors.Is(err, model.ErrDesktopGrantConfirmationInvalid):
+		return ErrDesktopConfirmationInvalid
+	case errors.Is(err, model.ErrDesktopGrantConfirmationExpired):
+		return ErrDesktopConfirmationExpired
+	case errors.Is(err, model.ErrDesktopGrantDeviceLimit):
+		return ErrDesktopDeviceLimit
+	case err != nil:
+		return err
+	}
+	if err := model.PublishDesktopGrantActivation(activation); err != nil {
+		return err
+	}
+	tokenKeys := append([]string{}, activation.RevokedTokenKeys...)
+	tokenKeys = append(tokenKeys, activation.ClaudeToken.Key, activation.CodexToken.Key)
+	return model.InvalidateTokenKeysCache(tokenKeys)
 }
 
 func AuthenticateDesktopAccessToken(rawToken, requiredScope string) (*DesktopAccess, error) {
@@ -544,11 +670,20 @@ func RevokeAllUserDesktopGrants(userID int, reason string) error {
 }
 
 func BuildDesktopAccount(token *model.Token, grant *model.DesktopGrant, additionalTokens ...*model.Token) (*DesktopAccount, error) {
-	if token == nil || grant == nil || token.UserId <= 0 || grant.UserId != token.UserId {
+	return buildDesktopAccountWithDB(model.DB, token, grant, additionalTokens...)
+}
+
+func buildDesktopAccountWithDB(
+	db *gorm.DB,
+	token *model.Token,
+	grant *model.DesktopGrant,
+	additionalTokens ...*model.Token,
+) (*DesktopAccount, error) {
+	if db == nil || token == nil || grant == nil || token.UserId <= 0 || grant.UserId != token.UserId {
 		return nil, ErrDesktopTokenInvalid
 	}
-	user, err := model.GetUserById(token.UserId, false)
-	if err != nil {
+	var user model.User
+	if err := db.Omit("password", "access_token").First(&user, "id = ?", token.UserId).Error; err != nil {
 		return nil, err
 	}
 	displayName := strings.TrimSpace(user.DisplayName)
@@ -556,15 +691,17 @@ func BuildDesktopAccount(token *model.Token, grant *model.DesktopGrant, addition
 		displayName = user.Username
 	}
 	subscription := DesktopAccountSubscription{State: "none"}
-	subscriptions, err := model.GetAllActiveUserSubscriptions(user.Id)
-	if err != nil {
+	var subscriptions []model.UserSubscription
+	if err := db.Where("user_id = ? AND status = ? AND end_time > ?", user.Id, "active", common.GetTimestamp()).
+		Order("end_time desc, id desc").
+		Find(&subscriptions).Error; err != nil {
 		return nil, err
 	}
 	if len(subscriptions) > 0 {
 		subscription.State = "active"
-		for _, summary := range subscriptions {
-			if summary.Subscription != nil && summary.Subscription.EndTime > subscription.ExpiresAt {
-				subscription.ExpiresAt = summary.Subscription.EndTime
+		for i := range subscriptions {
+			if subscriptions[i].EndTime > subscription.ExpiresAt {
+				subscription.ExpiresAt = subscriptions[i].EndTime
 			}
 		}
 	}
@@ -583,10 +720,12 @@ func BuildDesktopAccount(token *model.Token, grant *model.DesktopGrant, addition
 	}
 	sort.Strings(allowedModels)
 	return &DesktopAccount{
+		ContractVersion:   DesktopContractVersion,
 		DisplayName:       displayName,
 		Email:             common.MaskEmail(user.Email),
 		Status:            user.Status,
 		Quota:             user.Quota,
+		UsedQuota:         user.UsedQuota,
 		Subscription:      subscription,
 		SubscriptionState: subscription.State,
 		AllowedModels:     allowedModels,
@@ -628,25 +767,157 @@ func GetDesktopUsage(userID, page, pageSize int, startTimestamp, endTimestamp in
 	}
 	items := make([]DesktopUsageItem, 0, len(logs))
 	for _, log := range logs {
-		items = append(items, DesktopUsageItem{
-			CreatedAt:        log.CreatedAt,
-			Type:             log.Type,
-			ModelName:        log.ModelName,
-			Quota:            log.Quota,
-			PromptTokens:     log.PromptTokens,
-			CompletionTokens: log.CompletionTokens,
-			UseTime:          log.UseTime,
-			IsStream:         log.IsStream,
-			Group:            log.Group,
-			RequestID:        log.RequestId,
-		})
+		items = append(items, desktopUsageItemFromLog(log))
 	}
 	return &DesktopUsagePage{
-		Page:     page,
-		PageSize: pageSize,
-		Total:    total,
-		Items:    items,
+		ContractVersion: DesktopContractVersion,
+		Page:            page,
+		PageSize:        pageSize,
+		Total:           total,
+		HasMore:         int64(page*pageSize) < total,
+		Truncated:       false,
+		Items:           items,
 	}, nil
+}
+
+func GetDesktopUsageByCursor(
+	userID int,
+	cursorValue string,
+	pageSize int,
+	startTimestamp int64,
+	endTimestamp int64,
+) (*DesktopUsagePage, error) {
+	if userID <= 0 {
+		return nil, ErrDesktopTokenInvalid
+	}
+	if pageSize < 1 {
+		pageSize = 100
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	cursor := desktopUsageCursor{}
+	if cursorValue != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(cursorValue)
+		if err != nil || common.Unmarshal(decoded, &cursor) != nil || cursor.CreatedAt <= 0 {
+			return nil, ErrDesktopInvalidRequest
+		}
+	}
+	logs, hasMore, err := model.GetDesktopUsageLogsByCursor(
+		userID,
+		model.DesktopUsageCursor{
+			ID:        cursor.ID,
+			CreatedAt: cursor.CreatedAt,
+			RequestID: cursor.RequestID,
+		},
+		pageSize,
+		startTimestamp,
+		endTimestamp,
+	)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]DesktopUsageItem, 0, len(logs))
+	for _, log := range logs {
+		items = append(items, desktopUsageItemFromLog(log))
+	}
+	nextCursor := ""
+	if hasMore && len(logs) > 0 {
+		last := logs[len(logs)-1]
+		encoded, err := common.Marshal(desktopUsageCursor{
+			ID:        last.Id,
+			CreatedAt: last.CreatedAt,
+			RequestID: last.RequestId,
+		})
+		if err != nil {
+			return nil, err
+		}
+		nextCursor = base64.RawURLEncoding.EncodeToString(encoded)
+	}
+	return &DesktopUsagePage{
+		ContractVersion: DesktopContractVersion,
+		PageSize:        pageSize,
+		HasMore:         hasMore,
+		NextCursor:      nextCursor,
+		Truncated:       false,
+		Items:           items,
+	}, nil
+}
+
+func GetDesktopUsageSummary(userID int, startTimestamp, endTimestamp int64) (*DesktopUsageSummary, error) {
+	if userID <= 0 {
+		return nil, ErrDesktopTokenInvalid
+	}
+	aggregate, err := model.GetDesktopUsageAggregate(userID, startTimestamp, endTimestamp)
+	if err != nil {
+		return nil, err
+	}
+	return &DesktopUsageSummary{
+		ContractVersion:    DesktopContractVersion,
+		StartTimestamp:     aggregate.StartTimestamp,
+		EndTimestamp:       aggregate.EndTimestamp,
+		Totals:             aggregate.Totals,
+		ByDay:              aggregate.Days,
+		ByModel:            aggregate.Models,
+		LongestTaskSeconds: aggregate.LongestTaskSeconds,
+		Truncated:          aggregate.DaysTruncated || aggregate.ModelsTruncated || aggregate.LegacyTruncated || aggregate.ActivityTruncated,
+		DaysTruncated:      aggregate.DaysTruncated,
+		ModelsTruncated:    aggregate.ModelsTruncated,
+		LegacyTruncated:    aggregate.LegacyTruncated,
+		ActivityTruncated:  aggregate.ActivityTruncated,
+	}, nil
+}
+
+func desktopUsageItemFromLog(log *model.Log) DesktopUsageItem {
+	if log == nil {
+		return DesktopUsageItem{}
+	}
+	cacheTokens := log.CacheTokens
+	cacheCreationTokens := log.CacheCreationTokens
+	if cacheTokens == 0 || cacheCreationTokens == 0 {
+		other, _ := common.StrToMap(log.Other)
+		if cacheTokens == 0 {
+			cacheTokens = desktopUsageTokenCount(other["cache_tokens"])
+		}
+		if cacheCreationTokens == 0 {
+			cacheCreationTokens = desktopUsageTokenCount(other["cache_write_tokens"])
+			if cacheCreationTokens == 0 {
+				cacheCreationTokens = desktopUsageTokenCount(other["cache_creation_tokens"])
+			}
+		}
+	}
+	return DesktopUsageItem{
+		CreatedAt:           log.CreatedAt,
+		Type:                log.Type,
+		ModelName:           log.ModelName,
+		Quota:               log.Quota,
+		PromptTokens:        log.PromptTokens,
+		CompletionTokens:    log.CompletionTokens,
+		CacheTokens:         cacheTokens,
+		CacheCreationTokens: cacheCreationTokens,
+		UseTime:             log.UseTime,
+		IsStream:            log.IsStream,
+		Group:               log.Group,
+		RequestID:           log.RequestId,
+	}
+}
+
+func desktopUsageTokenCount(value any) int {
+	switch count := value.(type) {
+	case float64:
+		if count > 0 && count <= float64(common.MaxQuota) {
+			return int(count)
+		}
+	case int:
+		if count > 0 && count <= common.MaxQuota {
+			return count
+		}
+	case int64:
+		if count > 0 && count <= int64(common.MaxQuota) {
+			return int(count)
+		}
+	}
+	return 0
 }
 
 func validateDesktopAuthorizationRequest(input DesktopAuthorizationRequestInput) (*desktopAuthorizationRequestPayload, error) {

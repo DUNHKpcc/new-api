@@ -51,4 +51,10 @@ func cleanupAuthArtifacts() {
 	if err := model.DeleteExpiredPendingDesktopGrants(now); err != nil {
 		common.SysError("failed to delete expired pending desktop grants: " + err.Error())
 	}
+	expiredTokenKeys, err := model.RevokeExpiredUnconfirmedDesktopGrants(now)
+	if err != nil {
+		common.SysError("failed to revoke unconfirmed desktop grants: " + err.Error())
+	} else if err := model.InvalidateTokenKeysCache(expiredTokenKeys); err != nil {
+		common.SysError("failed to invalidate unconfirmed desktop token cache: " + err.Error())
+	}
 }

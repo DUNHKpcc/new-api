@@ -57,27 +57,29 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 }
 
 type Log struct {
-	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
-	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
-	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
-	Content           string `json:"content"`
-	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
-	TokenName         string `json:"token_name" gorm:"index;default:''"`
-	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
-	Quota             int    `json:"quota" gorm:"default:0"`
-	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
-	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
-	UseTime           int    `json:"use_time" gorm:"default:0"`
-	IsStream          bool   `json:"is_stream"`
-	ChannelId         int    `json:"channel" gorm:"index"`
-	ChannelName       string `json:"channel_name" gorm:"->"`
-	TokenId           int    `json:"token_id" gorm:"default:0;index"`
-	Group             string `json:"group" gorm:"index"`
-	Ip                string `json:"ip" gorm:"index;default:''"`
-	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
-	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
-	Other             string `json:"other"`
+	Id                  int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
+	UserId              int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
+	CreatedAt           int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
+	Type                int    `json:"type" gorm:"index:idx_created_at_type"`
+	Content             string `json:"content"`
+	Username            string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	TokenName           string `json:"token_name" gorm:"index;default:''"`
+	ModelName           string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
+	Quota               int    `json:"quota" gorm:"default:0"`
+	PromptTokens        int    `json:"prompt_tokens" gorm:"default:0"`
+	CompletionTokens    int    `json:"completion_tokens" gorm:"default:0"`
+	CacheTokens         int    `json:"cache_tokens" gorm:"default:0"`
+	CacheCreationTokens int    `json:"cache_creation_tokens" gorm:"default:0"`
+	UseTime             int    `json:"use_time" gorm:"default:0"`
+	IsStream            bool   `json:"is_stream"`
+	ChannelId           int    `json:"channel" gorm:"index"`
+	ChannelName         string `json:"channel_name" gorm:"->"`
+	TokenId             int    `json:"token_id" gorm:"default:0;index"`
+	Group               string `json:"group" gorm:"index"`
+	Ip                  string `json:"ip" gorm:"index;default:''"`
+	RequestId           string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
+	UpstreamRequestId   string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
+	Other               string `json:"other"`
 }
 
 // don't use iota, avoid change log type value
@@ -340,6 +342,37 @@ type RecordConsumeLogParams struct {
 	Other            map[string]interface{} `json:"other"`
 }
 
+func positiveLogTokenCount(value interface{}) int {
+	switch count := value.(type) {
+	case int:
+		if count > 0 && count <= common.MaxQuota {
+			return count
+		}
+	case int32:
+		if count > 0 {
+			return int(count)
+		}
+	case int64:
+		if count > 0 && count <= int64(common.MaxQuota) {
+			return int(count)
+		}
+	case float64:
+		if count > 0 && count <= float64(common.MaxQuota) {
+			return int(count)
+		}
+	}
+	return 0
+}
+
+func consumeLogCacheTokenCounts(other map[string]interface{}) (int, int) {
+	cacheTokens := positiveLogTokenCount(other["cache_tokens"])
+	cacheCreationTokens := positiveLogTokenCount(other["cache_write_tokens"])
+	if cacheCreationTokens == 0 {
+		cacheCreationTokens = positiveLogTokenCount(other["cache_creation_tokens"])
+	}
+	return cacheTokens, cacheCreationTokens
+}
+
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
 	if !common.LogConsumeEnabled {
 		return
@@ -350,6 +383,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
 	otherStr := common.MapToJsonStr(params.Other)
+	cacheTokens, cacheCreationTokens := consumeLogCacheTokenCounts(params.Other)
 	// 判断是否需要记录 IP
 	needRecordIp := false
 	if settingMap, err := GetUserSetting(userId, false); err == nil {
@@ -358,21 +392,23 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}
 	}
 	log := &Log{
-		UserId:           userId,
-		Username:         username,
-		CreatedAt:        createdAt,
-		Type:             LogTypeConsume,
-		Content:          params.Content,
-		PromptTokens:     params.PromptTokens,
-		CompletionTokens: params.CompletionTokens,
-		TokenName:        params.TokenName,
-		ModelName:        params.ModelName,
-		Quota:            params.Quota,
-		ChannelId:        params.ChannelId,
-		TokenId:          params.TokenId,
-		UseTime:          params.UseTimeSeconds,
-		IsStream:         params.IsStream,
-		Group:            params.Group,
+		UserId:              userId,
+		Username:            username,
+		CreatedAt:           createdAt,
+		Type:                LogTypeConsume,
+		Content:             params.Content,
+		PromptTokens:        params.PromptTokens,
+		CompletionTokens:    params.CompletionTokens,
+		CacheTokens:         cacheTokens,
+		CacheCreationTokens: cacheCreationTokens,
+		TokenName:           params.TokenName,
+		ModelName:           params.ModelName,
+		Quota:               params.Quota,
+		ChannelId:           params.ChannelId,
+		TokenId:             params.TokenId,
+		UseTime:             params.UseTimeSeconds,
+		IsStream:            params.IsStream,
+		Group:               params.Group,
 		Ip: func() string {
 			if needRecordIp {
 				return c.ClientIP()

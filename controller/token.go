@@ -97,6 +97,9 @@ func GetTokenKey(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if rejectPccAgentTokenMutation(c, userId, []int{id}) {
+		return
+	}
 	token, err := model.GetTokenByIds(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -368,6 +371,9 @@ func GetTokenKeysBatch(c *gin.Context) {
 		return
 	}
 	userId := c.GetInt("id")
+	if rejectPccAgentTokenMutation(c, userId, tokenBatch.Ids) {
+		return
+	}
 	tokens, err := model.GetTokenKeysByIds(tokenBatch.Ids, userId)
 	if err != nil {
 		common.ApiError(c, err)

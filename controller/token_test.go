@@ -469,7 +469,7 @@ func TestGetAllTokensIncludesPccAgentMetadataAndMaskedKeys(t *testing.T) {
 	assert.NotContains(t, recorder.Body.String(), codex.Key)
 }
 
-func TestPccAgentTokenKeyCanBeRead(t *testing.T) {
+func TestPccAgentTokenKeyCannotBeRead(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
 	claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "readpccclaude123")
 	codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "readpcccodex1234")
@@ -480,10 +480,30 @@ func TestPccAgentTokenKeyCanBeRead(t *testing.T) {
 	GetTokenKey(ctx)
 
 	response := decodeAPIResponse(t, recorder)
-	require.True(t, response.Success, response.Message)
-	var keyData tokenKeyResponse
-	require.NoError(t, common.Unmarshal(response.Data, &keyData))
-	assert.Equal(t, claude.Key, keyData.Key)
+	assert.False(t, response.Success)
+	assert.NotContains(t, recorder.Body.String(), claude.Key)
+	assert.NotContains(t, recorder.Body.String(), codex.Key)
+}
+
+func TestPccAgentTokenKeysCannotBeReadInBatch(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "batchreadclaude")
+	codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "batchreadcodex1")
+	seedPccAgentGrant(t, db, 1, claude, codex)
+
+	ctx, recorder := newAuthenticatedContext(
+		t,
+		http.MethodPost,
+		"/api/token/batch/key",
+		map[string]any{"ids": []int{claude.Id, codex.Id}},
+		1,
+	)
+	GetTokenKeysBatch(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	assert.NotContains(t, recorder.Body.String(), claude.Key)
+	assert.NotContains(t, recorder.Body.String(), codex.Key)
 }
 
 func TestPccAgentTokensRejectGenericMutations(t *testing.T) {

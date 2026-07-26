@@ -1,8 +1,7 @@
 package middleware
 
 import (
-	"errors"
-	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/service"
@@ -13,6 +12,7 @@ const desktopAccessContextKey = "desktop_access"
 
 func DesktopAuthorizationSecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		c.Header(service.DesktopContractVersionHeader, strconv.Itoa(service.DesktopContractVersion))
 		c.Header("Cache-Control", "no-store")
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
@@ -43,16 +43,9 @@ func DesktopTokenAuth(requiredScope string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		access, err := service.AuthenticateDesktopAccessToken(c.GetHeader("Authorization"), requiredScope)
 		if err != nil {
-			status := http.StatusUnauthorized
-			code := "DESKTOP_TOKEN_INVALID"
-			if errors.Is(err, service.ErrDesktopScopeDenied) {
-				status = http.StatusForbidden
-				code = "DESKTOP_SCOPE_DENIED"
-			}
-			c.AbortWithStatusJSON(status, gin.H{
-				"error":             code,
-				"error_description": http.StatusText(status),
-			})
+			status, response := service.DesktopErrorFor(err)
+			c.Header(service.DesktopContractVersionHeader, strconv.Itoa(service.DesktopContractVersion))
+			c.AbortWithStatusJSON(status, response)
 			return
 		}
 		c.Set("id", access.User.Id)
