@@ -7,11 +7,13 @@ const DesktopAgentAutoGroup = "auto"
 type DesktopAgentSetting struct {
 	ClaudeGroup string `json:"claude_group"`
 	CodexGroup  string `json:"codex_group"`
+	GiftPlanId  int    `json:"gift_plan_id"`
 }
 
 var desktopAgentSetting = DesktopAgentSetting{
 	ClaudeGroup: DesktopAgentAutoGroup,
 	CodexGroup:  DesktopAgentAutoGroup,
+	GiftPlanId:  0,
 }
 
 func init() {

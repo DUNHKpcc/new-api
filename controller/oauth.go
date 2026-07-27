@@ -34,6 +34,26 @@ func providerParams(name string) map[string]any {
 	return map[string]any{"Provider": name}
 }
 
+func claimWeChatUnionIDWithTx(tx *gorm.DB, provider oauth.Provider, oauthUser *oauth.OAuthUser, userID int) error {
+	if _, ok := provider.(*oauth.WeChatProvider); !ok {
+		return nil
+	}
+	if oauthUser == nil || oauthUser.Extra == nil {
+		return nil
+	}
+	unionID, _ := oauthUser.Extra["union_id"].(string)
+	unionID = strings.TrimSpace(unionID)
+	if unionID == "" {
+		return nil
+	}
+	return model.ClaimExternalIdentityWithTx(
+		tx,
+		model.ExternalIdentityProviderWeChatUnionID,
+		unionID,
+		userID,
+	)
+}
+
 // GenerateOAuthCode generates a state code for OAuth CSRF protection
 func GenerateOAuthCode(c *gin.Context) {
 	var request oauthStateRequest
@@ -281,7 +301,19 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider, pendingFlow *model
 	} else {
 		// Built-in provider: update user record directly
 		provider.SetProviderUserID(&user, oauthUser.ProviderUserID)
-		err = user.Update(false)
+		err = model.DB.Transaction(func(tx *gorm.DB) error {
+			if err := claimWeChatUnionIDWithTx(tx, provider, oauthUser, user.Id); err != nil {
+				return err
+			}
+			return tx.Model(&model.User{}).Where("id = ?", user.Id).Updates(map[string]interface{}{
+				"github_id":   user.GitHubId,
+				"discord_id":  user.DiscordId,
+				"oidc_id":     user.OidcId,
+				"linux_do_id": user.LinuxDOId,
+				"wechat_id":   user.WeChatId,
+				"telegram_id": user.TelegramId,
+			}).Error
+		})
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -306,6 +338,11 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		// Check if user has been deleted
 		if user.Id == 0 {
 			return nil, &OAuthUserDeletedError{}
+		}
+		if err := model.DB.Transaction(func(tx *gorm.DB) error {
+			return claimWeChatUnionIDWithTx(tx, provider, oauthUser, user.Id)
+		}); err != nil {
+			return nil, err
 		}
 		return user, nil
 	}
@@ -417,6 +454,9 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 				"wechat_id":   user.WeChatId,
 				"telegram_id": user.TelegramId,
 			}).Error; err != nil {
+				return err
+			}
+			if err := claimWeChatUnionIDWithTx(tx, provider, oauthUser, user.Id); err != nil {
 				return err
 			}
 

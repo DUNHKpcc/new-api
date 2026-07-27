@@ -6,9 +6,13 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/oauth"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestGetStatusAdvertisesWeChatOnlyWithCompleteConfiguration(t *testing.T) {
@@ -64,4 +68,50 @@ func TestLoginMethodFromContextRecognizesUnifiedWeChatRoute(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, response.Code)
 	assert.Equal(t, "wechat", method)
+}
+
+func TestWeChatOAuthUnionIDCreatesDurableIdentityClaim(t *testing.T) {
+	previousDB := model.DB
+	db, err := gorm.Open(sqlite.Open("file:wechat_union_claim?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.ExternalIdentityClaim{}))
+	model.DB = db
+	t.Cleanup(func() {
+		model.DB = previousDB
+		sqlDB, dbErr := db.DB()
+		if dbErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	provider := &oauth.WeChatProvider{}
+	oauthUser := &oauth.OAuthUser{
+		ProviderUserID: "wechat-union-id",
+		Extra: map[string]any{
+			"union_id": "wechat-union-id",
+		},
+	}
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return claimWeChatUnionIDWithTx(tx, provider, oauthUser, 7)
+	}))
+	subject, err := model.GetExternalIdentitySubjectByUserWithTx(
+		db,
+		model.ExternalIdentityProviderWeChatUnionID,
+		7,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "wechat-union-id", subject)
+
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return claimWeChatUnionIDWithTx(tx, provider, &oauth.OAuthUser{
+			ProviderUserID: "openid-fallback",
+			Extra:          map[string]any{"union_id": ""},
+		}, 8)
+	}))
+	_, err = model.GetExternalIdentitySubjectByUserWithTx(
+		db,
+		model.ExternalIdentityProviderWeChatUnionID,
+		8,
+	)
+	assert.ErrorIs(t, err, model.ErrExternalIdentityNotClaimed)
 }

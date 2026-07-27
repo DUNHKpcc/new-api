@@ -153,6 +153,27 @@ func UpdateOption(c *gin.Context) {
 		}
 	}
 	switch option.Key {
+	case "desktop_agent_setting.gift_plan_id":
+		giftPlanId, parseErr := strconv.Atoi(strings.TrimSpace(option.Value.(string)))
+		if parseErr != nil || giftPlanId < 0 {
+			common.ApiErrorMsg(c, "PccAgent 赠送订阅套餐无效")
+			return
+		}
+		if giftPlanId > 0 {
+			if !common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "" {
+				common.ApiErrorMsg(c, "启用 PccAgent 赠送订阅前必须完整配置并启用微信 OAuth")
+				return
+			}
+			plan, planErr := model.GetSubscriptionPlanById(giftPlanId)
+			if planErr != nil || plan == nil {
+				common.ApiErrorMsg(c, "PccAgent 赠送订阅套餐不存在")
+				return
+			}
+			if !plan.Enabled {
+				common.ApiErrorMsg(c, "PccAgent 赠送订阅套餐必须处于启用状态")
+				return
+			}
+		}
 	case "GitHubOAuthEnabled":
 		if option.Value == "true" && common.GitHubClientId == "" {
 			c.JSON(http.StatusOK, gin.H{

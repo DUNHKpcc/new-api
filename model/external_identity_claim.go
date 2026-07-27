@@ -10,9 +10,16 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const ExternalIdentityProviderTelegram = "telegram"
+const (
+	ExternalIdentityProviderTelegram           = "telegram"
+	ExternalIdentityProviderWeChatUnionID      = "wechat_unionid"
+	ExternalIdentityProviderPccAgentGiftWeChat = "pcc_agent_gift_wechat"
+)
 
-var ErrExternalIdentityAlreadyClaimed = errors.New("external identity is already claimed")
+var (
+	ErrExternalIdentityAlreadyClaimed = errors.New("external identity is already claimed")
+	ErrExternalIdentityNotClaimed     = errors.New("external identity is not claimed")
+)
 
 // ExternalIdentityClaim is the durable ownership record for an identity issued
 // by an external provider. The two unique indexes make both the provider
@@ -67,6 +74,35 @@ func ClaimExternalIdentityWithTx(tx *gorm.DB, provider, subject string, userId i
 	return nil
 }
 
+func GetExternalIdentitySubjectByUserWithTx(tx *gorm.DB, provider string, userId int) (string, error) {
+	provider = strings.TrimSpace(provider)
+	if tx == nil || provider == "" || userId <= 0 {
+		return "", errors.New("external identity lookup is invalid")
+	}
+	var claim ExternalIdentityClaim
+	if err := tx.Where("provider = ? AND user_id = ?", provider, userId).First(&claim).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", ErrExternalIdentityNotClaimed
+		}
+		return "", err
+	}
+	if strings.TrimSpace(claim.Subject) == "" {
+		return "", ErrExternalIdentityNotClaimed
+	}
+	return claim.Subject, nil
+}
+
+func HasExternalIdentityClaim(provider string, userId int) (bool, error) {
+	if userId <= 0 {
+		return false, errors.New("external identity lookup is invalid")
+	}
+	_, err := GetExternalIdentitySubjectByUserWithTx(DB, provider, userId)
+	if errors.Is(err, ErrExternalIdentityNotClaimed) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func ReleaseExternalIdentityWithTx(tx *gorm.DB, provider string, userId int) error {
 	provider = strings.TrimSpace(provider)
 	if tx == nil || provider == "" || userId == 0 {
@@ -80,7 +116,8 @@ func releaseAllExternalIdentitiesWithTx(tx *gorm.DB, userId int) error {
 	if tx == nil || userId == 0 {
 		return errors.New("external identity release is invalid")
 	}
-	return tx.Where("user_id = ?", userId).Delete(&ExternalIdentityClaim{}).Error
+	return tx.Where("user_id = ? AND provider <> ?", userId, ExternalIdentityProviderPccAgentGiftWeChat).
+		Delete(&ExternalIdentityClaim{}).Error
 }
 
 // InitializeExternalIdentityClaims imports legacy Telegram bindings after the

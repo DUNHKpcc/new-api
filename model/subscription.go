@@ -36,11 +36,24 @@ const (
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
+	ErrNoActiveSubscription           = errors.New("no active subscription")
+	ErrSubscriptionQuotaInsufficient  = errors.New("subscription quota insufficient")
+	ErrSubscriptionSourceForbidden    = errors.New("subscription source is not available for this token")
+	ErrPccAgentGiftDeleteForbidden    = errors.New("pcc agent gift subscription cannot be deleted")
+	ErrPccAgentGiftPlanUnavailable    = errors.New("pcc agent gift subscription plan is unavailable")
 )
 
 const (
 	subscriptionPlanCacheNamespace     = "new-api:subscription_plan:v1"
 	subscriptionPlanInfoCacheNamespace = "new-api:subscription_plan_info:v1"
+	UserSubscriptionSourcePccAgentGift = "pcc_agent_gift"
+)
+
+type SubscriptionUsageScope string
+
+const (
+	SubscriptionUsageScopeStandard     SubscriptionUsageScope = "standard"
+	SubscriptionUsageScopePccAgentGift SubscriptionUsageScope = "pcc_agent_gift"
 )
 
 var (
@@ -416,7 +429,8 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	}
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND plan_id = ?", userId, planId).
+		Where("user_id = ? AND plan_id = ? AND (source IS NULL OR source <> ?)",
+			userId, planId, UserSubscriptionSourcePccAgentGift).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
@@ -481,7 +495,13 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	return target, nil
 }
 
-func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
+type createUserSubscriptionOptions struct {
+	source               string
+	enforcePurchaseLimit bool
+	applyGroupChange     bool
+}
+
+func createUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, options createUserSubscriptionOptions) (*UserSubscription, error) {
 	if tx == nil {
 		return nil, errors.New("tx is nil")
 	}
@@ -491,10 +511,11 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
 	}
-	if plan.MaxPurchasePerUser > 0 {
+	if options.enforcePurchaseLimit && plan.MaxPurchasePerUser > 0 {
 		var count int64
 		if err := tx.Model(&UserSubscription{}).
-			Where("user_id = ? AND plan_id = ?", userId, plan.Id).
+			Where("user_id = ? AND plan_id = ? AND (source IS NULL OR source <> ?)",
+				userId, plan.Id, UserSubscriptionSourcePccAgentGift).
 			Count(&count).Error; err != nil {
 			return nil, err
 		}
@@ -502,7 +523,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			return nil, errors.New("已达到该套餐购买上限")
 		}
 	}
-	nowUnix := GetDBTimestamp()
+	nowUnix := getDBTimestamp(tx)
 	now := time.Unix(nowUnix, 0)
 	endUnix, err := calcPlanEndTime(now, plan)
 	if err != nil {
@@ -516,7 +537,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	}
 	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
 	prevGroup := ""
-	if upgradeGroup != "" {
+	if options.applyGroupChange && upgradeGroup != "" {
 		currentGroup, err := getUserGroupByIdTx(tx, userId)
 		if err != nil {
 			return nil, err
@@ -541,20 +562,94 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		StartTime:           now.Unix(),
 		EndTime:             endUnix,
 		Status:              "active",
-		Source:              source,
+		Source:              options.source,
 		LastResetTime:       lastReset,
 		NextResetTime:       nextReset,
-		UpgradeGroup:        upgradeGroup,
+		UpgradeGroup:        "",
 		PrevUserGroup:       prevGroup,
-		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
+		DowngradeGroup:      "",
 		AllowWalletOverflow: allowWalletOverflow,
 		CreatedAt:           common.GetTimestamp(),
 		UpdatedAt:           common.GetTimestamp(),
+	}
+	if options.applyGroupChange {
+		sub.UpgradeGroup = upgradeGroup
+		sub.DowngradeGroup = strings.TrimSpace(plan.DowngradeGroup)
 	}
 	if err := tx.Create(sub).Error; err != nil {
 		return nil, err
 	}
 	return sub, nil
+}
+
+func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
+	return createUserSubscriptionFromPlanTx(tx, userId, plan, createUserSubscriptionOptions{
+		source:               source,
+		enforcePurchaseLimit: true,
+		applyGroupChange:     true,
+	})
+}
+
+// EnsurePccAgentGiftSubscriptionWithTx grants the configured benefit at most
+// once per user and once per verified WeChat UnionID.
+func EnsurePccAgentGiftSubscriptionWithTx(tx *gorm.DB, userId int, planId int) (*UserSubscription, error) {
+	if tx == nil {
+		return nil, errors.New("tx is nil")
+	}
+	if planId <= 0 {
+		return nil, nil
+	}
+	if userId <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	if err := LockDesktopGrantUserWithTx(tx, userId); err != nil {
+		return nil, err
+	}
+	unionID, err := GetExternalIdentitySubjectByUserWithTx(tx, ExternalIdentityProviderWeChatUnionID, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	var existing UserSubscription
+	existingQuery := lockForUpdate(tx).
+		Where("user_id = ? AND source = ?", userId, UserSubscriptionSourcePccAgentGift).
+		Order("id asc").
+		Limit(1).
+		Find(&existing)
+	if existingQuery.Error != nil {
+		return nil, existingQuery.Error
+	}
+	if existingQuery.RowsAffected > 0 {
+		if _, claimErr := GetExternalIdentitySubjectByUserWithTx(tx, ExternalIdentityProviderPccAgentGiftWeChat, userId); errors.Is(claimErr, ErrExternalIdentityNotClaimed) {
+			if claimErr = ClaimExternalIdentityWithTx(tx, ExternalIdentityProviderPccAgentGiftWeChat, unionID, userId); claimErr != nil {
+				return nil, claimErr
+			}
+		} else if claimErr != nil {
+			return nil, claimErr
+		}
+		return &existing, nil
+	}
+
+	if _, claimErr := GetExternalIdentitySubjectByUserWithTx(tx, ExternalIdentityProviderPccAgentGiftWeChat, userId); claimErr == nil {
+		return nil, nil
+	} else if !errors.Is(claimErr, ErrExternalIdentityNotClaimed) {
+		return nil, claimErr
+	}
+	if err := ClaimExternalIdentityWithTx(tx, ExternalIdentityProviderPccAgentGiftWeChat, unionID, userId); err != nil {
+		return nil, err
+	}
+	plan, err := getSubscriptionPlanByIdTx(tx, planId)
+	if err != nil {
+		return nil, err
+	}
+	if !plan.Enabled {
+		return nil, ErrPccAgentGiftPlanUnavailable
+	}
+	return createUserSubscriptionFromPlanTx(tx, userId, plan, createUserSubscriptionOptions{
+		source:               UserSubscriptionSourcePccAgentGift,
+		enforcePurchaseLimit: false,
+		applyGroupChange:     false,
+	})
 }
 
 func refreshSubscriptionUserGroupCache(userId int, operation string) {
@@ -859,7 +954,8 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 	now := common.GetTimestamp()
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		Where("user_id = ? AND status = ? AND end_time > ? AND (source IS NULL OR source <> ?)",
+			userId, "active", now, UserSubscriptionSourcePccAgentGift).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -876,8 +972,8 @@ func UserActiveSubscriptionsAllowWalletOverflow(userId int) (bool, error) {
 	now := common.GetTimestamp()
 	var strictCount int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND status = ? AND end_time > ? AND allow_wallet_overflow = ?",
-			userId, "active", now, false).
+		Where("user_id = ? AND status = ? AND end_time > ? AND allow_wallet_overflow = ? AND (source IS NULL OR source <> ?)",
+			userId, "active", now, false, UserSubscriptionSourcePccAgentGift).
 		Count(&strictCount).Error; err != nil {
 		return false, err
 	}
@@ -972,6 +1068,9 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 		if err := lockForUpdate(tx).
 			Where("id = ?", userSubscriptionId).First(&sub).Error; err != nil {
 			return err
+		}
+		if sub.Source == UserSubscriptionSourcePccAgentGift {
+			return ErrPccAgentGiftDeleteForbidden
 		}
 		userId = sub.UserId
 		target, err := downgradeUserGroupForSubscriptionTx(tx, &sub, now)
@@ -1284,8 +1383,29 @@ func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, pl
 	return tx.Save(sub).Error
 }
 
-// PreConsumeUserSubscription pre-consumes from any active subscription total quota.
+// PreConsumeUserSubscription pre-consumes from ordinary subscriptions only.
 func PreConsumeUserSubscription(requestId string, userId int, modelName string, quotaType int, amount int64) (*SubscriptionPreConsumeResult, error) {
+	return PreConsumeUserSubscriptionForScope(
+		requestId,
+		userId,
+		modelName,
+		quotaType,
+		amount,
+		SubscriptionUsageScopeStandard,
+	)
+}
+
+// PreConsumeUserSubscriptionForScope isolates the PccAgent gift pool from
+// ordinary API keys. A PccAgent retry may resume a prior ordinary fallback
+// record, but a standard key can never resume or select a gift record.
+func PreConsumeUserSubscriptionForScope(
+	requestId string,
+	userId int,
+	modelName string,
+	quotaType int,
+	amount int64,
+	scope SubscriptionUsageScope,
+) (*SubscriptionPreConsumeResult, error) {
 	if userId <= 0 {
 		return nil, errors.New("invalid userId")
 	}
@@ -1294,6 +1414,9 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 	}
 	if amount <= 0 {
 		return nil, errors.New("amount must be > 0")
+	}
+	if scope != SubscriptionUsageScopeStandard && scope != SubscriptionUsageScopePccAgentGift {
+		return nil, errors.New("invalid subscription usage scope")
 	}
 	now := GetDBTimestamp()
 
@@ -1309,9 +1432,15 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			if existing.Status == "refunded" {
 				return errors.New("subscription pre-consume already refunded")
 			}
+			if existing.UserId != userId {
+				return ErrSubscriptionSourceForbidden
+			}
 			var sub UserSubscription
 			if err := tx.Where("id = ?", existing.UserSubscriptionId).First(&sub).Error; err != nil {
 				return err
+			}
+			if scope == SubscriptionUsageScopeStandard && sub.Source == UserSubscriptionSourcePccAgentGift {
+				return ErrSubscriptionSourceForbidden
 			}
 			returnValue.UserSubscriptionId = sub.Id
 			returnValue.PreConsumed = existing.PreConsumed
@@ -1322,14 +1451,20 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		}
 
 		var subs []UserSubscription
-		if err := lockForUpdate(tx).
-			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		subQuery := lockForUpdate(tx).
+			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
+		if scope == SubscriptionUsageScopePccAgentGift {
+			subQuery = subQuery.Where("source = ?", UserSubscriptionSourcePccAgentGift)
+		} else {
+			subQuery = subQuery.Where("(source IS NULL OR source <> ?)", UserSubscriptionSourcePccAgentGift)
+		}
+		if err := subQuery.
 			Order("end_time asc, id asc").
 			Find(&subs).Error; err != nil {
-			return errors.New("no active subscription")
+			return err
 		}
 		if len(subs) == 0 {
-			return errors.New("no active subscription")
+			return ErrNoActiveSubscription
 		}
 		for _, candidate := range subs {
 			sub := candidate
@@ -1360,11 +1495,21 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 					if dup.Status == "refunded" {
 						return errors.New("subscription pre-consume already refunded")
 					}
-					returnValue.UserSubscriptionId = sub.Id
+					if dup.UserId != userId {
+						return ErrSubscriptionSourceForbidden
+					}
+					var duplicateSub UserSubscription
+					if err2 := tx.Where("id = ?", dup.UserSubscriptionId).First(&duplicateSub).Error; err2 != nil {
+						return err2
+					}
+					if scope == SubscriptionUsageScopeStandard && duplicateSub.Source == UserSubscriptionSourcePccAgentGift {
+						return ErrSubscriptionSourceForbidden
+					}
+					returnValue.UserSubscriptionId = duplicateSub.Id
 					returnValue.PreConsumed = dup.PreConsumed
-					returnValue.AmountTotal = sub.AmountTotal
-					returnValue.AmountUsedBefore = sub.AmountUsed
-					returnValue.AmountUsedAfter = sub.AmountUsed
+					returnValue.AmountTotal = duplicateSub.AmountTotal
+					returnValue.AmountUsedBefore = duplicateSub.AmountUsed
+					returnValue.AmountUsedAfter = duplicateSub.AmountUsed
 					return nil
 				}
 				return err
@@ -1380,7 +1525,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			returnValue.AmountUsedAfter = sub.AmountUsed
 			return nil
 		}
-		return fmt.Errorf("subscription quota insufficient, need=%d", amount)
+		return fmt.Errorf("%w, need=%d", ErrSubscriptionQuotaInsufficient, amount)
 	})
 	if err != nil {
 		return nil, err

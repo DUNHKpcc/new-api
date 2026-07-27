@@ -835,8 +835,11 @@ func (user *User) ClearBinding(bindingType string) error {
 		if err := tx.Model(&User{}).Where("id = ?", user.Id).Update(column, "").Error; err != nil {
 			return err
 		}
-		if bindingType == ExternalIdentityProviderTelegram {
+		switch bindingType {
+		case ExternalIdentityProviderTelegram:
 			return ReleaseExternalIdentityWithTx(tx, ExternalIdentityProviderTelegram, user.Id)
+		case "wechat":
+			return ReleaseExternalIdentityWithTx(tx, ExternalIdentityProviderWeChatUnionID, user.Id)
 		}
 		return nil
 	}); err != nil {

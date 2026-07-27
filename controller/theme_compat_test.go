@@ -45,3 +45,56 @@ func TestGetStatusAdvertisesDefaultDashboard(t *testing.T) {
 	assert.True(t, payload.Success)
 	assert.Equal(t, "default", payload.Data["theme"])
 }
+
+func TestUpdateOptionRejectsInvalidPccAgentGiftConfiguration(t *testing.T) {
+	previousEnabled := common.WeChatAuthEnabled
+	previousAppID := common.WeChatAppId
+	previousAppSecret := common.WeChatAppSecret
+	common.WeChatAuthEnabled = false
+	common.WeChatAppId = ""
+	common.WeChatAppSecret = ""
+	t.Cleanup(func() {
+		common.WeChatAuthEnabled = previousEnabled
+		common.WeChatAppId = previousAppID
+		common.WeChatAppSecret = previousAppSecret
+	})
+
+	tests := []struct {
+		name    string
+		value   string
+		message string
+	}{
+		{
+			name:    "negative plan",
+			value:   "-1",
+			message: "PccAgent 赠送订阅套餐无效",
+		},
+		{
+			name:    "wechat oauth disabled",
+			value:   "1",
+			message: "启用 PccAgent 赠送订阅前必须完整配置并启用微信 OAuth",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			context, _ := gin.CreateTestContext(response)
+			context.Request = httptest.NewRequest(
+				http.MethodPut,
+				"/api/option/",
+				strings.NewReader(`{"key":"desktop_agent_setting.gift_plan_id","value":`+test.value+`}`),
+			)
+
+			UpdateOption(context)
+
+			assert.Equal(t, http.StatusOK, response.Code)
+			var payload struct {
+				Success bool   `json:"success"`
+				Message string `json:"message"`
+			}
+			require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+			assert.False(t, payload.Success)
+			assert.Equal(t, test.message, payload.Message)
+		})
+	}
+}
