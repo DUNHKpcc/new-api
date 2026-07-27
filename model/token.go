@@ -30,6 +30,7 @@ type Token struct {
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	PccAgent           bool           `json:"pcc_agent" gorm:"-"`
 	PccAgentEngine     string         `json:"pcc_agent_engine,omitempty" gorm:"-"`
+	PccAgentDeletable  bool           `json:"pcc_agent_deletable" gorm:"-"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
@@ -101,6 +102,13 @@ func excludeDesktopGrantTokens(query *gorm.DB) *gorm.DB {
 	)
 }
 
+func excludeNonRevokedDesktopGrantTokens(query *gorm.DB) *gorm.DB {
+	return query.Where(
+		"NOT EXISTS (SELECT 1 FROM desktop_grants WHERE (desktop_grants.status IS NULL OR desktop_grants.status <> ?) AND (desktop_grants.token_id = tokens.id OR desktop_grants.codex_token_id = tokens.id))",
+		DesktopGrantStatusRevoked,
+	)
+}
+
 func attachPccAgentTokenMetadata(tokens []*Token) error {
 	tokenByID := make(map[int]*Token, len(tokens))
 	tokenIDs := make([]int, 0, len(tokens))
@@ -116,7 +124,7 @@ func attachPccAgentTokenMetadata(tokens []*Token) error {
 	}
 
 	var grants []DesktopGrant
-	if err := DB.Select("token_id", "codex_token_id").
+	if err := DB.Select("token_id", "codex_token_id", "status").
 		Where("token_id IN ? OR codex_token_id IN ?", tokenIDs, tokenIDs).
 		Find(&grants).Error; err != nil {
 		return err
@@ -124,14 +132,24 @@ func attachPccAgentTokenMetadata(tokens []*Token) error {
 	for i := range grants {
 		if grants[i].TokenId != nil {
 			if token := tokenByID[*grants[i].TokenId]; token != nil {
+				if !token.PccAgent {
+					token.PccAgentDeletable = true
+				}
 				token.PccAgent = true
 				token.PccAgentEngine = "claude"
+				token.PccAgentDeletable = token.PccAgentDeletable &&
+					grants[i].Status == DesktopGrantStatusRevoked
 			}
 		}
 		if grants[i].CodexTokenId != nil {
 			if token := tokenByID[*grants[i].CodexTokenId]; token != nil {
+				if !token.PccAgent {
+					token.PccAgentDeletable = true
+				}
 				token.PccAgent = true
 				token.PccAgentEngine = "codex"
+				token.PccAgentDeletable = token.PccAgentDeletable &&
+					grants[i].Status == DesktopGrantStatusRevoked
 			}
 		}
 	}
@@ -457,11 +475,31 @@ func DeleteTokenById(id int, userId int) (err error) {
 		return errors.New("id 或 userId 为空！")
 	}
 	token := Token{Id: id, UserId: userId}
-	err = excludeDesktopGrantTokens(DB.Model(&Token{})).Where(token).First(&token).Error
-	if err != nil {
-		return err
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		if err := excludeNonRevokedDesktopGrantTokens(lockForUpdate(tx).Model(&Token{})).
+			Where(token).First(&token).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&DesktopGrant{}).
+			Where("user_id = ? AND status = ? AND token_id = ?", userId, DesktopGrantStatusRevoked, id).
+			Update("token_id", nil).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&DesktopGrant{}).
+			Where("user_id = ? AND status = ? AND codex_token_id = ?", userId, DesktopGrantStatusRevoked, id).
+			Update("codex_token_id", nil).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&token).Error
+	})
+	if shouldUpdateRedis(true, err) {
+		gopool.Go(func() {
+			if cacheErr := cacheDeleteToken(token.Key); cacheErr != nil {
+				common.SysLog("failed to delete token cache: " + cacheErr.Error())
+			}
+		})
 	}
-	return token.Delete()
+	return err
 }
 
 func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
@@ -550,7 +588,7 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 	tx := DB.Begin()
 
 	var tokens []Token
-	if err := excludeDesktopGrantTokens(tx.Model(&Token{})).
+	if err := excludeNonRevokedDesktopGrantTokens(lockForUpdate(tx).Model(&Token{})).
 		Where("user_id = ? AND id IN (?)", userId, ids).
 		Find(&tokens).Error; err != nil {
 		tx.Rollback()
@@ -564,6 +602,18 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 	tokenIds := make([]int, 0, len(tokens))
 	for i := range tokens {
 		tokenIds = append(tokenIds, tokens[i].Id)
+	}
+	if err := tx.Model(&DesktopGrant{}).
+		Where("user_id = ? AND status = ? AND token_id IN ?", userId, DesktopGrantStatusRevoked, tokenIds).
+		Update("token_id", nil).Error; err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+	if err := tx.Model(&DesktopGrant{}).
+		Where("user_id = ? AND status = ? AND codex_token_id IN ?", userId, DesktopGrantStatusRevoked, tokenIds).
+		Update("codex_token_id", nil).Error; err != nil {
+		tx.Rollback()
+		return 0, err
 	}
 	if err := tx.Where("user_id = ? AND id IN (?)", userId, tokenIds).Delete(&Token{}).Error; err != nil {
 		tx.Rollback()

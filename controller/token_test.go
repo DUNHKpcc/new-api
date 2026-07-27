@@ -36,12 +36,13 @@ type tokenPageResponse struct {
 }
 
 type tokenResponseItem struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	Key            string `json:"key"`
-	Status         int    `json:"status"`
-	PccAgent       bool   `json:"pcc_agent"`
-	PccAgentEngine string `json:"pcc_agent_engine"`
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	Key               string `json:"key"`
+	Status            int    `json:"status"`
+	PccAgent          bool   `json:"pcc_agent"`
+	PccAgentEngine    string `json:"pcc_agent_engine"`
+	PccAgentDeletable bool   `json:"pcc_agent_deletable"`
 }
 
 type tokenKeyResponse struct {
@@ -461,6 +462,7 @@ func TestGetAllTokensIncludesPccAgentMetadataAndMaskedKeys(t *testing.T) {
 	engines := make(map[string]tokenResponseItem, len(page.Items))
 	for _, item := range page.Items {
 		require.True(t, item.PccAgent)
+		assert.False(t, item.PccAgentDeletable)
 		engines[item.PccAgentEngine] = item
 	}
 	assert.Equal(t, claude.GetMaskedKey(), engines["claude"].Key)
@@ -567,6 +569,93 @@ func TestPccAgentTokensRejectGenericMutations(t *testing.T) {
 		require.NoError(t, db.Where("id IN ?", []int{regular.Id, codex.Id}).Find(&persisted).Error)
 		assert.Len(t, persisted, 2)
 	})
+
+	t.Run("revoked single delete", func(t *testing.T) {
+		db := setupTokenControllerTestDB(t)
+		claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "revokedpccclaude")
+		codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "revokedpcccodex1")
+		seedPccAgentGrant(t, db, 1, claude, codex)
+		require.NoError(t, db.Model(&model.DesktopGrant{}).
+			Where("user_id = ?", 1).
+			Updates(map[string]any{
+				"status":      model.DesktopGrantStatusRevoked,
+				"active_slot": nil,
+			}).Error)
+
+		ctx, recorder := newAuthenticatedContext(t, http.MethodDelete, "/api/token/"+strconv.Itoa(claude.Id)+"/", nil, 1)
+		ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(claude.Id)}}
+		DeleteToken(ctx)
+
+		response := decodeAPIResponse(t, recorder)
+		require.True(t, response.Success, response.Message)
+		assert.ErrorIs(t, db.First(&model.Token{}, claude.Id).Error, gorm.ErrRecordNotFound)
+		var grant model.DesktopGrant
+		require.NoError(t, db.Where("user_id = ?", 1).First(&grant).Error)
+		assert.Nil(t, grant.TokenId)
+		require.NotNil(t, grant.CodexTokenId)
+		assert.Equal(t, codex.Id, *grant.CodexTokenId)
+	})
+
+	t.Run("revoked batch delete", func(t *testing.T) {
+		db := setupTokenControllerTestDB(t)
+		claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "revbatchpccclaude")
+		codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "revbatchpcccodex1")
+		regular := seedToken(t, db, 1, "Regular", "revbatchregular1")
+		seedPccAgentGrant(t, db, 1, claude, codex)
+		require.NoError(t, db.Model(&model.DesktopGrant{}).
+			Where("user_id = ?", 1).
+			Updates(map[string]any{
+				"status":      model.DesktopGrantStatusRevoked,
+				"active_slot": nil,
+			}).Error)
+
+		ctx, recorder := newAuthenticatedContext(
+			t,
+			http.MethodPost,
+			"/api/token/batch",
+			map[string]any{"ids": []int{regular.Id, claude.Id, codex.Id}},
+			1,
+		)
+		DeleteTokenBatch(ctx)
+
+		response := decodeAPIResponse(t, recorder)
+		require.True(t, response.Success, response.Message)
+		var remaining int64
+		require.NoError(t, db.Model(&model.Token{}).
+			Where("id IN ?", []int{regular.Id, claude.Id, codex.Id}).
+			Count(&remaining).Error)
+		assert.Zero(t, remaining)
+		var grant model.DesktopGrant
+		require.NoError(t, db.Where("user_id = ?", 1).First(&grant).Error)
+		assert.Nil(t, grant.TokenId)
+		assert.Nil(t, grant.CodexTokenId)
+	})
+}
+
+func TestGetAllTokensMarksRevokedPccAgentTokensDeletable(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	claude := seedToken(t, db, 1, "PCC Agent Claude - Mac", "listrevokedclaude")
+	codex := seedToken(t, db, 1, "PCC Agent Codex - Mac", "listrevokedcodex1")
+	seedPccAgentGrant(t, db, 1, claude, codex)
+	require.NoError(t, db.Model(&model.DesktopGrant{}).
+		Where("user_id = ?", 1).
+		Updates(map[string]any{
+			"status":      model.DesktopGrantStatusRevoked,
+			"active_slot": nil,
+		}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/?p=1&size=10", nil, 1)
+	GetAllTokens(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var page tokenPageResponse
+	require.NoError(t, common.Unmarshal(response.Data, &page))
+	require.Len(t, page.Items, 2)
+	for _, item := range page.Items {
+		assert.True(t, item.PccAgent)
+		assert.True(t, item.PccAgentDeletable)
+	}
 }
 
 func TestSearchTokensMasksKeyInResponse(t *testing.T) {

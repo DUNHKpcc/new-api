@@ -104,6 +104,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/sessions/revoke-others", middleware.DisableCache(), controller.RevokeOtherLoginSessions)
 				selfRoute.GET("/desktop-grants", middleware.DisableCache(), controller.ListDesktopGrants)
 				selfRoute.DELETE("/desktop-grants/:public_id", middleware.DisableCache(), controller.DeleteDesktopGrant)
+				selfRoute.DELETE("/desktop-grants/:public_id/history", middleware.DisableCache(), controller.DeleteRevokedDesktopGrant)
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self", controller.GetSelf)
 				selfRoute.GET("/models", controller.GetUserModels)

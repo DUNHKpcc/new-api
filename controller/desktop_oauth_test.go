@@ -140,6 +140,7 @@ func setupDesktopHTTPWorkflow(t *testing.T) desktopHTTPFixture {
 	desktop.GET("/usage/summary", middleware.DesktopTokenAuth("usage.read"), GetDesktopUsageSummary)
 
 	router.GET("/api/user/desktop-grants", browserSession, ListDesktopGrants)
+	router.DELETE("/api/user/desktop-grants/:public_id/history", browserSession, DeleteRevokedDesktopGrant)
 	relayIdentity := func(c *gin.Context) {
 		modelLimit, _ := c.Get("token_model_limit")
 		c.JSON(http.StatusOK, gin.H{
@@ -469,6 +470,16 @@ func TestDesktopAuthorizationHTTPWorkflowRegression(t *testing.T) {
 	require.Len(t, grantsEnvelope.Data, 1)
 	assert.Equal(t, model.DesktopGrantStatusActive, grantsEnvelope.Data[0].Status)
 
+	deleteActiveResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodDelete,
+		"/api/user/desktop-grants/"+grantsEnvelope.Data[0].PublicId+"/history",
+		nil,
+		"",
+	)
+	assert.Equal(t, http.StatusConflict, deleteActiveResponse.Code)
+
 	revokeResponse := performDesktopJSON(
 		t,
 		fixture.router,
@@ -494,6 +505,39 @@ func TestDesktopAuthorizationHTTPWorkflowRegression(t *testing.T) {
 	require.Len(t, revokedTokens, 2)
 	assert.Equal(t, common.TokenStatusDisabled, revokedTokens[0].Status)
 	assert.Equal(t, common.TokenStatusDisabled, revokedTokens[1].Status)
+
+	deleteRevokedResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodDelete,
+		"/api/user/desktop-grants/"+grantsEnvelope.Data[0].PublicId+"/history",
+		nil,
+		"",
+	)
+	require.Equal(t, http.StatusOK, deleteRevokedResponse.Code, deleteRevokedResponse.Body.String())
+
+	deletedGrantsResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodGet,
+		"/api/user/desktop-grants",
+		nil,
+		"",
+	)
+	require.Equal(t, http.StatusOK, deletedGrantsResponse.Code, deletedGrantsResponse.Body.String())
+	var deletedGrantsEnvelope struct {
+		Success bool                 `json:"success"`
+		Data    []model.DesktopGrant `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(deletedGrantsResponse.Body.Bytes(), &deletedGrantsEnvelope))
+	require.True(t, deletedGrantsEnvelope.Success)
+	assert.Empty(t, deletedGrantsEnvelope.Data)
+
+	var remainingTokens int64
+	require.NoError(t, fixture.db.Model(&model.Token{}).
+		Where("user_id = ?", fixture.user.Id).
+		Count(&remainingTokens).Error)
+	assert.Zero(t, remainingTokens)
 }
 
 func TestDesktopAuthorizationHTTPProtocolV2Confirmation(t *testing.T) {

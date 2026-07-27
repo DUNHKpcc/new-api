@@ -227,6 +227,40 @@ func DeleteDesktopGrant(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+func DeleteRevokedDesktopGrant(c *gin.Context) {
+	if _, ok := middleware.GetSessionAuthIdentity(c); !ok {
+		writeDesktopAuthorizationError(c, service.ErrDesktopBrowserSession)
+		return
+	}
+	publicID := strings.TrimSpace(c.Param("public_id"))
+	if publicID == "" {
+		writeDesktopAuthorizationError(c, service.ErrDesktopInvalidRequest)
+		return
+	}
+	err := service.DeleteRevokedUserDesktopGrant(c.GetInt("id"), publicID)
+	if errors.Is(err, model.ErrDesktopGrantNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"code":    "DESKTOP_GRANT_NOT_FOUND",
+			"message": http.StatusText(http.StatusNotFound),
+		})
+		return
+	}
+	if errors.Is(err, model.ErrDesktopGrantNotRevoked) {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"code":    "DESKTOP_GRANT_NOT_REVOKED",
+			"message": http.StatusText(http.StatusConflict),
+		})
+		return
+	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 func writeDesktopAuthorizationError(c *gin.Context, err error) {
 	status, response := service.DesktopErrorFor(err)
 	if status == http.StatusInternalServerError {

@@ -44,6 +44,19 @@ func rejectPccAgentTokenMutation(c *gin.Context, userId int, tokenIds []int) boo
 	return false
 }
 
+func rejectNonRevokedPccAgentTokenDeletion(c *gin.Context, userId int, tokenIds []int) bool {
+	managed, err := model.HasNonRevokedDesktopGrantToken(userId, tokenIds)
+	if err != nil {
+		common.ApiError(c, err)
+		return true
+	}
+	if managed {
+		common.ApiErrorI18n(c, i18n.MsgTokenPccAgentReadOnly)
+		return true
+	}
+	return false
+}
+
 func GetAllTokens(c *gin.Context) {
 	userId := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
@@ -252,7 +265,7 @@ func AddToken(c *gin.Context) {
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt("id")
-	if rejectPccAgentTokenMutation(c, userId, []int{id}) {
+	if rejectNonRevokedPccAgentTokenDeletion(c, userId, []int{id}) {
 		return
 	}
 	err := model.DeleteTokenById(id, userId)
@@ -345,7 +358,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		return
 	}
 	userId := c.GetInt("id")
-	if rejectPccAgentTokenMutation(c, userId, tokenBatch.Ids) {
+	if rejectNonRevokedPccAgentTokenDeletion(c, userId, tokenBatch.Ids) {
 		return
 	}
 	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
