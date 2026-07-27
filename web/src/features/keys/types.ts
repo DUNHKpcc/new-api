@@ -47,6 +47,7 @@ export const apiKeySchema = z.object({
   allow_ips: z.string().nullish().default(''),
   pcc_agent: z.boolean().optional().default(false),
   pcc_agent_engine: z.enum(['claude', 'codex']).optional(),
+  pcc_agent_deletable: z.boolean().optional().default(false),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>

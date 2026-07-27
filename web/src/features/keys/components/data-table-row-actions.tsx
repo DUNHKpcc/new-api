@@ -191,6 +191,29 @@ export function DataTableRowActions<TData>({
   }
 
   if (apiKey.pcc_agent) {
+    if (apiKey.pcc_agent_deletable) {
+      return (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={() => {
+                  setCurrentRow(apiKey)
+                  setOpen('delete')
+                }}
+                aria-label={t('Delete')}
+                className='text-destructive hover:text-destructive'
+              />
+            }
+          >
+            <Trash2 className='size-4' />
+          </TooltipTrigger>
+          <TooltipContent>{t('Delete')}</TooltipContent>
+        </Tooltip>
+      )
+    }
     const readOnlyLabel = t(
       'Managed by PccAgent authorization and cannot be modified here.'
     )

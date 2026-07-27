@@ -59,3 +59,12 @@ export async function revokeDesktopGrant(
   )
   return response.data as DesktopGrantResponse
 }
+
+export async function deleteRevokedDesktopGrant(
+  publicID: string
+): Promise<DesktopGrantResponse> {
+  const response = await api.delete(
+    `/api/user/desktop-grants/${encodeURIComponent(publicID)}/history`
+  )
+  return response.data as DesktopGrantResponse
+}

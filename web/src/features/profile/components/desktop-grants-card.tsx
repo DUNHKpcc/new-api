@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { Laptop, Loader2, Unplug } from 'lucide-react'
+import { Laptop, Loader2, Trash2, Unplug } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FaMicrosoft } from 'react-icons/fa6'
@@ -49,6 +49,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TitledCard } from '@/components/ui/titled-card'
 import {
+  deleteRevokedDesktopGrant,
   getDesktopGrants,
   revokeDesktopGrant,
 } from '@/features/desktop-authorization/api'
@@ -56,6 +57,11 @@ import { PccAgentLogo } from '@/features/desktop-authorization/pcc-agent-logo'
 import type { DesktopGrant } from '@/features/desktop-authorization/types'
 
 const desktopGrantQueryKey = ['profile', 'desktop-grants'] as const
+
+interface DesktopGrantAction {
+  grant: DesktopGrant
+  type: 'delete' | 'revoke'
+}
 
 function grantStatusLabel(status: DesktopGrant['status']): string {
   switch (status) {
@@ -71,7 +77,9 @@ function grantStatusLabel(status: DesktopGrant['status']): string {
 export function DesktopGrantsCard() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [revokeTarget, setRevokeTarget] = useState<DesktopGrant | null>(null)
+  const [actionTarget, setActionTarget] = useState<DesktopGrantAction | null>(
+    null
+  )
   const grantsQuery = useQuery({
     queryKey: desktopGrantQueryKey,
     queryFn: async () => {
@@ -92,12 +100,37 @@ export function DesktopGrantsCard() {
       }
     },
     onSuccess: async () => {
-      setRevokeTarget(null)
+      setActionTarget(null)
       toast.success(t('Device authorization revoked'))
       await queryClient.invalidateQueries({ queryKey: desktopGrantQueryKey })
     },
     onError: () => toast.error(t('Failed to revoke device')),
   })
+  const deleteMutation = useMutation({
+    mutationFn: async (publicID: string) => {
+      const response = await deleteRevokedDesktopGrant(publicID)
+      if (!response.success) {
+        throw new Error(
+          response.message || t('Failed to delete revoked authorization')
+        )
+      }
+    },
+    onSuccess: async () => {
+      setActionTarget(null)
+      toast.success(t('Revoked authorization deleted'))
+      await queryClient.invalidateQueries({ queryKey: desktopGrantQueryKey })
+    },
+    onError: () => toast.error(t('Failed to delete revoked authorization')),
+  })
+  const isDeleteAction = actionTarget?.type === 'delete'
+  const actionPending = revokeMutation.isPending || deleteMutation.isPending
+  let actionIcon: ReactNode = <Unplug aria-hidden='true' />
+  if (isDeleteAction) {
+    actionIcon = <Trash2 aria-hidden='true' />
+  }
+  if (actionPending) {
+    actionIcon = <Loader2 className='animate-spin' aria-hidden='true' />
+  }
 
   let content: ReactNode
   if (grantsQuery.isLoading) {
@@ -208,12 +241,35 @@ export function DesktopGrantsCard() {
                 type='button'
                 variant='outline'
                 size='icon-sm'
-                aria-label={t('Revoke device authorization')}
-                title={t('Revoke device authorization')}
-                disabled={grant.status !== 'active'}
-                onClick={() => setRevokeTarget(grant)}
+                aria-label={
+                  grant.status === 'revoked'
+                    ? t('Delete revoked authorization')
+                    : t('Revoke device authorization')
+                }
+                title={
+                  grant.status === 'revoked'
+                    ? t('Delete revoked authorization')
+                    : t('Revoke device authorization')
+                }
+                className={
+                  grant.status === 'revoked'
+                    ? 'text-destructive hover:text-destructive'
+                    : undefined
+                }
+                disabled={grant.status === 'expired'}
+                onClick={() => {
+                  if (grant.status === 'active') {
+                    setActionTarget({ grant, type: 'revoke' })
+                  } else if (grant.status === 'revoked') {
+                    setActionTarget({ grant, type: 'delete' })
+                  }
+                }}
               >
-                <Unplug aria-hidden='true' />
+                {grant.status === 'revoked' ? (
+                  <Trash2 aria-hidden='true' />
+                ) : (
+                  <Unplug aria-hidden='true' />
+                )}
               </Button>
             </div>
           </div>
@@ -237,44 +293,53 @@ export function DesktopGrantsCard() {
       </TitledCard>
 
       <AlertDialog
-        open={revokeTarget !== null}
+        open={actionTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setRevokeTarget(null)
+          if (!open) setActionTarget(null)
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogMedia>
-              <Unplug aria-hidden='true' />
+              {isDeleteAction ? (
+                <Trash2 aria-hidden='true' />
+              ) : (
+                <Unplug aria-hidden='true' />
+              )}
             </AlertDialogMedia>
             <AlertDialogTitle>
-              {t('Revoke this device authorization?')}
+              {isDeleteAction
+                ? t('Delete this revoked authorization?')
+                : t('Revoke this device authorization?')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t(
-                'PCC Agent on this device will immediately lose access to your account and models.'
-              )}
+              {isDeleteAction
+                ? t(
+                    'This permanently removes the revoked device from your authorization history. This action cannot be undone.'
+                  )
+                : t(
+                    'PCC Agent on this device will immediately lose access to your account and models.'
+                  )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={revokeMutation.isPending}>
+            <AlertDialogCancel disabled={actionPending}>
               {t('Cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               variant='destructive'
-              disabled={revokeMutation.isPending}
+              disabled={actionPending}
               onClick={() => {
-                if (revokeTarget) {
-                  revokeMutation.mutate(revokeTarget.public_id)
+                if (!actionTarget) return
+                if (actionTarget.type === 'delete') {
+                  deleteMutation.mutate(actionTarget.grant.public_id)
+                } else {
+                  revokeMutation.mutate(actionTarget.grant.public_id)
                 }
               }}
             >
-              {revokeMutation.isPending ? (
-                <Loader2 className='animate-spin' aria-hidden='true' />
-              ) : (
-                <Unplug aria-hidden='true' />
-              )}
-              {t('Revoke')}
+              {actionIcon}
+              {isDeleteAction ? t('Delete') : t('Revoke')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

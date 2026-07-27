@@ -17,7 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Check, Clock3, Loader2, ShieldCheck, X } from 'lucide-react'
+import {
+  Check,
+  Clock3,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  X,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -168,6 +176,53 @@ export function DesktopAuthorizationScreen(
           </p>
         </div>
 
+        {request.wechat_verification_required && (
+          <section
+            aria-labelledby='desktop-wechat-title'
+            className='bg-muted/40 space-y-3 rounded-lg border p-3'
+          >
+            <div>
+              <h2 id='desktop-wechat-title' className='text-sm font-medium'>
+                {t('WeChat OAuth verification')}
+              </h2>
+              <p className='text-muted-foreground mt-1 text-sm'>
+                {request.wechat_verified
+                  ? t('Your WeChat identity is verified for this benefit.')
+                  : t(
+                      'Bind WeChat OAuth before approving PCC Agent and claiming the subscription benefit.'
+                    )}
+              </p>
+            </div>
+            {!request.wechat_verified && (
+              <div className='flex flex-wrap gap-2'>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  render={
+                    <a href='/profile' target='_blank' rel='noreferrer' />
+                  }
+                >
+                  <ExternalLink aria-hidden='true' />
+                  {t('Bind WeChat')}
+                </Button>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='ghost'
+                  disabled={requestQuery.isFetching}
+                  onClick={() => void requestQuery.refetch()}
+                >
+                  <RefreshCw
+                    className={requestQuery.isFetching ? 'animate-spin' : ''}
+                    aria-hidden='true'
+                  />
+                  {t('Check verification')}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
+
         {decisionMutation.isError && (
           <p className='text-destructive text-sm' role='alert'>
             {t('Authorization could not be completed. Please try again.')}
@@ -187,7 +242,9 @@ export function DesktopAuthorizationScreen(
           <Button
             type='button'
             disabled={
-              decisionMutation.isPending || request.allowed_models.length === 0
+              decisionMutation.isPending ||
+              request.allowed_models.length === 0 ||
+              (request.wechat_verification_required && !request.wechat_verified)
             }
             onClick={() => decisionMutation.mutate('allow')}
           >

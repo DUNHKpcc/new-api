@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { Code2, Eye, HelpCircle } from 'lucide-react'
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
@@ -60,6 +61,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
+import { getAdminPlans } from '../../subscriptions/api'
 import {
   SettingsForm,
   SettingsSwitchContent,
@@ -80,6 +82,7 @@ type GroupFormValues = {
   GroupSpecialUsableGroup: string
   DesktopClaudeGroup: string
   DesktopCodexGroup: string
+  DesktopGiftPlanId: number
 }
 
 type GroupRatioFormProps = {
@@ -96,6 +99,12 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   const { t } = useTranslation()
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
   const [guideOpen, setGuideOpen] = useState(false)
+  const giftPlansQuery = useQuery({
+    queryKey: ['admin-subscription-plans', 'pcc-agent-gift'],
+    queryFn: getAdminPlans,
+  })
+  const giftPlans =
+    giftPlansQuery.data?.data?.map((record) => record.plan) ?? []
 
   const handleFieldChange = useCallback(
     (field: keyof GroupFormValues, value: string) => {
@@ -267,6 +276,51 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   <FormDescription>
                     {t(
                       'Applied only to the Codex key created after a user approves PccAgent.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='DesktopGiftPlanId'
+              render={({ field }) => (
+                <FormItem className='md:col-span-2'>
+                  <FormLabel>{t('PccAgent subscription benefit')}</FormLabel>
+                  <Select
+                    value={String(field.value)}
+                    onValueChange={(value) =>
+                      field.onChange(Number.parseInt(value ?? '0', 10) || 0)
+                    }
+                    disabled={giftPlansQuery.isLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        <SelectItem value='0'>{t('Disabled')}</SelectItem>
+                        {giftPlans.map((plan) => (
+                          <SelectItem
+                            key={plan.id}
+                            value={String(plan.id)}
+                            disabled={!plan.enabled}
+                          >
+                            {plan.enabled
+                              ? plan.title
+                              : `${plan.title} (${t('Disabled')})`}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {t(
+                      'Verified WeChat users receive this existing plan once when PCC Agent authorization is activated. Only PCC Agent keys can spend this benefit.'
                     )}
                   </FormDescription>
                   <FormMessage />

@@ -395,21 +395,25 @@ export function UserSubscriptionsDialog(props: Props) {
                             <Ban size={16} />
                           </DropdownMenuShortcut>
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant='destructive'
-                          onClick={() =>
-                            setConfirmAction({
-                              type: 'delete',
-                              subId: sub.id,
-                            })
-                          }
-                        >
-                          {t('Delete')}
-                          <DropdownMenuShortcut>
-                            <Trash2 size={16} />
-                          </DropdownMenuShortcut>
-                        </DropdownMenuItem>
+                        {sub.source !== 'pcc_agent_gift' && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant='destructive'
+                              onClick={() =>
+                                setConfirmAction({
+                                  type: 'delete',
+                                  subId: sub.id,
+                                })
+                              }
+                            >
+                              {t('Delete')}
+                              <DropdownMenuShortcut>
+                                <Trash2 size={16} />
+                              </DropdownMenuShortcut>
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DataTableRowActionMenu>
                     )
                   },

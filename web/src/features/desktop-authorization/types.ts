@@ -26,6 +26,8 @@ export interface DesktopAuthorizationRequestView {
   allowed_models: string[]
   expires_at: number
   token_ttl: number
+  wechat_verification_required: boolean
+  wechat_verified: boolean
 }
 
 export interface DesktopAuthorizationDecision {

@@ -279,6 +279,7 @@ export type BillingSettings = {
   'group_ratio_setting.group_special_usable_group': string
   'desktop_agent_setting.claude_group': string
   'desktop_agent_setting.codex_group': string
+  'desktop_agent_setting.gift_plan_id': number
   PayAddress: string
   EpayId: string
   EpayKey: string

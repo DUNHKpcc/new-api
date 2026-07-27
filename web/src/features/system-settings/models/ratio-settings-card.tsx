@@ -134,6 +134,7 @@ const createGroupSchema = (t: Translate) =>
     GroupSpecialUsableGroup: createJsonStringField(t),
     DesktopClaudeGroup: z.string().min(1),
     DesktopCodexGroup: z.string().min(1),
+    DesktopGiftPlanId: z.number().int().min(0),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -212,6 +213,7 @@ export function RatioSettingsCard({
     ),
     DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
     DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
+    DesktopGiftPlanId: groupDefaults.DesktopGiftPlanId,
   })
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
@@ -251,6 +253,7 @@ export function RatioSettingsCard({
       ),
       DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
       DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
+      DesktopGiftPlanId: groupDefaults.DesktopGiftPlanId,
     },
   })
 
@@ -302,6 +305,7 @@ export function RatioSettingsCard({
       ),
       DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
       DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
+      DesktopGiftPlanId: groupDefaults.DesktopGiftPlanId,
     }
 
     groupForm.reset({
@@ -316,6 +320,7 @@ export function RatioSettingsCard({
       ),
       DesktopClaudeGroup: groupDefaults.DesktopClaudeGroup,
       DesktopCodexGroup: groupDefaults.DesktopCodexGroup,
+      DesktopGiftPlanId: groupDefaults.DesktopGiftPlanId,
     })
   }, [groupDefaults, groupForm])
 
@@ -376,6 +381,7 @@ export function RatioSettingsCard({
         ),
         DesktopClaudeGroup: values.DesktopClaudeGroup,
         DesktopCodexGroup: values.DesktopCodexGroup,
+        DesktopGiftPlanId: values.DesktopGiftPlanId,
       }
 
       // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
@@ -384,6 +390,7 @@ export function RatioSettingsCard({
           'group_ratio_setting.group_special_usable_group',
         DesktopClaudeGroup: 'desktop_agent_setting.claude_group',
         DesktopCodexGroup: 'desktop_agent_setting.codex_group',
+        DesktopGiftPlanId: 'desktop_agent_setting.gift_plan_id',
       }
 
       const updates = (

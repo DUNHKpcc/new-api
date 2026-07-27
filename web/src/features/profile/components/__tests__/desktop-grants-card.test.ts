@@ -27,7 +27,7 @@ import { I18nextProvider, initReactI18next } from 'react-i18next'
 
 import { DesktopGrantsCard } from '../desktop-grants-card'
 
-describe('desktop grants empty state', () => {
+describe('desktop grants card', () => {
   test('links to the official Microsoft Store download with its icon', async () => {
     const i18n = createInstance()
     await i18n.use(initReactI18next).init({
@@ -71,5 +71,58 @@ describe('desktop grants empty state', () => {
     assert.match(markup, /rel="noopener noreferrer"/)
     assert.match(markup, /data-icon="microsoft-store"/)
     assert.match(markup, /Download PccAgent from Microsoft Store/)
+  })
+
+  test('offers deletion for a revoked authorization', async () => {
+    const i18n = createInstance()
+    await i18n.use(initReactI18next).init({
+      lng: 'en',
+      resources: {
+        en: {
+          translation: {
+            'Authorized desktop devices': 'Authorized desktop devices',
+            'Delete revoked authorization': 'Delete revoked authorization',
+            'Review and revoke PccAgent apps connected to your account.':
+              'Review and revoke PccAgent apps connected to your account.',
+            Revoked: 'Revoked',
+          },
+        },
+      },
+    })
+
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(
+      ['profile', 'desktop-grants'],
+      [
+        {
+          public_id: 'revoked-device',
+          client_id: 'pcc-agent-desktop',
+          device_name: 'Office PC',
+          platform: 'windows',
+          app_version: '2.1.6',
+          scopes: 'relay account.read usage.read',
+          status: 'revoked',
+          created_time: 1_700_000_000,
+          last_used_time: 1_700_000_100,
+          expired_time: 1_800_000_000,
+          revoked_time: 1_700_000_200,
+        },
+      ]
+    )
+
+    const markup = renderToStaticMarkup(
+      createElement(
+        I18nextProvider,
+        { i18n },
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(DesktopGrantsCard)
+        )
+      )
+    )
+
+    assert.match(markup, /aria-label="Delete revoked authorization"/)
+    assert.doesNotMatch(markup, /disabled=""[^>]*Delete revoked authorization/)
   })
 })

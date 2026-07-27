@@ -51,6 +51,7 @@ const getGroupDefaults = (settings: BillingSettings) => ({
     settings['group_ratio_setting.group_special_usable_group'],
   DesktopClaudeGroup: settings['desktop_agent_setting.claude_group'],
   DesktopCodexGroup: settings['desktop_agent_setting.codex_group'],
+  DesktopGiftPlanId: settings['desktop_agent_setting.gift_plan_id'],
 })
 
 const BILLING_SECTIONS = [

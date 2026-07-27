@@ -286,7 +286,8 @@ export function ApiKeysTable() {
   const { table } = useDataTable({
     data: apiKeys,
     columns,
-    enableRowSelection: (row) => !row.original.pcc_agent,
+    enableRowSelection: (row) =>
+      !row.original.pcc_agent || row.original.pcc_agent_deletable,
     columnFilters,
     columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
     globalFilter,

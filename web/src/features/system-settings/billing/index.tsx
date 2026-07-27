@@ -60,6 +60,7 @@ const defaultBillingSettings: BillingSettings = {
   'group_ratio_setting.group_special_usable_group': '{}',
   'desktop_agent_setting.claude_group': 'auto',
   'desktop_agent_setting.codex_group': 'auto',
+  'desktop_agent_setting.gift_plan_id': 0,
   PayAddress: '',
   EpayId: '',
   EpayKey: '',
