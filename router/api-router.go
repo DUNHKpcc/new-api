@@ -69,6 +69,7 @@ func SetApiRouter(router *gin.Engine) {
 		desktopRoute.Use(middleware.DesktopAuthorizationSecurityHeaders(), middleware.DesktopTokenReadRateLimit())
 		{
 			desktopRoute.GET("/account", middleware.DesktopTokenAuth("account.read"), controller.GetDesktopAccount)
+			desktopRoute.GET("/subscriptions", middleware.DesktopTokenAuth("account.read"), controller.GetDesktopSubscriptions)
 			desktopRoute.GET("/usage", middleware.DesktopTokenAuth("usage.read"), controller.GetDesktopUsage)
 			desktopRoute.GET("/usage/summary", middleware.DesktopTokenAuth("usage.read"), controller.GetDesktopUsageSummary)
 		}

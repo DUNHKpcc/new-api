@@ -58,6 +58,7 @@ func setupDesktopHTTPWorkflow(t *testing.T) desktopHTTPFixture {
 		&model.Token{},
 		&model.DesktopGrant{},
 		&model.Ability{},
+		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
 		&model.Log{},
 	))
@@ -134,6 +135,7 @@ func setupDesktopHTTPWorkflow(t *testing.T) desktopHTTPFixture {
 	desktop := router.Group("/api/desktop")
 	desktop.Use(middleware.DesktopAuthorizationSecurityHeaders())
 	desktop.GET("/account", middleware.DesktopTokenAuth("account.read"), GetDesktopAccount)
+	desktop.GET("/subscriptions", middleware.DesktopTokenAuth("account.read"), GetDesktopSubscriptions)
 	desktop.GET("/usage", middleware.DesktopTokenAuth("usage.read"), GetDesktopUsage)
 	desktop.GET("/usage/summary", middleware.DesktopTokenAuth("usage.read"), GetDesktopUsageSummary)
 
@@ -367,6 +369,54 @@ func TestDesktopAuthorizationHTTPWorkflowRegression(t *testing.T) {
 	assert.Equal(t, fixture.request.DeviceName, account.DeviceName)
 	assert.Equal(t, []string{"gpt-desktop"}, account.AllowedModels)
 	assert.Equal(t, fixture.user.Quota, account.Quota)
+
+	plan := &model.SubscriptionPlan{
+		Title:         "DPCC Pro",
+		PriceAmount:   20,
+		Currency:      "USD",
+		DurationUnit:  model.SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   2_000_000,
+	}
+	require.NoError(t, fixture.db.Create(plan).Error)
+	now := time.Now()
+	require.NoError(t, fixture.db.Create(&model.UserSubscription{
+		UserId:        fixture.user.Id,
+		PlanId:        plan.Id,
+		AmountTotal:   2_000_000,
+		AmountUsed:    500_000,
+		StartTime:     now.Add(-time.Hour).Unix(),
+		EndTime:       now.Add(30 * 24 * time.Hour).Unix(),
+		Status:        "active",
+		NextResetTime: now.Add(24 * time.Hour).Unix(),
+	}).Error)
+	require.NoError(t, fixture.db.Create(&model.UserSubscription{
+		UserId:      fixture.user.Id,
+		PlanId:      plan.Id,
+		AmountTotal: 1_000_000,
+		AmountUsed:  100_000,
+		StartTime:   now.Add(-60 * 24 * time.Hour).Unix(),
+		EndTime:     now.Add(-30 * 24 * time.Hour).Unix(),
+		Status:      "expired",
+	}).Error)
+
+	subscriptionsResponse := performDesktopJSON(
+		t,
+		fixture.router,
+		http.MethodGet,
+		"/api/desktop/subscriptions",
+		nil,
+		"Bearer "+exchanged.Tokens.Claude.AccessToken,
+	)
+	require.Equal(t, http.StatusOK, subscriptionsResponse.Code, subscriptionsResponse.Body.String())
+	subscriptions := decodeDesktopHTTPResponse[service.DesktopSubscriptions](t, subscriptionsResponse)
+	assert.Equal(t, service.DesktopContractVersion, subscriptions.ContractVersion)
+	require.Len(t, subscriptions.Subscriptions, 1)
+	assert.Equal(t, "DPCC Pro", subscriptions.Subscriptions[0].PlanTitle)
+	assert.EqualValues(t, 2_000_000, subscriptions.Subscriptions[0].AmountTotal)
+	assert.EqualValues(t, 500_000, subscriptions.Subscriptions[0].AmountUsed)
+	assert.EqualValues(t, 1_500_000, subscriptions.Subscriptions[0].AmountRemaining)
+	assert.False(t, subscriptions.Subscriptions[0].Unlimited)
 
 	usageResponse := performDesktopJSON(
 		t,

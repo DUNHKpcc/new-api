@@ -128,6 +128,20 @@ func GetDesktopAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, account)
 }
 
+func GetDesktopSubscriptions(c *gin.Context) {
+	access, ok := middleware.GetDesktopAccess(c)
+	if !ok {
+		writeDesktopAuthorizationError(c, service.ErrDesktopTokenInvalid)
+		return
+	}
+	subscriptions, err := service.GetDesktopSubscriptions(access.User.Id)
+	if err != nil {
+		writeDesktopAuthorizationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, subscriptions)
+}
+
 func GetDesktopUsage(c *gin.Context) {
 	access, ok := middleware.GetDesktopAccess(c)
 	if !ok {

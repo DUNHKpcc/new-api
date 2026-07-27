@@ -378,6 +378,12 @@ PccAgent 和 origin 链路兼容，省略 `protocol_version` 或显式发送 `1`
 - 返回脱敏用户资料、用户状态、可用额度、订阅/权益摘要、允许模型和 Token 到期时间。
 - 不返回邮箱验证码状态以外的敏感认证信息、角色管理信息或其他设备秘密。
 
+`GET /api/desktop/subscriptions`
+
+- 使用 `account.read`。
+- 返回当前用户有效订阅的套餐名称、总额度、已用额度、剩余额度和有效期。
+- 只读访问订阅及套餐数据，不开放购买、偏好设置或支付相关操作。
+
 `GET /api/desktop/usage`
 
 - 使用 `usage.read`。

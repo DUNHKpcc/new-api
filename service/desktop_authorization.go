@@ -148,6 +148,25 @@ type DesktopAccount struct {
 	GrantPublicID     string                     `json:"grant_public_id"`
 }
 
+type DesktopSubscriptionItem struct {
+	ID              int    `json:"id"`
+	PlanID          int    `json:"plan_id"`
+	PlanTitle       string `json:"plan_title"`
+	Status          string `json:"status"`
+	AmountTotal     int64  `json:"amount_total"`
+	AmountUsed      int64  `json:"amount_used"`
+	AmountRemaining int64  `json:"amount_remaining"`
+	Unlimited       bool   `json:"unlimited"`
+	StartTime       int64  `json:"start_time"`
+	EndTime         int64  `json:"end_time"`
+	NextResetTime   int64  `json:"next_reset_time,omitempty"`
+}
+
+type DesktopSubscriptions struct {
+	ContractVersion int                       `json:"contract_version"`
+	Subscriptions   []DesktopSubscriptionItem `json:"subscriptions"`
+}
+
 type DesktopTokenExchangeResult struct {
 	ContractVersion       int                       `json:"contract_version"`
 	TokenType             string                    `json:"token_type"`
@@ -671,6 +690,78 @@ func RevokeAllUserDesktopGrants(userID int, reason string) error {
 
 func BuildDesktopAccount(token *model.Token, grant *model.DesktopGrant, additionalTokens ...*model.Token) (*DesktopAccount, error) {
 	return buildDesktopAccountWithDB(model.DB, token, grant, additionalTokens...)
+}
+
+func GetDesktopSubscriptions(userID int) (*DesktopSubscriptions, error) {
+	if userID <= 0 {
+		return nil, ErrDesktopTokenInvalid
+	}
+
+	var subscriptions []model.UserSubscription
+	if err := model.DB.
+		Where("user_id = ? AND status = ? AND end_time > ?", userID, "active", common.GetTimestamp()).
+		Order("end_time asc, id asc").
+		Find(&subscriptions).Error; err != nil {
+		return nil, err
+	}
+
+	planIDs := make([]int, 0, len(subscriptions))
+	seenPlanIDs := make(map[int]struct{}, len(subscriptions))
+	for i := range subscriptions {
+		if subscriptions[i].PlanId <= 0 {
+			continue
+		}
+		if _, seen := seenPlanIDs[subscriptions[i].PlanId]; seen {
+			continue
+		}
+		seenPlanIDs[subscriptions[i].PlanId] = struct{}{}
+		planIDs = append(planIDs, subscriptions[i].PlanId)
+	}
+
+	type planTitle struct {
+		ID    int
+		Title string
+	}
+	planTitles := make(map[int]string, len(planIDs))
+	if len(planIDs) > 0 {
+		var plans []planTitle
+		if err := model.DB.Model(&model.SubscriptionPlan{}).
+			Select("id", "title").
+			Where("id IN ?", planIDs).
+			Find(&plans).Error; err != nil {
+			return nil, err
+		}
+		for i := range plans {
+			planTitles[plans[i].ID] = strings.TrimSpace(plans[i].Title)
+		}
+	}
+
+	items := make([]DesktopSubscriptionItem, 0, len(subscriptions))
+	for i := range subscriptions {
+		subscription := subscriptions[i]
+		remaining := subscription.AmountTotal - subscription.AmountUsed
+		if remaining < 0 {
+			remaining = 0
+		}
+		items = append(items, DesktopSubscriptionItem{
+			ID:              subscription.Id,
+			PlanID:          subscription.PlanId,
+			PlanTitle:       planTitles[subscription.PlanId],
+			Status:          subscription.Status,
+			AmountTotal:     subscription.AmountTotal,
+			AmountUsed:      subscription.AmountUsed,
+			AmountRemaining: remaining,
+			Unlimited:       subscription.AmountTotal == 0,
+			StartTime:       subscription.StartTime,
+			EndTime:         subscription.EndTime,
+			NextResetTime:   subscription.NextResetTime,
+		})
+	}
+
+	return &DesktopSubscriptions{
+		ContractVersion: DesktopContractVersion,
+		Subscriptions:   items,
+	}, nil
 }
 
 func buildDesktopAccountWithDB(
