@@ -51,6 +51,8 @@ func setupDesktopAuthorizationTest(t *testing.T) desktopAuthorizationFixture {
 		&model.Token{},
 		&model.DesktopGrant{},
 		&model.Ability{},
+		&model.ExternalIdentityClaim{},
+		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
 		&model.Log{},
 	))
@@ -285,6 +287,97 @@ func TestDesktopAuthorizationProtocolV2ActivatesOnlyAfterConfirmation(t *testing
 	require.NoError(t, model.DB.Where("user_id = ?", fixture.user.Id).Order("id").Find(&storedTokens).Error)
 	assert.Equal(t, common.TokenStatusEnabled, storedTokens[0].Status)
 	assert.Equal(t, common.TokenStatusEnabled, storedTokens[1].Status)
+}
+
+func TestDesktopAuthorizationGiftRequiresWeChatAndIsGrantedOnConfirmation(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	plan := model.SubscriptionPlan{
+		Title:              "PccAgent gift",
+		DurationUnit:       model.SubscriptionDurationMonth,
+		DurationValue:      1,
+		Enabled:            true,
+		MaxPurchasePerUser: 1,
+		TotalAmount:        500,
+		UpgradeGroup:       "pro",
+	}
+	require.NoError(t, model.DB.Create(&plan).Error)
+	model.InvalidateSubscriptionPlanCache(plan.Id)
+	operation_setting.GetDesktopAgentSetting().GiftPlanId = plan.Id
+
+	started, err := CreateDesktopAuthorizationRequest(fixture.request, "https://dpcc.example")
+	require.NoError(t, err)
+	view, err := GetDesktopAuthorizationRequest(started.RequestToken, fixture.user.Id)
+	require.NoError(t, err)
+	assert.True(t, view.WeChatVerificationRequired)
+	assert.False(t, view.WeChatVerified)
+
+	_, err = DecideDesktopAuthorization(DesktopAuthorizationDecisionInput{
+		RequestToken: started.RequestToken,
+		Decision:     "allow",
+		UserID:       fixture.user.Id,
+		SessionID:    fixture.session.SID,
+	})
+	assert.ErrorIs(t, err, ErrDesktopWeChatRequired)
+
+	require.NoError(t, model.DB.Transaction(func(tx *gorm.DB) error {
+		return model.ClaimExternalIdentityWithTx(
+			tx,
+			model.ExternalIdentityProviderWeChatUnionID,
+			"desktop-wechat-union",
+			fixture.user.Id,
+		)
+	}))
+	view, err = GetDesktopAuthorizationRequest(started.RequestToken, fixture.user.Id)
+	require.NoError(t, err)
+	assert.True(t, view.WeChatVerified)
+
+	decision, err := DecideDesktopAuthorization(DesktopAuthorizationDecisionInput{
+		RequestToken: started.RequestToken,
+		Decision:     "allow",
+		UserID:       fixture.user.Id,
+		SessionID:    fixture.session.SID,
+	})
+	require.NoError(t, err)
+	callback, err := url.Parse(decision.RedirectURI)
+	require.NoError(t, err)
+	code := callback.Query().Get("code")
+	require.NotEmpty(t, code)
+
+	protocolVersion := DesktopContractVersion
+	exchanged, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:       "authorization_code",
+		ClientID:        DesktopClientID,
+		Code:            code,
+		RedirectURI:     fixture.request.RedirectURI,
+		CodeVerifier:    fixture.verifier,
+		DeviceID:        fixture.request.DeviceID,
+		ProtocolVersion: &protocolVersion,
+	})
+	require.NoError(t, err)
+
+	var giftCount int64
+	require.NoError(t, model.DB.Model(&model.UserSubscription{}).
+		Where("user_id = ? AND source = ?", fixture.user.Id, model.UserSubscriptionSourcePccAgentGift).
+		Count(&giftCount).Error)
+	assert.Zero(t, giftCount, "staged credentials must not grant the benefit before confirmation")
+
+	require.NoError(t, ConfirmDesktopAuthorization(exchanged.ConfirmationToken))
+	require.NoError(t, ConfirmDesktopAuthorization(exchanged.ConfirmationToken))
+	require.NoError(t, model.DB.Model(&model.UserSubscription{}).
+		Where("user_id = ? AND source = ?", fixture.user.Id, model.UserSubscriptionSourcePccAgentGift).
+		Count(&giftCount).Error)
+	assert.EqualValues(t, 1, giftCount)
+
+	var storedUser model.User
+	require.NoError(t, model.DB.First(&storedUser, fixture.user.Id).Error)
+	assert.Equal(t, "default", storedUser.Group)
+	permanentSubject, err := model.GetExternalIdentitySubjectByUserWithTx(
+		model.DB,
+		model.ExternalIdentityProviderPccAgentGiftWeChat,
+		fixture.user.Id,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "desktop-wechat-union", permanentSubject)
 }
 
 func TestDesktopAuthorizationProtocolV2KeepsPreviousDeviceCredentialUntilConfirmation(t *testing.T) {

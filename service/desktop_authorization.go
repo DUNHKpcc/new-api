@@ -48,6 +48,8 @@ var (
 	ErrDesktopScopeDenied         = errors.New("desktop access token scope is denied")
 	ErrDesktopBrowserSession      = errors.New("desktop authorization requires a browser session")
 	ErrDesktopGroupUnavailable    = errors.New("desktop token group is unavailable to this user")
+	ErrDesktopWeChatRequired      = errors.New("desktop authorization requires verified WeChat OAuth")
+	ErrDesktopGiftAlreadyClaimed  = errors.New("pcc agent gift was already claimed by this WeChat identity")
 	ErrDesktopConfirmationInvalid = errors.New("desktop token confirmation is invalid")
 	ErrDesktopConfirmationExpired = errors.New("desktop token confirmation has expired")
 
@@ -95,15 +97,17 @@ type DesktopAuthorizationRequestResult struct {
 }
 
 type DesktopAuthorizationRequestView struct {
-	ClientID      string   `json:"client_id"`
-	ClientName    string   `json:"client_name"`
-	DeviceName    string   `json:"device_name"`
-	Platform      string   `json:"platform"`
-	AppVersion    string   `json:"app_version"`
-	Scopes        []string `json:"scopes"`
-	AllowedModels []string `json:"allowed_models"`
-	ExpiresAt     int64    `json:"expires_at"`
-	TokenTTL      int64    `json:"token_ttl"`
+	ClientID                   string   `json:"client_id"`
+	ClientName                 string   `json:"client_name"`
+	DeviceName                 string   `json:"device_name"`
+	Platform                   string   `json:"platform"`
+	AppVersion                 string   `json:"app_version"`
+	Scopes                     []string `json:"scopes"`
+	AllowedModels              []string `json:"allowed_models"`
+	ExpiresAt                  int64    `json:"expires_at"`
+	TokenTTL                   int64    `json:"token_ttl"`
+	WeChatVerificationRequired bool     `json:"wechat_verification_required"`
+	WeChatVerified             bool     `json:"wechat_verified"`
 }
 
 type DesktopAuthorizationDecisionInput struct {
@@ -290,23 +294,33 @@ func GetDesktopAuthorizationRequest(requestToken string, userID int) (*DesktopAu
 		return nil, err
 	}
 	allowedModels := []string{}
+	wechatVerificationRequired := operation_setting.GetDesktopAgentSetting().GiftPlanId > 0
+	wechatVerified := false
 	if userID > 0 {
 		claudePolicy, codexPolicy, policyErr := desktopTokenPolicies(userID, payload.DeviceName)
 		if policyErr != nil {
 			return nil, policyErr
 		}
 		allowedModels = mergeDesktopAllowedModels(claudePolicy, codexPolicy)
+		if wechatVerificationRequired {
+			wechatVerified, policyErr = model.HasExternalIdentityClaim(model.ExternalIdentityProviderWeChatUnionID, userID)
+			if policyErr != nil {
+				return nil, policyErr
+			}
+		}
 	}
 	return &DesktopAuthorizationRequestView{
-		ClientID:      payload.ClientID,
-		ClientName:    DesktopClientDisplayName,
-		DeviceName:    payload.DeviceName,
-		Platform:      payload.Platform,
-		AppVersion:    payload.AppVersion,
-		Scopes:        strings.Fields(DesktopAuthorizationScopes),
-		AllowedModels: allowedModels,
-		ExpiresAt:     flow.ExpiresAt.Unix(),
-		TokenTTL:      int64(DesktopAccessTokenTTL / time.Second),
+		ClientID:                   payload.ClientID,
+		ClientName:                 DesktopClientDisplayName,
+		DeviceName:                 payload.DeviceName,
+		Platform:                   payload.Platform,
+		AppVersion:                 payload.AppVersion,
+		Scopes:                     strings.Fields(DesktopAuthorizationScopes),
+		AllowedModels:              allowedModels,
+		ExpiresAt:                  flow.ExpiresAt.Unix(),
+		TokenTTL:                   int64(DesktopAccessTokenTTL / time.Second),
+		WeChatVerificationRequired: wechatVerificationRequired,
+		WeChatVerified:             wechatVerified,
 	}, nil
 }
 
@@ -334,6 +348,17 @@ func DecideDesktopAuthorization(input DesktopAuthorizationDecisionInput) (*Deskt
 				"state": {payload.State},
 			})
 			return decodeErr
+		}
+		if operation_setting.GetDesktopAgentSetting().GiftPlanId > 0 {
+			if _, claimErr := model.GetExternalIdentitySubjectByUserWithTx(
+				tx,
+				model.ExternalIdentityProviderWeChatUnionID,
+				input.UserID,
+			); errors.Is(claimErr, model.ErrExternalIdentityNotClaimed) {
+				return ErrDesktopWeChatRequired
+			} else if claimErr != nil {
+				return claimErr
+			}
 		}
 
 		maxActiveDevices := common.GetEnvOrDefault("DESKTOP_GRANT_ACTIVE_LIMIT", 10)
@@ -519,6 +544,18 @@ func ExchangeDesktopAuthorizationCode(input DesktopTokenExchangeInput) (*Desktop
 		if activeCount >= int64(maxActiveDevices) && sameDeviceCount == 0 {
 			return ErrDesktopDeviceLimit
 		}
+		if !confirmationRequired {
+			if _, giftErr := model.EnsurePccAgentGiftSubscriptionWithTx(
+				tx,
+				payload.UserID,
+				operation_setting.GetDesktopAgentSetting().GiftPlanId,
+			); giftErr != nil {
+				if errors.Is(giftErr, model.ErrExternalIdentityNotClaimed) {
+					return ErrDesktopWeChatRequired
+				}
+				return giftErr
+			}
+		}
 		var activateErr error
 		if confirmationRequired {
 			activation, activateErr = model.StageDesktopGrantWithTokensTx(
@@ -607,6 +644,7 @@ func ConfirmDesktopAuthorization(confirmationToken string) error {
 	activation, err := model.ConfirmDesktopGrant(
 		common.GenerateHMAC(confirmationToken),
 		maxActiveDevices,
+		operation_setting.GetDesktopAgentSetting().GiftPlanId,
 	)
 	switch {
 	case errors.Is(err, model.ErrDesktopGrantConfirmationInvalid):
@@ -615,6 +653,10 @@ func ConfirmDesktopAuthorization(confirmationToken string) error {
 		return ErrDesktopConfirmationExpired
 	case errors.Is(err, model.ErrDesktopGrantDeviceLimit):
 		return ErrDesktopDeviceLimit
+	case errors.Is(err, model.ErrExternalIdentityNotClaimed):
+		return ErrDesktopWeChatRequired
+	case errors.Is(err, model.ErrExternalIdentityAlreadyClaimed):
+		return ErrDesktopGiftAlreadyClaimed
 	case err != nil:
 		return err
 	}
@@ -674,6 +716,14 @@ func RevokeDesktopAccessToken(rawToken string) error {
 
 func RevokeUserDesktopGrant(userID int, publicID string) error {
 	keys, err := model.RevokeDesktopGrant(userID, strings.TrimSpace(publicID), "user_revoked")
+	if err != nil {
+		return err
+	}
+	return model.InvalidateTokenKeysCache(keys)
+}
+
+func DeleteRevokedUserDesktopGrant(userID int, publicID string) error {
+	keys, err := model.DeleteRevokedDesktopGrant(userID, strings.TrimSpace(publicID))
 	if err != nil {
 		return err
 	}
@@ -1264,6 +1314,10 @@ func mapDesktopAuthFlowError(err error) error {
 		return ErrDesktopInvalidRequest
 	case errors.Is(err, model.ErrUserSessionInvalid), errors.Is(err, model.ErrUserSessionInactive):
 		return ErrDesktopBrowserSession
+	case errors.Is(err, model.ErrExternalIdentityNotClaimed):
+		return ErrDesktopWeChatRequired
+	case errors.Is(err, model.ErrExternalIdentityAlreadyClaimed):
+		return ErrDesktopGiftAlreadyClaimed
 	default:
 		return err
 	}

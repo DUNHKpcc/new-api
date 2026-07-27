@@ -158,7 +158,7 @@ func TestDesktopGrantLifecycleConfiguredDatabases(t *testing.T) {
 			_, err = GetActiveDesktopGrantByTokenId(legacy.ClaudeToken.Id)
 			require.NoError(t, err, "staging must not revoke the current device credential")
 
-			confirmed, err := ConfirmDesktopGrant(confirmationHash, 1)
+			confirmed, err := ConfirmDesktopGrant(confirmationHash, 1, 0)
 			require.NoError(t, err)
 			require.NotNil(t, confirmed)
 			assert.Equal(t, DesktopGrantStatusActive, confirmed.Grant.Status)
@@ -216,7 +216,7 @@ func TestDesktopGrantLifecycleConfiguredDatabases(t *testing.T) {
 				go func(confirmationHash string) {
 					defer confirmations.Done()
 					<-startConfirm
-					_, confirmErr := ConfirmDesktopGrant(confirmationHash, 1)
+					_, confirmErr := ConfirmDesktopGrant(confirmationHash, 1, 0)
 					confirmationErrors <- confirmErr
 				}(hash)
 			}

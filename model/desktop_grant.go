@@ -20,6 +20,7 @@ var (
 	ErrDesktopGrantInvalid             = errors.New("desktop grant is invalid")
 	ErrDesktopGrantNotFound            = errors.New("desktop grant was not found")
 	ErrDesktopGrantInactive            = errors.New("desktop grant is inactive")
+	ErrDesktopGrantNotRevoked          = errors.New("desktop grant is not revoked")
 	ErrDesktopGrantDeviceLimit         = errors.New("desktop grant device limit reached")
 	ErrDesktopGrantConfirmationInvalid = errors.New("desktop grant confirmation is invalid")
 	ErrDesktopGrantConfirmationExpired = errors.New("desktop grant confirmation has expired")
@@ -320,8 +321,9 @@ func StageDesktopGrantWithTokensTx(
 func ConfirmDesktopGrant(
 	confirmationHash string,
 	maxActiveDevices int,
+	giftPlanId int,
 ) (*DesktopGrantActivationResult, error) {
-	if len(confirmationHash) != 64 || maxActiveDevices <= 0 {
+	if len(confirmationHash) != 64 || maxActiveDevices <= 0 || giftPlanId < 0 {
 		return nil, ErrDesktopGrantConfirmationInvalid
 	}
 	now := time.Now().Unix()
@@ -341,6 +343,9 @@ func ConfirmDesktopGrant(
 			return err
 		}
 		if grant.Status == DesktopGrantStatusActive && grant.ActiveSlot != nil {
+			if _, err := EnsurePccAgentGiftSubscriptionWithTx(tx, grant.UserId, giftPlanId); err != nil {
+				return err
+			}
 			activation = &DesktopGrantActivationResult{
 				Grant:       &grant,
 				ClaudeToken: claudeToken,
@@ -355,6 +360,9 @@ func ConfirmDesktopGrant(
 			return ErrDesktopGrantConfirmationInvalid
 		}
 		if err := LockDesktopGrantUserWithTx(tx, grant.UserId); err != nil {
+			return err
+		}
+		if _, err := EnsurePccAgentGiftSubscriptionWithTx(tx, grant.UserId, giftPlanId); err != nil {
 			return err
 		}
 
@@ -687,6 +695,49 @@ func RevokeDesktopGrant(userId int, publicId, reason string) ([]string, error) {
 	return tokenKeys, err
 }
 
+func DeleteRevokedDesktopGrant(userId int, publicId string) ([]string, error) {
+	if userId <= 0 || publicId == "" {
+		return nil, ErrDesktopGrantInvalid
+	}
+	var tokenKeys []string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var grant DesktopGrant
+		if err := lockForUpdate(tx).
+			Where("user_id = ? AND public_id = ?", userId, publicId).
+			First(&grant).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrDesktopGrantNotFound
+			}
+			return err
+		}
+		if grant.Status != DesktopGrantStatusRevoked {
+			return ErrDesktopGrantNotRevoked
+		}
+
+		tokenIds := desktopGrantTokenIds(&grant)
+		if len(tokenIds) > 0 {
+			var tokens []Token
+			if err := tx.Select("id", commonKeyCol).
+				Where("user_id = ? AND id IN ?", userId, tokenIds).
+				Find(&tokens).Error; err != nil {
+				return err
+			}
+			if len(tokens) > 0 {
+				if err := tx.Where("user_id = ? AND id IN ?", userId, tokenIds).
+					Delete(&Token{}).Error; err != nil {
+					return err
+				}
+				tokenKeys = make([]string, 0, len(tokens))
+				for i := range tokens {
+					tokenKeys = append(tokenKeys, tokens[i].Key)
+				}
+			}
+		}
+		return tx.Delete(&grant).Error
+	})
+	return tokenKeys, err
+}
+
 func RevokeDesktopGrantByTokenId(tokenId int, reason string) (int, []string, error) {
 	if tokenId <= 0 {
 		return 0, nil, ErrDesktopGrantInvalid
@@ -830,6 +881,18 @@ func HasDesktopGrantToken(userId int, tokenIds []int) (bool, error) {
 	var count int64
 	err := DB.Model(&DesktopGrant{}).
 		Where("user_id = ? AND (token_id IN ? OR codex_token_id IN ?)", userId, tokenIds, tokenIds).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func HasNonRevokedDesktopGrantToken(userId int, tokenIds []int) (bool, error) {
+	if userId <= 0 || len(tokenIds) == 0 {
+		return false, nil
+	}
+	var count int64
+	err := DB.Model(&DesktopGrant{}).
+		Where("user_id = ? AND (status IS NULL OR status <> ?) AND (token_id IN ? OR codex_token_id IN ?)",
+			userId, DesktopGrantStatusRevoked, tokenIds, tokenIds).
 		Count(&count).Error
 	return count > 0, err
 }

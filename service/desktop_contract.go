@@ -26,6 +26,8 @@ const (
 	DesktopErrorRequestConsumed     DesktopErrorCode = "DESKTOP_REQUEST_CONSUMED"
 	DesktopErrorDeviceLimit         DesktopErrorCode = "DESKTOP_DEVICE_LIMIT"
 	DesktopErrorGroupUnavailable    DesktopErrorCode = "DESKTOP_TOKEN_GROUP_UNAVAILABLE"
+	DesktopErrorWeChatRequired      DesktopErrorCode = "DESKTOP_WECHAT_VERIFICATION_REQUIRED"
+	DesktopErrorGiftAlreadyClaimed  DesktopErrorCode = "DESKTOP_GIFT_ALREADY_CLAIMED"
 	DesktopErrorTokenInvalid        DesktopErrorCode = "DESKTOP_TOKEN_INVALID"
 	DesktopErrorScopeDenied         DesktopErrorCode = "DESKTOP_SCOPE_DENIED"
 	DesktopErrorConfirmationInvalid DesktopErrorCode = "DESKTOP_CONFIRMATION_INVALID"
@@ -62,6 +64,10 @@ func DesktopErrorFor(err error) (int, DesktopErrorResponse) {
 		status, code = http.StatusConflict, DesktopErrorDeviceLimit
 	case errors.Is(err, ErrDesktopGroupUnavailable):
 		status, code = http.StatusConflict, DesktopErrorGroupUnavailable
+	case errors.Is(err, ErrDesktopWeChatRequired):
+		status, code = http.StatusForbidden, DesktopErrorWeChatRequired
+	case errors.Is(err, ErrDesktopGiftAlreadyClaimed):
+		status, code = http.StatusConflict, DesktopErrorGiftAlreadyClaimed
 	case errors.Is(err, ErrDesktopTokenInvalid):
 		status, code = http.StatusUnauthorized, DesktopErrorTokenInvalid
 	case errors.Is(err, ErrDesktopScopeDenied):
