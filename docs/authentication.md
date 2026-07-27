@@ -159,14 +159,16 @@ http://127.0.0.1:{1024-65535}/oauth/callback/{至少 16 字节的 base64url nonc
 | `POST /api/desktop/oauth/authorization-requests` | 无；专用 IP 限流 | 创建短时授权请求并返回 `/desktop/authorize?request=...` |
 | `GET /api/desktop/oauth/authorization-requests/:request_token` | 真实浏览器 Session | 读取设备、权限、允许模型和到期时间 |
 | `POST /api/desktop/oauth/authorize` | 真实浏览器 Session | 明确同意或拒绝；PAT 不能代表用户决定 |
-| `POST /api/desktop/oauth/token` | 无；授权码、PKCE 和设备标识 | 一次性交换 Claude/Codex 两个 90 天受限 Token |
+| `POST /api/desktop/oauth/token` | 无；授权码、PKCE 和设备标识 | 一次性交换 Claude/Codex 两个 90 天受限 Token；v2 初始为 disabled |
+| `POST /api/desktop/oauth/confirm` | v2 一次性确认令牌 | 客户端持久化双 Token 后原子激活新 Grant 并替换同设备旧 Grant |
 | `GET /api/desktop/account` | 有效桌面 Token，`account.read` | 读取脱敏账户、额度、订阅、模型和授权摘要 |
+| `GET /api/desktop/subscriptions` | 有效桌面 Token，`account.read` | 读取当前用户的有效订阅列表 |
 | `GET /api/desktop/usage` | 有效桌面 Token，`usage.read` | 分页读取最小化用量记录 |
 | `POST /api/desktop/oauth/revoke` | 当前桌面 Token | 幂等撤销当前设备授权 |
 | `GET /api/user/desktop-grants` | 真实浏览器 Session | 查看当前用户的桌面设备授权 |
 | `DELETE /api/user/desktop-grants/:public_id` | 真实浏览器 Session | 撤销指定设备授权 |
 
-用户点击允许时只创建 pending `DesktopGrant` 和一次性授权码。服务端在授权码、PKCE、redirect、设备标识和原浏览器 Session 全部校验通过后，才在同一事务中创建 Claude、Codex 两个受限普通 API Token 并激活 Grant。设备重新授权会撤销同一用户、客户端和设备标识下的旧 Grant 及其两个 Token；使用其中任意一个 Token 撤销设备授权时也会同时撤销二者。用户被禁用或删除时会撤销其全部桌面授权。
+用户点击允许时只创建 pending `DesktopGrant` 和一次性授权码。服务端在授权码、PKCE、redirect、设备标识和原浏览器 Session 全部校验通过后，才在同一事务中创建 Claude、Codex 两个受限普通 API Token。Desktop Contract v2 先创建 disabled Token 和 `awaiting_confirmation` Grant；客户端安全保存后调用确认接口，服务端才启用新 Token，并撤销同一用户、客户端和设备标识下的旧 Grant 及其两个 Token。旧 Grant 在确认前继续可用。兼容协议 v1 在换码时立即完成替换。使用任意一枚桌面 Token 撤销设备授权时也会同时撤销二者。完整生命周期见 [`pcc-agent-authorization-token-lifecycle.md`](./pcc-agent-authorization-token-lifecycle.md)。
 
 两个桌面 Token 的模型集合和用户组由服务端根据账户策略独立计算，客户端不能请求扩权。管理员可在“计费设置 -> 分组定价”中分别设置 Claude Key 分组和 Codex Key 分组；对应配置键是 `desktop_agent_setting.claude_group` 与 `desktop_agent_setting.codex_group`，默认值均为 `auto`。固定分组必须已经对授权用户可用，否则换码会返回 `DESKTOP_TOKEN_GROUP_UNAVAILABLE` 且不会创建 Token。这两项只控制后续浏览器授权产生的两个 Key，不会修改现有 Key、分组倍率、用户分组规则或计费逻辑。`PCC_DESKTOP_MODEL_ALLOWLIST` 可进一步与账户可用模型取交集；`DESKTOP_GRANT_ACTIVE_LIMIT` 控制每个用户的活跃桌面设备上限，默认 `10`。桌面 Token 可以在各自的模型和分组限制内调用 Relay，并只可访问 `account.read`、`usage.read` 两个桌面只读接口；不能调用面板会话、通用 Token 管理、管理后台或支付写接口。用户自己的 `/api/token` 列表和搜索只展示这两个 Token 的掩码与 `pcc_agent`、`pcc_agent_engine` 标记；通用单个/批量密钥读取、更新、启停和删除接口均拒绝它们，撤销仍必须通过设备授权管理完成。
 
@@ -197,7 +199,7 @@ Proof 同时绑定用户、登录会话、用户鉴权版本、会话版本和 s
 - 数据库迁移会新增 `desktop_grants`，并为已有表增加可空的 `codex_token_id`。Claude/Codex 桌面 Token 继续存放在 `tokens`，通过 Grant 建立设备、同意状态和撤销审计关联，并在 API 密钥页面作为 PccAgent 专用只读 Key 展示。历史上只有 `token_id` 的单 Token Grant 继续兼容读取和撤销。
 - 数据库迁移会为 Session 签发计数和分批清理新增索引；已有 `user_sessions` 很大时应为首次启动预留维护窗口。
 - `user_sessions.previous_refresh_hash` 会从定长 `char(64)` 迁移为 `varchar(64)`。应用会兼容读取历史定长字段留下的空格填充；迁移后的目标结构必须保持幂等，连续启动不应反复执行列类型变更。
-- 仅 master 节点定时清理过期登录会话、超过配置保留期的 revoked 会话、已过保留期的 AuthFlow 和未完成换码的旧 pending DesktopGrant。
+- 仅 master 节点定时清理过期登录会话、超过配置保留期的 revoked 会话、已过保留期的 AuthFlow、未完成换码的旧 pending DesktopGrant 和确认超时的桌面双 Token。
 - 未配置 `TRUSTED_PROXIES` 时会兼容信任回环和常见私网代理；使用公网负载均衡器、`100.64.0.0/10`、链路本地地址或自定义 CNI 网段的部署仍需显式配置。需要严格忽略所有转发头时设置为 `none`。
 - Redis 限流从近似滑动窗口改为原子固定窗口，存在明确的边界双倍突发语义。
 - 用户级模型成功请求限流的 UTC 时间戳在滚动升级期间存在一个窗口的混合格式过渡，期间可能临时误放行或误拒绝。
