@@ -2,6 +2,31 @@
 
 DO NOT send optional commentary
 
+## Branch Policy (dev Fork)
+
+This branch is maintained for secondary open-source customization of this project. Unless explicitly approved, changes should be limited to:
+
+- Frontend user-visible customization (UI/UX, style, copy, routing screens, and related front-end assets).
+- Frontend localization updates that do not alter business semantics or API contracts.
+- Non-behavioral docs or notes describing local customization decisions.
+
+Do **not** modify or refactor these areas without explicit approval:
+
+- Backend business logic, relay/channel/provider behavior, or auth flow.
+- Payment/billing/quoting code paths, pre-consume/settlement hooks, quota math, or pricing configuration.
+- Database schema/data migration/data-shape contracts, data model definitions, or sensitive cache/stateful infrastructure.
+- Public API shape, response semantics, error contracts, and request/response formats.
+- Operational or security controls that affect user/session/auth/rate-limiting permissions.
+
+If a new branch rule here conflicts with a higher-level AGENTS instruction, the higher-level instruction prevails and that conflict must be called out before continuing.
+
+For future upstream synchronization:
+
+- Keep frontend changes small and localized to reduce conflict surface.
+- Prefer configuration, theme tokens, wrappers, and extension points before direct refactors.
+- Keep diffs compatible with upstream commits and avoid touching non-essential shared modules.
+- When pulling upstream updates, preserve existing local customizations and record merge rationale in commit messages or PR notes.
+
 ## Overview
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.
