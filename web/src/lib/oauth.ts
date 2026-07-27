@@ -66,3 +66,21 @@ export function buildOIDCOAuthUrl(
 export function buildLinuxDOOAuthUrl(clientId: string, state: string): string {
   return `https://connect.linux.do/oauth2/authorize?response_type=code&client_id=${clientId}&state=${state}`
 }
+
+/**
+ * Build WeChat Open Platform website OAuth URL
+ */
+export function buildWeChatOAuthUrl(
+  appId: string,
+  state: string,
+  origin = window.location.origin
+): string {
+  const url = new URL('https://open.weixin.qq.com/connect/qrconnect')
+  url.searchParams.set('appid', appId)
+  url.searchParams.set('redirect_uri', `${origin}/oauth/wechat`)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('scope', 'snsapi_login')
+  url.searchParams.set('state', state)
+  url.hash = 'wechat_redirect'
+  return url.toString()
+}

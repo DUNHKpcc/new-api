@@ -111,9 +111,8 @@ var LinuxDOClientId = ""
 var LinuxDOClientSecret = ""
 var LinuxDOMinimumTrustLevel = 0
 
-var WeChatServerAddress = ""
-var WeChatServerToken = ""
-var WeChatAccountQRCodeImageURL = ""
+var WeChatAppId = ""
+var WeChatAppSecret = ""
 
 var TurnstileSiteKey = ""
 var TurnstileSecretKey = ""

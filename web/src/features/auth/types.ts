@@ -109,12 +109,7 @@ export interface SystemStatus {
     telegram_bot_name?: string
     passkey_login?: boolean
     wechat_login?: boolean
-    wechat_qrcode?: string
-    wechat_qr_code?: string
-    wechat_qrcode_image_url?: string
-    wechat_qr_code_image_url?: string
-    wechat_account_qrcode_image_url?: string
-    WeChatAccountQRCodeImageURL?: string
+    wechat_app_id?: string
     turnstile_check?: boolean
     turnstile_site_key?: string
     email_verification?: boolean
@@ -153,12 +148,7 @@ export interface SystemStatus {
   telegram_bot_name?: string
   passkey_login?: boolean
   wechat_login?: boolean
-  wechat_qrcode?: string
-  wechat_qr_code?: string
-  wechat_qrcode_image_url?: string
-  wechat_qr_code_image_url?: string
-  wechat_account_qrcode_image_url?: string
-  WeChatAccountQRCodeImageURL?: string
+  wechat_app_id?: string
   turnstile_check?: boolean
   turnstile_site_key?: string
   email_verification?: boolean

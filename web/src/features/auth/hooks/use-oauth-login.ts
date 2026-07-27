@@ -28,6 +28,7 @@ import {
   buildDiscordOAuthUrl,
   buildOIDCOAuthUrl,
   buildLinuxDOOAuthUrl,
+  buildWeChatOAuthUrl,
 } from '../lib/oauth'
 import { pickTelegramAuthorization } from '../lib/telegram-login'
 import type { SystemStatus, CustomOAuthProviderInfo } from '../types'
@@ -159,6 +160,25 @@ export function useOAuthLogin(
     }
   }
 
+  const handleWeChatLogin = async () => {
+    if (!status?.wechat_app_id) return
+
+    setIsLoading(true)
+    try {
+      await resetSession()
+      const state = await createOAuthFlow('wechat', 'login')
+
+      const url = buildWeChatOAuthUrl(status.wechat_app_id, state)
+      window.open(url, '_self')
+    } catch {
+      toast.error(
+        t('Failed to start {{provider}} login', { provider: 'WeChat' })
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleTelegramLogin = async () => {
     if (!status?.telegram_bot_name?.trim()) {
       toast.error(t('Login failed'))
@@ -241,6 +261,7 @@ export function useOAuthLogin(
     handleDiscordLogin,
     handleOIDCLogin,
     handleLinuxDOLogin,
+    handleWeChatLogin,
     handleTelegramLogin,
     handleTelegramAuthorization,
     setIsTelegramDialogOpen,

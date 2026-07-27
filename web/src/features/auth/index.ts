@@ -30,7 +30,6 @@ export {
   bindEmail,
   createOAuthFlow,
   githubOAuthStart,
-  wechatLoginByCode,
   telegramLogin,
 } from './api'
 

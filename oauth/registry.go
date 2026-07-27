@@ -22,12 +22,20 @@ func Register(name string, provider Provider) {
 	providers[name] = provider
 }
 
-// RegisterCustom registers a custom OAuth provider (can be unregistered later)
+// RegisterCustom registers a custom OAuth provider without replacing a built-in provider.
 func RegisterCustom(name string, provider Provider) {
+	registerCustom(name, provider)
+}
+
+func registerCustom(name string, provider Provider) bool {
 	mu.Lock()
 	defer mu.Unlock()
+	if _, exists := providers[name]; exists && !customProviderSlugs[name] {
+		return false
+	}
 	providers[name] = provider
 	customProviderSlugs[name] = true
+	return true
 }
 
 // Unregister removes a provider from the registry
@@ -104,13 +112,18 @@ func LoadCustomProviders() error {
 	}
 
 	// Register each custom provider
+	loaded := 0
 	for _, config := range customProviders {
 		provider := NewGenericOAuthProvider(config)
-		RegisterCustom(config.Slug, provider)
+		if !registerCustom(config.Slug, provider) {
+			common.SysError("Skipped custom OAuth provider with reserved built-in slug: " + config.Slug)
+			continue
+		}
+		loaded++
 		common.SysLog("Loaded custom OAuth provider: " + config.Name + " (" + config.Slug + ")")
 	}
 
-	common.SysLog(fmt.Sprintf("Loaded %d custom OAuth providers", len(customProviders)))
+	common.SysLog(fmt.Sprintf("Loaded %d custom OAuth providers", loaded))
 	return nil
 }
 
@@ -124,11 +137,21 @@ func RegisterOrUpdateCustomProvider(config *model.CustomOAuthProvider) {
 	provider := NewGenericOAuthProvider(config)
 	mu.Lock()
 	defer mu.Unlock()
+	if _, exists := providers[config.Slug]; exists && !customProviderSlugs[config.Slug] {
+		common.SysError("Skipped custom OAuth provider with reserved built-in slug: " + config.Slug)
+		return
+	}
 	providers[config.Slug] = provider
 	customProviderSlugs[config.Slug] = true
 }
 
 // UnregisterCustomProvider unregisters a custom provider by slug
 func UnregisterCustomProvider(slug string) {
-	Unregister(slug)
+	mu.Lock()
+	defer mu.Unlock()
+	if !customProviderSlugs[slug] {
+		return
+	}
+	delete(providers, slug)
+	delete(customProviderSlugs, slug)
 }

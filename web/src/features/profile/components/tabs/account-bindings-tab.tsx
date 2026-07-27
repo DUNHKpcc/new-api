@@ -42,6 +42,7 @@ import {
   buildGitHubOAuthUrl,
   buildLinuxDOOAuthUrl,
   buildOIDCOAuthUrl,
+  buildWeChatOAuthUrl,
 } from '@/lib/oauth'
 
 import {
@@ -52,7 +53,6 @@ import {
 import type { UserProfile, BindingItem } from '../../types'
 import { EmailBindDialog } from '../dialogs/email-bind-dialog'
 import { TelegramBindDialog } from '../dialogs/telegram-bind-dialog'
-import { WeChatBindDialog } from '../dialogs/wechat-bind-dialog'
 
 // ============================================================================
 // Account Bindings Tab Component
@@ -63,7 +63,7 @@ interface AccountBindingsTabProps {
   onUpdate: () => void
 }
 
-type DialogKey = 'email' | 'wechat' | 'telegram'
+type DialogKey = 'email' | 'telegram'
 
 interface PendingOAuthBinding {
   provider: string
@@ -299,8 +299,15 @@ export function AccountBindingsTab({
         isBound: Boolean(
           (profile as unknown as Record<string, unknown>).wechat_id
         ),
-        isEnabled: status?.wechat_login || false,
-        onBind: () => dialogs.open('wechat'),
+        isEnabled: Boolean(status?.wechat_login && status?.wechat_app_id),
+        onBind: () => {
+          const appId = status?.wechat_app_id
+          if (appId) {
+            void startOAuthBinding('wechat', (state) =>
+              buildWeChatOAuthUrl(appId, state)
+            )
+          }
+        },
       },
       {
         id: 'github',
@@ -543,18 +550,6 @@ export function AccountBindingsTab({
           open ? dialogs.open('email') : dialogs.close('email')
         }
         currentEmail={profile.email}
-        onSuccess={onUpdate}
-      />
-
-      {/* WeChat Bind Dialog */}
-      <WeChatBindDialog
-        open={dialogs.isOpen('wechat')}
-        qrCodeUrl={
-          typeof status?.wechat_qrcode === 'string' ? status.wechat_qrcode : ''
-        }
-        onOpenChange={(open) =>
-          open ? dialogs.open('wechat') : dialogs.close('wechat')
-        }
         onSuccess={onUpdate}
       />
 

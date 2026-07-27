@@ -157,12 +157,6 @@ export async function createOAuthFlow(
   throw new Error(res.data?.message || 'Failed to initialize OAuth')
 }
 
-// WeChat login by authorization code
-export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
-  const res = await api.get('/api/oauth/wechat', { params: { code } })
-  return res.data
-}
-
 export async function telegramLogin(
   authorization: TelegramAuthorization
 ): Promise<ApiResponse> {

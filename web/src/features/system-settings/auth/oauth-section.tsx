@@ -87,9 +87,8 @@ const oauthSchema = z.object({
   LinuxDOClientSecret: z.string(),
   LinuxDOMinimumTrustLevel: z.string(),
   WeChatAuthEnabled: z.boolean(),
-  WeChatServerAddress: z.string(),
-  WeChatServerToken: z.string(),
-  WeChatAccountQRCodeImageURL: z.string(),
+  WeChatAppId: z.string(),
+  WeChatAppSecret: z.string(),
 })
 
 type OAuthFormValues = z.infer<typeof oauthSchema>
@@ -116,9 +115,8 @@ type FlatOAuthDefaults = {
   LinuxDOClientSecret: string
   LinuxDOMinimumTrustLevel: string
   WeChatAuthEnabled: boolean
-  WeChatServerAddress: string
-  WeChatServerToken: string
-  WeChatAccountQRCodeImageURL: string
+  WeChatAppId: string
+  WeChatAppSecret: string
 }
 
 const oauthTabContentClassName =
@@ -199,9 +197,8 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   LinuxDOClientSecret: defaults.LinuxDOClientSecret ?? '',
   LinuxDOMinimumTrustLevel: defaults.LinuxDOMinimumTrustLevel ?? '',
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
-  WeChatServerAddress: defaults.WeChatServerAddress ?? '',
-  WeChatServerToken: defaults.WeChatServerToken ?? '',
-  WeChatAccountQRCodeImageURL: defaults.WeChatAccountQRCodeImageURL ?? '',
+  WeChatAppId: defaults.WeChatAppId ?? '',
+  WeChatAppSecret: defaults.WeChatAppSecret ?? '',
 })
 
 const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
@@ -225,10 +222,9 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   LinuxDOClientId: values.LinuxDOClientId,
   LinuxDOClientSecret: values.LinuxDOClientSecret,
   LinuxDOMinimumTrustLevel: values.LinuxDOMinimumTrustLevel,
+  WeChatAppId: values.WeChatAppId,
+  WeChatAppSecret: values.WeChatAppSecret,
   WeChatAuthEnabled: values.WeChatAuthEnabled,
-  WeChatServerAddress: values.WeChatServerAddress,
-  WeChatServerToken: values.WeChatServerToken,
-  WeChatAccountQRCodeImageURL: values.WeChatAccountQRCodeImageURL,
 })
 
 type OAuthSectionProps = {
@@ -259,6 +255,11 @@ export function OAuthSection(props: OAuthSectionProps) {
   const linuxDOCallbackUrl = buildOAuthCallbackUrl(
     props.serverAddress,
     'linuxdo',
+    t('Site URL')
+  )
+  const weChatCallbackUrl = buildOAuthCallbackUrl(
+    props.serverAddress,
+    'wechat',
     t('Site URL')
   )
 
@@ -971,6 +972,31 @@ export function OAuthSection(props: OAuthSectionProps) {
               </TabsContent>
 
               <TabsContent value='wechat' className={oauthTabContentClassName}>
+                <OAuthSetupGuide
+                  title={t('Setup guide')}
+                  description={t(
+                    'Create and approve a website application in WeChat Open Platform before enabling login.'
+                  )}
+                  rows={[
+                    {
+                      label: t('Homepage URL'),
+                      value: siteUrl,
+                      copyLabel: t('Copy homepage URL'),
+                    },
+                    {
+                      label: t('Authorization callback URL'),
+                      value: weChatCallbackUrl,
+                      copyLabel: t('Copy callback URL'),
+                    },
+                  ]}
+                >
+                  <p>
+                    {t(
+                      'Set the authorization callback domain in WeChat Open Platform to the domain shown above.'
+                    )}
+                  </p>
+                </OAuthSetupGuide>
+
                 <FormField
                   control={form.control}
                   name='WeChatAuthEnabled'
@@ -994,13 +1020,13 @@ export function OAuthSection(props: OAuthSectionProps) {
 
                 <FormField
                   control={form.control}
-                  name='WeChatServerAddress'
+                  name='WeChatAppId'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Server Address')}</FormLabel>
+                      <FormLabel>{t('WeChat App ID')}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={t('https://wechat-server.example.com')}
+                          placeholder={t('WeChat App ID')}
                           autoComplete='off'
                           value={field.value ?? ''}
                           onChange={(event) =>
@@ -1018,39 +1044,15 @@ export function OAuthSection(props: OAuthSectionProps) {
 
                 <FormField
                   control={form.control}
-                  name='WeChatServerToken'
+                  name='WeChatAppSecret'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Server Token')}</FormLabel>
+                      <FormLabel>{t('WeChat App Secret')}</FormLabel>
                       <FormControl>
                         <Input
                           type='password'
-                          placeholder={t('Server Token')}
+                          placeholder={t('WeChat App Secret')}
                           autoComplete='new-password'
-                          value={field.value ?? ''}
-                          onChange={(event) =>
-                            field.onChange(event.target.value)
-                          }
-                          name={field.name}
-                          onBlur={field.onBlur}
-                          ref={field.ref}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='WeChatAccountQRCodeImageURL'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('QR Code Image URL')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder={t('https://example.com/qr-code.png')}
-                          autoComplete='off'
                           value={field.value ?? ''}
                           onChange={(event) =>
                             field.onChange(event.target.value)

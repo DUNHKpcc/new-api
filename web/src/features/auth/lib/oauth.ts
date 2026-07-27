@@ -23,6 +23,7 @@ export {
   buildDiscordOAuthUrl,
   buildOIDCOAuthUrl,
   buildLinuxDOOAuthUrl,
+  buildWeChatOAuthUrl,
 } from '@/lib/oauth'
 
 // ============================================================================
@@ -76,6 +77,15 @@ export function getAvailableOAuthProviders(
     })
   }
 
+  if (status.wechat_login && status.wechat_app_id) {
+    providers.push({
+      name: 'WeChat',
+      type: 'wechat',
+      enabled: true,
+      clientId: status.wechat_app_id,
+    })
+  }
+
   if (status.telegram_oauth) {
     providers.push({
       name: 'Telegram',
@@ -98,6 +108,6 @@ export function hasOAuthProviders(status: SystemStatus | null): boolean {
     status.oidc_enabled ||
     status.linuxdo_oauth ||
     status.telegram_oauth ||
-    status.wechat_login
+    (status.wechat_login && status.wechat_app_id)
   )
 }
