@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Check, Clock3, Loader2, ShieldCheck, X } from 'lucide-react'
 import type { ReactNode } from 'react'

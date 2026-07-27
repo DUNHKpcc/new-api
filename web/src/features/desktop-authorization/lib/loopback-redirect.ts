@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-
 const callbackPathPattern = /^\/oauth\/callback\/[A-Za-z0-9_-]{22,}$/
 
 export function isSafeDesktopLoopbackRedirect(value: unknown): value is string {
