@@ -67,6 +67,7 @@ export async function searchUsers(
     page_size = 10,
     sort_by,
     sort_order,
+    pcc_agent,
   } = params
   const queryParams = new URLSearchParams()
   queryParams.set('keyword', keyword)
@@ -77,6 +78,7 @@ export async function searchUsers(
   queryParams.set('page_size', String(page_size))
   if (sort_by) queryParams.set('sort_by', sort_by)
   if (sort_order) queryParams.set('sort_order', sort_order)
+  if (pcc_agent) queryParams.set('pcc_agent', 'true')
   const res = await api.get(`/api/user/search?${queryParams.toString()}`)
   return res.data
 }

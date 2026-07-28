@@ -380,6 +380,50 @@ func TestDesktopAuthorizationGiftRequiresWeChatAndIsGrantedOnConfirmation(t *tes
 	assert.Equal(t, "desktop-wechat-union", permanentSubject)
 }
 
+func TestDesktopAuthorizationConfirmationReplayDoesNotGrantNewGift(t *testing.T) {
+	fixture := setupDesktopAuthorizationTest(t)
+	require.NoError(t, model.DB.Transaction(func(tx *gorm.DB) error {
+		return model.ClaimExternalIdentityWithTx(
+			tx,
+			model.ExternalIdentityProviderWeChatUnionID,
+			"desktop-wechat-replay",
+			fixture.user.Id,
+		)
+	}))
+	code, _ := authorizeDesktopFixture(t, fixture)
+	protocolVersion := DesktopContractVersion
+	exchanged, err := ExchangeDesktopAuthorizationCode(DesktopTokenExchangeInput{
+		GrantType:       "authorization_code",
+		ClientID:        DesktopClientID,
+		Code:            code,
+		RedirectURI:     fixture.request.RedirectURI,
+		CodeVerifier:    fixture.verifier,
+		DeviceID:        fixture.request.DeviceID,
+		ProtocolVersion: &protocolVersion,
+	})
+	require.NoError(t, err)
+	require.NoError(t, ConfirmDesktopAuthorization(exchanged.ConfirmationToken))
+
+	plan := model.SubscriptionPlan{
+		Title:              "Later PccAgent gift",
+		DurationUnit:       model.SubscriptionDurationMonth,
+		DurationValue:      1,
+		Enabled:            true,
+		MaxPurchasePerUser: 1,
+		TotalAmount:        500,
+	}
+	require.NoError(t, model.DB.Create(&plan).Error)
+	model.InvalidateSubscriptionPlanCache(plan.Id)
+	operation_setting.GetDesktopAgentSetting().GiftPlanId = plan.Id
+
+	require.NoError(t, ConfirmDesktopAuthorization(exchanged.ConfirmationToken))
+	var giftCount int64
+	require.NoError(t, model.DB.Model(&model.UserSubscription{}).
+		Where("user_id = ? AND source = ?", fixture.user.Id, model.UserSubscriptionSourcePccAgentGift).
+		Count(&giftCount).Error)
+	assert.Zero(t, giftCount)
+}
+
 func TestDesktopAuthorizationProtocolV2KeepsPreviousDeviceCredentialUntilConfirmation(t *testing.T) {
 	fixture := setupDesktopAuthorizationTest(t)
 	firstCode, _ := authorizeDesktopFixture(t, fixture)

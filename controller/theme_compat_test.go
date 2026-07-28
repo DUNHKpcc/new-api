@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,6 +49,7 @@ func TestGetStatusAdvertisesDefaultDashboard(t *testing.T) {
 }
 
 func TestUpdateOptionRejectsInvalidPccAgentGiftConfiguration(t *testing.T) {
+	confirmPaymentComplianceForTest(t)
 	previousEnabled := common.WeChatAuthEnabled
 	previousAppID := common.WeChatAppId
 	previousAppSecret := common.WeChatAppSecret
@@ -97,4 +100,35 @@ func TestUpdateOptionRejectsInvalidPccAgentGiftConfiguration(t *testing.T) {
 			assert.Equal(t, test.message, payload.Message)
 		})
 	}
+}
+
+func TestUpdateOptionRequiresPaymentComplianceForPccAgentGift(t *testing.T) {
+	paymentSetting := operation_setting.GetPaymentSetting()
+	previousConfirmed := paymentSetting.ComplianceConfirmed
+	previousTermsVersion := paymentSetting.ComplianceTermsVersion
+	paymentSetting.ComplianceConfirmed = false
+	paymentSetting.ComplianceTermsVersion = ""
+	t.Cleanup(func() {
+		paymentSetting.ComplianceConfirmed = previousConfirmed
+		paymentSetting.ComplianceTermsVersion = previousTermsVersion
+	})
+
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(
+		http.MethodPut,
+		"/api/option/",
+		strings.NewReader(`{"key":"desktop_agent_setting.gift_plan_id","value":1}`),
+	)
+
+	UpdateOption(context)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+	var payload struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+	assert.False(t, payload.Success)
+	assert.Equal(t, i18n.MsgPaymentComplianceRequired, payload.Message)
 }

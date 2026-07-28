@@ -61,7 +61,9 @@ function isDisabledUserRow(user: User) {
 
 export function UsersTable() {
   const { t } = useTranslation()
-  const columns = useUsersColumns()
+  const search = route.useSearch()
+  const view = search.view ?? 'all'
+  const columns = useUsersColumns(view)
   const { refreshTrigger } = useUsers()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [sorting, setSorting] = useState<SortingState>([])
@@ -75,7 +77,7 @@ export function UsersTable() {
     onPaginationChange,
     ensurePageInRange,
   } = useTableUrlState({
-    search: route.useSearch(),
+    search,
     navigate: route.useNavigate(),
     pagination: { defaultPage: 1, defaultPageSize: isMobile ? 10 : 20 },
     globalFilter: { enabled: true, key: 'filter' },
@@ -129,6 +131,7 @@ export function UsersTable() {
       statusFilter,
       roleFilter,
       groupFilter,
+      view,
       sortParams,
       refreshTrigger,
     ],
@@ -143,13 +146,14 @@ export function UsersTable() {
       }
 
       const result =
-        hasFilter || hasColumnFilter
+        view === 'pcc_agent' || hasFilter || hasColumnFilter
           ? await searchUsers({
               ...params,
               keyword: globalFilter,
               status: statusFilter[0] ?? '',
               role: roleFilter[0] ?? '',
               group: groupFilter,
+              pcc_agent: view === 'pcc_agent',
             })
           : await getUsers(params)
 
@@ -231,13 +235,10 @@ export function UsersTable() {
           },
         ],
       }}
-      getRowClassName={(row, { isMobile }) =>
-        isDisabledUserRow(row.original)
-          ? isMobile
-            ? DISABLED_ROW_MOBILE
-            : DISABLED_ROW_DESKTOP
-          : undefined
-      }
+      getRowClassName={(row, { isMobile }) => {
+        if (!isDisabledUserRow(row.original)) return undefined
+        return isMobile ? DISABLED_ROW_MOBILE : DISABLED_ROW_DESKTOP
+      }}
       bulkActions={<DataTableBulkActions table={table} />}
     />
   )

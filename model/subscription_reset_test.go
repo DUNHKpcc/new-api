@@ -115,6 +115,39 @@ func TestAdminResetUserSubscriptionsByPlanKeepsResetTimes(t *testing.T) {
 	assert.Equal(t, nextReset, sub.NextResetTime)
 }
 
+func TestAdminResetUserSubscriptionsByPlanExcludesPccAgentGift(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	plan := &SubscriptionPlan{
+		Id:               9351,
+		Title:            "Shared Gift Plan",
+		DurationUnit:     SubscriptionDurationMonth,
+		DurationValue:    1,
+		TotalAmount:      2000,
+		QuotaResetPeriod: SubscriptionResetDaily,
+	}
+	seedSubscriptionResetPlan(t, plan)
+	endTime := now + 30*24*3600
+	ordinary := &UserSubscription{
+		Id: 9352, UserId: 251, PlanId: plan.Id, AmountTotal: 2000, AmountUsed: 800,
+		StartTime: now - 3600, EndTime: endTime, Status: "active", Source: "admin",
+	}
+	gift := &UserSubscription{
+		Id: 9353, UserId: 251, PlanId: plan.Id, AmountTotal: 2000, AmountUsed: 1200,
+		StartTime: now - 3600, EndTime: endTime, Status: "active", Source: UserSubscriptionSourcePccAgentGift,
+	}
+	seedSubscriptionResetSub(t, ordinary)
+	seedSubscriptionResetSub(t, gift)
+
+	result, err := AdminResetUserSubscriptionsByPlan(251, plan.Id, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.ResetCount)
+	assert.Zero(t, getSubscriptionResetSub(t, ordinary.Id).AmountUsed)
+	assert.EqualValues(t, 1200, getSubscriptionResetSub(t, gift.Id).AmountUsed)
+}
+
 func TestAdminResetUserSubscriptionsByPlanNoActiveMatchReturnsError(t *testing.T) {
 	truncateTables(t)
 
@@ -198,4 +231,37 @@ func TestAdminResetPlanSubscriptionsNoMatchSucceeds(t *testing.T) {
 	assert.Zero(t, result.ResetCount)
 	assert.Zero(t, result.UserCount)
 	assert.Empty(t, result.AffectedUserIds)
+}
+
+func TestAdminResetPlanSubscriptionsExcludesPccAgentGift(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	plan := &SubscriptionPlan{
+		Id:               9651,
+		Title:            "Shared Global Gift Plan",
+		DurationUnit:     SubscriptionDurationMonth,
+		DurationValue:    1,
+		TotalAmount:      3000,
+		QuotaResetPeriod: SubscriptionResetDaily,
+	}
+	seedSubscriptionResetPlan(t, plan)
+	endTime := now + 30*24*3600
+	ordinary := &UserSubscription{
+		Id: 9652, UserId: 451, PlanId: plan.Id, AmountTotal: 3000, AmountUsed: 1000,
+		StartTime: now - 3600, EndTime: endTime, Status: "active", Source: "order",
+	}
+	gift := &UserSubscription{
+		Id: 9653, UserId: 452, PlanId: plan.Id, AmountTotal: 3000, AmountUsed: 2000,
+		StartTime: now - 3600, EndTime: endTime, Status: "active", Source: UserSubscriptionSourcePccAgentGift,
+	}
+	seedSubscriptionResetSub(t, ordinary)
+	seedSubscriptionResetSub(t, gift)
+
+	result, err := AdminResetPlanSubscriptions(plan.Id, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.ResetCount)
+	assert.Zero(t, getSubscriptionResetSub(t, ordinary.Id).AmountUsed)
+	assert.EqualValues(t, 2000, getSubscriptionResetSub(t, gift.Id).AmountUsed)
 }

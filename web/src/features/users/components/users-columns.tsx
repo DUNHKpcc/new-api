@@ -38,13 +38,15 @@ import {
   USER_ROLES,
   isUserDeleted,
 } from '../constants'
-import type { User } from '../types'
+import type { User, UsersView } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import { usePccAgentUsersColumns } from './pcc-agent-users-columns'
 import { UserQuotaCell } from './user-quota-cell'
 
-export function useUsersColumns(): ColumnDef<User>[] {
+export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
   const { t } = useTranslation()
-  return [
+  const pccAgentColumns = usePccAgentUsersColumns()
+  const columns: ColumnDef<User>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -327,4 +329,11 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { pinned: 'right' as const },
     },
   ]
+
+  if (view !== 'pcc_agent') {
+    return columns
+  }
+
+  columns.splice(3, 0, ...pccAgentColumns)
+  return columns
 }

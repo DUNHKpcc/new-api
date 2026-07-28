@@ -343,9 +343,6 @@ func ConfirmDesktopGrant(
 			return err
 		}
 		if grant.Status == DesktopGrantStatusActive && grant.ActiveSlot != nil {
-			if _, err := EnsurePccAgentGiftSubscriptionWithTx(tx, grant.UserId, giftPlanId); err != nil {
-				return err
-			}
 			activation = &DesktopGrantActivationResult{
 				Grant:       &grant,
 				ClaudeToken: claudeToken,

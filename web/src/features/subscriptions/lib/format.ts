@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 import dayjs from '@/lib/dayjs'
+import { formatQuota } from '@/lib/format'
 
 import type { SubscriptionPlan } from '../types'
 
@@ -60,6 +61,19 @@ export function formatResetPeriod(
     return `${seconds} ${t('seconds')}`
   }
   return t('No Reset')
+}
+
+export function formatPlanSummary(
+  plan: Partial<SubscriptionPlan>,
+  t: TFunction
+): string {
+  const totalAmount = Number(plan.total_amount || 0)
+  const quota = totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')
+  return [
+    `${t('Total Quota')}: ${quota}`,
+    `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`,
+    `${t('Validity Period')}: ${formatDuration(plan, t)}`,
+  ].join(' | ')
 }
 
 export function formatTimestamp(ts: number): string {

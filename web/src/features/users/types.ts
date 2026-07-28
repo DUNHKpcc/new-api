@@ -32,6 +32,24 @@ export type UserStatus = z.infer<typeof userStatusSchema>
 export const userRoleSchema = z.number()
 export type UserRole = z.infer<typeof userRoleSchema>
 
+export const pccAgentGiftSummarySchema = z.object({
+  subscription_id: z.number(),
+  plan_id: z.number(),
+  plan_title: z.string(),
+  status: z.string(),
+  amount_total: z.number(),
+  amount_used: z.number(),
+  amount_remaining: z.number(),
+  next_reset_time: z.number(),
+  end_time: z.number(),
+})
+
+export const pccAgentUserSummarySchema = z.object({
+  active_device_count: z.number(),
+  wechat_verified: z.boolean(),
+  gift: pccAgentGiftSummarySchema.nullable(),
+})
+
 export const userSchema = z.object({
   id: z.number(),
   username: z.string(),
@@ -62,6 +80,7 @@ export const userSchema = z.object({
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
+  pcc_agent_summary: pccAgentUserSummarySchema.optional(),
 })
 export type User = z.infer<typeof userSchema>
 
@@ -87,6 +106,7 @@ export type UserSortBy =
   | 'last_login_at'
 
 export type UserSortOrder = 'asc' | 'desc'
+export type UsersView = 'all' | 'pcc_agent'
 
 export interface GetUsersParams {
   p?: number
@@ -115,6 +135,7 @@ export interface SearchUsersParams {
   page_size?: number
   sort_by?: UserSortBy
   sort_order?: UserSortOrder
+  pcc_agent?: boolean
 }
 
 export interface UserFormData {

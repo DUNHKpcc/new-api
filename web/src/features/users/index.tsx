@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { getRouteApi } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -25,16 +26,34 @@ import { UsersMutateDrawer } from './components/users-mutate-drawer'
 import { UsersPrimaryButtons } from './components/users-primary-buttons'
 import { UsersProvider, useUsers } from './components/users-provider'
 import { UsersTable } from './components/users-table'
+import { UsersViewTabs } from './components/users-view-tabs'
+import type { UsersView } from './types'
+
+const route = getRouteApi('/_authenticated/users/')
 
 function UsersContent() {
   const { t } = useTranslation()
   const { open, setOpen, currentRow } = useUsers()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const view = search.view ?? 'all'
+
+  const handleViewChange = (nextView: UsersView) => {
+    void navigate({
+      search: (previous) => ({
+        ...previous,
+        page: 1,
+        view: nextView === 'all' ? undefined : nextView,
+      }),
+    })
+  }
 
   return (
     <>
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>{t('Users')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
+          <UsersViewTabs value={view} onValueChange={handleViewChange} />
           <UsersPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>

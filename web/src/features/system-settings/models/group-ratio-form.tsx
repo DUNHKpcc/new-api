@@ -62,6 +62,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
 import { getAdminPlans } from '../../subscriptions/api'
+import { formatPlanSummary } from '../../subscriptions/lib/format'
 import {
   SettingsForm,
   SettingsSwitchContent,
@@ -298,10 +299,18 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   >
                     <FormControl>
                       <SelectTrigger className='w-full'>
-                        <SelectValue />
+                        <SelectValue>
+                          {field.value === 0
+                            ? t('Disabled')
+                            : (giftPlans.find((plan) => plan.id === field.value)
+                                ?.title ?? t('Select'))}
+                        </SelectValue>
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent alignItemWithTrigger={false}>
+                    <SelectContent
+                      alignItemWithTrigger={false}
+                      className='w-[calc(100vw-2rem)] max-w-lg sm:w-[32rem]'
+                    >
                       <SelectGroup>
                         <SelectItem value='0'>{t('Disabled')}</SelectItem>
                         {giftPlans.map((plan) => (
@@ -309,10 +318,18 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                             key={plan.id}
                             value={String(plan.id)}
                             disabled={!plan.enabled}
+                            className='items-start py-2'
                           >
-                            {plan.enabled
-                              ? plan.title
-                              : `${plan.title} (${t('Disabled')})`}
+                            <span className='min-w-0 flex-1'>
+                              <span className='block font-medium'>
+                                {plan.enabled
+                                  ? plan.title
+                                  : `${plan.title} (${t('Disabled')})`}
+                              </span>
+                              <span className='text-muted-foreground block text-xs break-words whitespace-normal'>
+                                {formatPlanSummary(plan, t)}
+                              </span>
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectGroup>

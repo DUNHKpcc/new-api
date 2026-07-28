@@ -36,6 +36,7 @@ const usersSearchSchema = z.object({
     .optional()
     .catch([]),
   group: z.string().optional().catch(''),
+  view: z.enum(['all', 'pcc_agent']).optional().catch('all'),
 })
 
 export const Route = createFileRoute('/_authenticated/users/')({

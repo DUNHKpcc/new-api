@@ -66,6 +66,10 @@ import {
   resetUserSubscriptionsByPlan,
 } from '../../api'
 import { formatTimestamp } from '../../lib'
+import {
+  getUserSubscriptionActionPolicy,
+  isPccAgentGiftSubscription,
+} from '../../lib/user-subscription-policy'
 import type { PlanRecord, UserSubscriptionRecord } from '../../types'
 
 interface Props {
@@ -81,9 +85,8 @@ function SubscriptionStatusBadge(props: {
 }) {
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now() / 1000
-  const isExpired = (props.sub.end_time || 0) > 0 && props.sub.end_time < now
-  const isActive = props.sub.status === 'active' && !isExpired
-  if (isActive) {
+  const policy = getUserSubscriptionActionPolicy(props.sub, now)
+  if (policy.isActive) {
     return (
       <StatusBadge
         label={props.t('Active')}
@@ -307,7 +310,10 @@ export function UserSubscriptionsDialog(props: Props) {
                           {planTitleMap.get(sub.plan_id) || `#${sub.plan_id}`}
                         </div>
                         <div className='text-muted-foreground text-sm'>
-                          {t('Source')}: {sub.source || '-'}
+                          {t('Source')}:{' '}
+                          {isPccAgentGiftSubscription(sub)
+                            ? t('PccAgent Gift')
+                            : sub.source || '-'}
                         </div>
                       </div>
                     )
@@ -357,32 +363,33 @@ export function UserSubscriptionsDialog(props: Props) {
                   cellClassName: 'text-right',
                   cell: (record) => {
                     const sub = record.subscription
+                    // eslint-disable-next-line react-hooks/purity
                     const now = Date.now() / 1000
-                    const isExpired =
-                      (sub.end_time || 0) > 0 && sub.end_time < now
-                    const isActive = sub.status === 'active' && !isExpired
+                    const policy = getUserSubscriptionActionPolicy(sub, now)
 
                     return (
                       <DataTableRowActionMenu ariaLabel={t('Actions')}>
+                        {policy.showReset && (
+                          <DropdownMenuItem
+                            disabled={!policy.canReset}
+                            onClick={() => {
+                              setAdvanceResetTime(true)
+                              setResetAction({
+                                planId: sub.plan_id,
+                                planTitle:
+                                  planTitleMap.get(sub.plan_id) ||
+                                  `#${sub.plan_id}`,
+                              })
+                            }}
+                          >
+                            {t('Reset quota')}
+                            <DropdownMenuShortcut>
+                              <RotateCcw size={16} />
+                            </DropdownMenuShortcut>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
-                          disabled={!isActive}
-                          onClick={() => {
-                            setAdvanceResetTime(true)
-                            setResetAction({
-                              planId: sub.plan_id,
-                              planTitle:
-                                planTitleMap.get(sub.plan_id) ||
-                                `#${sub.plan_id}`,
-                            })
-                          }}
-                        >
-                          {t('Reset quota')}
-                          <DropdownMenuShortcut>
-                            <RotateCcw size={16} />
-                          </DropdownMenuShortcut>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={!isActive}
+                          disabled={!policy.canInvalidate}
                           onClick={() =>
                             setConfirmAction({
                               type: 'invalidate',
@@ -395,7 +402,7 @@ export function UserSubscriptionsDialog(props: Props) {
                             <Ban size={16} />
                           </DropdownMenuShortcut>
                         </DropdownMenuItem>
-                        {sub.source !== 'pcc_agent_gift' && (
+                        {policy.canDelete && (
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

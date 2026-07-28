@@ -160,6 +160,10 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 		if giftPlanId > 0 {
+			if !operation_setting.IsPaymentComplianceConfirmed() {
+				common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+				return
+			}
 			if !common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "" {
 				common.ApiErrorMsg(c, "启用 PccAgent 赠送订阅前必须完整配置并启用微信 OAuth")
 				return

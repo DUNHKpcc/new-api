@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：待评审，未进入业务代码实现
+- 状态：核心授权、赠送及 PccAgent 授权用户管理视图已实现
 - 目标版本：V1 最小实现
 - 变更性质：PccAgent 授权权益、订阅资金来源选择、管理员配置与展示
 - 风险等级：高。涉及订阅预扣、结算、退款和购买上限，必须完成本文测试门禁后才能上线
@@ -465,6 +465,39 @@ flowchart TD
 - 编辑用户、调整钱包额度、启停用户等操作。
 - 用户订阅列表、重置、作废和删除操作。
 
+视图使用现有 `/users` 路由和用户表格，通过 `view=pcc_agent` URL 查询参数切换；
+不新增侧边栏入口、路由页面、权限模型或第二套用户管理组件。切换视图时回到第一页，
+现有搜索、状态、角色、分组、排序和分页参数继续生效。
+
+前端在 PccAgent 视图中调用：
+
+```text
+GET /api/user/search?pcc_agent=true
+```
+
+普通用户视图不发送该参数，现有 `/api/user/` 和 `/api/user/search` 行为及基础字段保持
+不变。PccAgent 查询仍返回现有分页用户 DTO，只额外为本视图的用户附加可选
+`pcc_agent_summary`：
+
+```text
+pcc_agent_summary:
+  active_device_count
+  wechat_verified
+  gift:
+    subscription_id
+    plan_id
+    plan_title
+    status
+    amount_total
+    amount_used
+    amount_remaining
+    next_reset_time
+    end_time
+```
+
+`gift` 在没有历史赠送时为 `null`。响应不得包含完整或脱敏前的 UnionID、Token ID、
+Token Key、设备摘要、授权码、确认 Token 或 Grant 内部 ID。
+
 增加的只读列：
 
 - 活跃设备数。
@@ -476,6 +509,22 @@ flowchart TD
 
 赠送实例只允许复用现有“作废”动作；隐藏或禁用“硬删除”，且不提供“补发”动作。
 
+管理动作边界：
+
+- 用户本身继续复用编辑、钱包额度调整、启停、绑定管理、安全重置和删除操作。
+- 赠送摘要列只读；进入现有用户订阅抽屉后可以同时查看普通订阅和赠送订阅。
+- PccAgent 赠送实例只提供“作废”。不提供修改 `plan_id`、`source`、额度、有效期、
+  重置周期、用户分组或领取身份的通用编辑入口。
+- 隐藏 PccAgent 赠送实例的“重置额度”。现有重置接口按
+  `user_id + plan_id` 重置全部同套餐有效实例；赠送与购买实例可以复用同一套餐，直接
+  复用会误重置用户购买的订阅。
+- 现有用户级和套餐级重置查询必须排除 `source = pcc_agent_gift`，防止管理员从同套餐
+  普通实例发起重置时旁路前端限制并修改赠送额度。
+- 普通订阅继续保留现有重置、作废和硬删除动作。
+- 如未来需要重置单条赠送，必须新增按 `user_subscription_id` 锁定并操作单实例的专用
+  接口、支付合规检查和管理员审计，不得复用当前按套餐批量重置接口。
+- 编辑 `SubscriptionPlan` 只影响未来创建的赠送实例；不迁移、不改写现有赠送快照。
+
 列表范围为：
 
 - 存在非 pending 的 Desktop Grant；或
@@ -485,6 +534,11 @@ flowchart TD
 
 后端使用分页用户查询加两次批量聚合查询获取设备数和赠送摘要，禁止逐用户 N+1 查询。
 查询使用 GORM 子查询和 `IN` 批量查询，兼容 SQLite、MySQL 和 PostgreSQL。
+
+第一次批量查询以本页用户 ID 为范围，统计 `status = active` 的 Desktop Grant，并只
+判断该用户是否存在 `provider = wechat_unionid` 的 Claim。第二次批量查询读取所有状态
+的 `source = pcc_agent_gift` 实例并关联套餐名称。微信验证只返回布尔值，不读取或返回
+Claim Subject。
 
 ### 10.3 PccAgent 客户端展示
 
@@ -500,6 +554,7 @@ flowchart TD
 
 - 系统设置：扩展现有 Option 更新接口，增加 `desktop_agent_setting.gift_plan_id`。
 - 授权用户列表：扩展现有用户查询参数或增加 PccAgent 管理查询，但返回仍复用用户 DTO。
+- `pcc_agent=true` 仅在现有管理员鉴权后的用户搜索接口生效；不得增加用户侧查询入口。
 
 PccAgent 浏览器授权查询需要返回服务端计算的 `wechat_verification_required` 和
 `wechat_verified` 状态，用于决定是否显示微信验证流程。响应不能包含 UnionID。
@@ -641,6 +696,21 @@ WeChat UnionID。
 - 授权用户视图正确展示同 PlanId 的普通与赠送实例。
 - 所有新增文案通过 `bun run i18n:sync`。
 - 前端 `bun run build` 通过。
+
+### 14.7 授权用户管理视图
+
+- 仅有 `pending` Grant 且没有历史赠送的用户不出现在 PccAgent 视图。
+- 存在 `awaiting_confirmation`、`active`、`revoked` 或 `expired` Grant 的用户均可查询。
+- 没有 Grant、但存在任意状态历史赠送的用户仍可查询。
+- PccAgent 筛选与关键词、状态、角色、分组、排序和分页组合时，总数和页数据正确。
+- 活跃设备数只统计 `active` Grant，不统计待确认、撤销、过期或 pending。
+- 微信验证只根据 `wechat_unionid` Claim 计算，响应不包含 Claim Subject。
+- 赠送摘要返回历史实例、套餐名称、状态、额度、重置和到期时间；无限额度保持
+  `amount_total = 0`。
+- 普通用户查询不附加 `pcc_agent_summary`，不改变原响应行为。
+- 前端切换视图时回到第一页，并保持其他有效筛选条件。
+- PccAgent 视图继续提供现有用户操作和“管理订阅”入口。
+- 赠送订阅不显示重置和硬删除动作，只允许查看与作废；普通订阅动作不回归。
 
 ## 15. 上线步骤与回滚
 

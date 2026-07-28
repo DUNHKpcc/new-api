@@ -110,6 +110,25 @@ type User struct {
 	LastLoginAt      int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	AuthVersion      int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
 	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+	PccAgentSummary  *PccAgentUserSummary       `json:"pcc_agent_summary,omitempty" gorm:"-:all"`
+}
+
+type PccAgentGiftSummary struct {
+	SubscriptionId  int    `json:"subscription_id"`
+	PlanId          int    `json:"plan_id"`
+	PlanTitle       string `json:"plan_title"`
+	Status          string `json:"status"`
+	AmountTotal     int64  `json:"amount_total"`
+	AmountUsed      int64  `json:"amount_used"`
+	AmountRemaining int64  `json:"amount_remaining"`
+	NextResetTime   int64  `json:"next_reset_time"`
+	EndTime         int64  `json:"end_time"`
+}
+
+type PccAgentUserSummary struct {
+	ActiveDeviceCount int64                `json:"active_device_count"`
+	WeChatVerified    bool                 `json:"wechat_verified"`
+	Gift              *PccAgentGiftSummary `json:"gift"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -381,7 +400,7 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 	return users, total, nil
 }
 
-func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
+func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, pccAgentOnly bool, sortOptions ...UserSortOptions) ([]*User, int64, error) {
 	var users []*User
 	var total int64
 	var err error
@@ -426,6 +445,15 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 			query = query.Where("deleted_at IS NULL").Where("status = ?", *status)
 		}
 	}
+	if pccAgentOnly {
+		nonPendingGrant := tx.Model(&DesktopGrant{}).
+			Select("1").
+			Where("desktop_grants.user_id = users.id AND desktop_grants.status <> ?", DesktopGrantStatusPending)
+		giftSubscription := tx.Model(&UserSubscription{}).
+			Select("1").
+			Where("user_subscriptions.user_id = users.id AND user_subscriptions.source = ?", UserSubscriptionSourcePccAgentGift)
+		query = query.Where("EXISTS (?) OR EXISTS (?)", nonPendingGrant, giftSubscription)
+	}
 
 	// 获取总数
 	err = query.Count(&total).Error
@@ -441,6 +469,12 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 		tx.Rollback()
 		return nil, 0, err
 	}
+	if pccAgentOnly {
+		if err = attachPccAgentUserSummaries(tx, users); err != nil {
+			tx.Rollback()
+			return nil, 0, err
+		}
+	}
 
 	// 提交事务
 	if err = tx.Commit().Error; err != nil {
@@ -448,6 +482,101 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	}
 
 	return users, total, nil
+}
+
+func attachPccAgentUserSummaries(tx *gorm.DB, users []*User) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	userIds := make([]int, 0, len(users))
+	usersById := make(map[int]*User, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		user.PccAgentSummary = &PccAgentUserSummary{}
+		userIds = append(userIds, user.Id)
+		usersById[user.Id] = user
+	}
+	if len(userIds) == 0 {
+		return nil
+	}
+
+	var accessRows []struct {
+		UserId            int   `gorm:"column:user_id"`
+		ActiveDeviceCount int64 `gorm:"column:active_device_count"`
+		WeChatClaimUserId int   `gorm:"column:wechat_claim_user_id"`
+	}
+	if err := tx.Table("users").
+		Select("users.id AS user_id, COUNT(desktop_grants.id) AS active_device_count, COALESCE(MAX(external_identity_claims.user_id), 0) AS wechat_claim_user_id").
+		Joins(
+			"LEFT JOIN desktop_grants ON desktop_grants.user_id = users.id AND desktop_grants.status = ? AND desktop_grants.active_slot = ? AND desktop_grants.expired_time > ?",
+			DesktopGrantStatusActive,
+			1,
+			common.GetTimestamp(),
+		).
+		Joins("LEFT JOIN external_identity_claims ON external_identity_claims.user_id = users.id AND external_identity_claims.provider = ?", ExternalIdentityProviderWeChatUnionID).
+		Where("users.id IN ?", userIds).
+		Group("users.id").
+		Scan(&accessRows).Error; err != nil {
+		return err
+	}
+	for _, row := range accessRows {
+		user := usersById[row.UserId]
+		if user == nil || user.PccAgentSummary == nil {
+			continue
+		}
+		user.PccAgentSummary.ActiveDeviceCount = row.ActiveDeviceCount
+		user.PccAgentSummary.WeChatVerified = row.WeChatClaimUserId > 0
+	}
+
+	var giftRows []struct {
+		UserId         int    `gorm:"column:user_id"`
+		SubscriptionId int    `gorm:"column:subscription_id"`
+		PlanId         int    `gorm:"column:plan_id"`
+		PlanTitle      string `gorm:"column:plan_title"`
+		Status         string `gorm:"column:status"`
+		AmountTotal    int64  `gorm:"column:amount_total"`
+		AmountUsed     int64  `gorm:"column:amount_used"`
+		NextResetTime  int64  `gorm:"column:next_reset_time"`
+		EndTime        int64  `gorm:"column:end_time"`
+	}
+	if err := tx.Table("user_subscriptions").
+		Select("user_subscriptions.user_id, user_subscriptions.id AS subscription_id, user_subscriptions.plan_id, subscription_plans.title AS plan_title, user_subscriptions.status, user_subscriptions.amount_total, user_subscriptions.amount_used, user_subscriptions.next_reset_time, user_subscriptions.end_time").
+		Joins("LEFT JOIN subscription_plans ON subscription_plans.id = user_subscriptions.plan_id").
+		Where("user_subscriptions.user_id IN ? AND user_subscriptions.source = ?", userIds, UserSubscriptionSourcePccAgentGift).
+		Order("user_subscriptions.id ASC").
+		Scan(&giftRows).Error; err != nil {
+		return err
+	}
+	for _, row := range giftRows {
+		user := usersById[row.UserId]
+		if user == nil || user.PccAgentSummary == nil || user.PccAgentSummary.Gift != nil {
+			continue
+		}
+		amountRemaining := int64(0)
+		if row.AmountTotal > 0 {
+			switch {
+			case row.AmountUsed <= 0:
+				amountRemaining = row.AmountTotal
+			case row.AmountUsed < row.AmountTotal:
+				amountRemaining = row.AmountTotal - row.AmountUsed
+			}
+		}
+		user.PccAgentSummary.Gift = &PccAgentGiftSummary{
+			SubscriptionId:  row.SubscriptionId,
+			PlanId:          row.PlanId,
+			PlanTitle:       row.PlanTitle,
+			Status:          row.Status,
+			AmountTotal:     row.AmountTotal,
+			AmountUsed:      row.AmountUsed,
+			AmountRemaining: amountRemaining,
+			NextResetTime:   row.NextResetTime,
+			EndTime:         row.EndTime,
+		}
+	}
+	return nil
 }
 
 func GetUserById(id int, selectAll bool) (*User, error) {

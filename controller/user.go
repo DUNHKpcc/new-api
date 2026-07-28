@@ -357,7 +357,17 @@ func SearchUsers(c *gin.Context) {
 	}
 	pageInfo := common.GetPageQuery(c)
 	sortOptions := model.NewUserSortOptions(c.Query("sort_by"), c.Query("sort_order"))
-	users, total, err := model.SearchUsers(keyword, group, role, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortOptions)
+	pccAgentOnly := c.Query("pcc_agent") == "true"
+	users, total, err := model.SearchUsers(
+		keyword,
+		group,
+		role,
+		status,
+		pageInfo.GetStartIdx(),
+		pageInfo.GetPageSize(),
+		pccAgentOnly,
+		sortOptions,
+	)
 	if err != nil {
 		common.ApiError(c, err)
 		return
