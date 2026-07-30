@@ -26,7 +26,7 @@ export type AnnouncementNotification = {
 
 export type NotificationFeedItem = {
   key: string
-  source: 'notice' | 'announcement'
+  source: 'discount' | 'notice' | 'announcement'
   type?: string
   content: string
   extra?: string
@@ -35,10 +35,21 @@ export type NotificationFeedItem = {
 }
 
 type BuildNotificationFeedOptions = {
+  discountNotice: string
   notice: string
   announcements: AnnouncementNotification[]
+  lastReadDiscountNotice: string
   lastReadNotice: string
   readAnnouncementKeys: string[]
+}
+
+const notificationSourcePriority: Record<
+  NotificationFeedItem['source'],
+  number
+> = {
+  discount: 0,
+  notice: 1,
+  announcement: 2,
 }
 
 function hashString(input: string): string {
@@ -88,7 +99,18 @@ export function buildNotificationFeed(
   options: BuildNotificationFeedOptions
 ): NotificationFeedItem[] {
   const items: Array<NotificationFeedItem & { originalIndex: number }> = []
+  const normalizedDiscountNotice = options.discountNotice.trim()
   const normalizedNotice = options.notice.trim()
+
+  if (normalizedDiscountNotice) {
+    items.push({
+      key: 'discount',
+      source: 'discount',
+      content: normalizedDiscountNotice,
+      unread: normalizedDiscountNotice !== options.lastReadDiscountNotice,
+      originalIndex: items.length,
+    })
+  }
 
   if (normalizedNotice) {
     items.push({
@@ -117,7 +139,12 @@ export function buildNotificationFeed(
 
   items.sort((left, right) => {
     if (left.unread !== right.unread) return left.unread ? -1 : 1
-    if (left.source !== right.source) return left.source === 'notice' ? -1 : 1
+    if (left.source !== right.source) {
+      return (
+        notificationSourcePriority[left.source] -
+        notificationSourcePriority[right.source]
+      )
+    }
 
     const leftTime = left.publishDate
       ? new Date(left.publishDate).getTime()

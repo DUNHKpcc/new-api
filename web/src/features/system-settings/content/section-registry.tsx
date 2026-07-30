@@ -22,6 +22,7 @@ import { AnnouncementsSection } from './announcements-section'
 import { ApiInfoSection } from './api-info-section'
 import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
+import { DiscountNoticeSection } from './discount-notice-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
@@ -61,6 +62,13 @@ const CONTENT_SECTIONS = [
         enabled={settings['console_setting.announcements_enabled']}
         data={settings['console_setting.announcements']}
       />
+    ),
+  },
+  {
+    id: 'discount-notice',
+    titleKey: 'Discount Notice',
+    build: (settings: ContentSettings) => (
+      <DiscountNoticeSection defaultValue={settings.DiscountNotice} />
     ),
   },
   {

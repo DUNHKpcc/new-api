@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Bell, Check, CheckCheck, ChevronDown, Megaphone } from 'lucide-react'
+import {
+  BadgePercent,
+  Bell,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  Megaphone,
+} from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -65,6 +72,33 @@ function NotificationItem(props: NotificationItemProps) {
     publishedAt && !Number.isNaN(publishedAt.getTime())
       ? formatDateTimeObject(publishedAt)
       : ''
+  let sourceLabel = t('Timeline')
+  let sourceMarker: ReactNode = (
+    <span
+      className={cn(
+        'size-2 shrink-0 rounded-full',
+        getAnnouncementColorClass(props.item.type)
+      )}
+      aria-hidden='true'
+    />
+  )
+  if (props.item.source === 'notice') {
+    sourceLabel = t('Notice')
+    sourceMarker = (
+      <span
+        className='bg-primary size-2 shrink-0 rounded-full'
+        aria-hidden='true'
+      />
+    )
+  } else if (props.item.source === 'discount') {
+    sourceLabel = t('Discount')
+    sourceMarker = (
+      <BadgePercent
+        className='text-destructive size-3.5 shrink-0'
+        aria-hidden='true'
+      />
+    )
+  }
 
   return (
     <article
@@ -82,17 +116,9 @@ function NotificationItem(props: NotificationItemProps) {
           onClick={() => props.onExpandedChange(props.item.key)}
         >
           <div className='flex items-center gap-2'>
-            <span
-              className={cn(
-                'size-2 shrink-0 rounded-full',
-                props.item.source === 'notice'
-                  ? 'bg-primary'
-                  : getAnnouncementColorClass(props.item.type)
-              )}
-              aria-hidden='true'
-            />
+            {sourceMarker}
             <span className='text-muted-foreground text-xs font-medium'>
-              {props.item.source === 'notice' ? t('Notice') : t('Timeline')}
+              {sourceLabel}
             </span>
             {publishedLabel ? (
               <time className='text-muted-foreground/70 ms-auto truncate text-xs'>
@@ -163,6 +189,8 @@ export function GlobalNotificationCenter() {
   const firstUnreadPreview = firstUnreadItem
     ? getNotificationPreview(firstUnreadItem.content, 88)
     : ''
+  const firstUnreadLabel =
+    firstUnreadItem?.source === 'discount' ? t('Discount') : t('Unread')
 
   const handleItemExpandedChange = (key: string) => {
     setExpandedItemKey((currentKey) => (currentKey === key ? null : key))
@@ -306,16 +334,23 @@ export function GlobalNotificationCenter() {
                 <button
                   type='button'
                   className={globalNotificationCenterLayout.preview}
-                  aria-label={`${t('Unread')}: ${firstUnreadPreview}`}
+                  aria-label={`${firstUnreadLabel}: ${firstUnreadPreview}`}
                   onClick={() => setExpanded(true)}
                 >
                   <span className='flex items-center gap-2'>
-                    <span
-                      className='bg-destructive size-2 shrink-0 rounded-full'
-                      aria-hidden='true'
-                    />
+                    {firstUnreadItem.source === 'discount' ? (
+                      <BadgePercent
+                        className='text-destructive size-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    ) : (
+                      <span
+                        className='bg-destructive size-2 shrink-0 rounded-full'
+                        aria-hidden='true'
+                      />
+                    )}
                     <span className='text-destructive text-xs font-semibold'>
-                      {t('Unread')}
+                      {firstUnreadLabel}
                     </span>
                     <Badge
                       variant='destructive'

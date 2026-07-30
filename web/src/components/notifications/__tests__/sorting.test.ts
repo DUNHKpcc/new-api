@@ -24,7 +24,9 @@ import { buildNotificationFeed } from '../notification-feed'
 describe('notification feed ordering', () => {
   test('keeps every unread notification above read content', () => {
     const feed = buildNotificationFeed({
+      discountNotice: '',
       notice: 'Scheduled maintenance',
+      lastReadDiscountNotice: '',
       lastReadNotice: 'Scheduled maintenance',
       readAnnouncementKeys: ['id:1'],
       announcements: [
@@ -59,7 +61,9 @@ describe('notification feed ordering', () => {
 
   test('treats edited notice and id-less announcement content as new', () => {
     const initialFeed = buildNotificationFeed({
+      discountNotice: '',
       notice: 'Initial notice',
+      lastReadDiscountNotice: '',
       lastReadNotice: 'Initial notice',
       readAnnouncementKeys: [],
       announcements: [{ content: 'Initial timeline item' }],
@@ -68,7 +72,9 @@ describe('notification feed ordering', () => {
       (item) => item.source === 'announcement'
     )
     const updatedFeed = buildNotificationFeed({
+      discountNotice: '',
       notice: 'Updated notice',
+      lastReadDiscountNotice: '',
       lastReadNotice: 'Initial notice',
       readAnnouncementKeys: [initialAnnouncement?.key ?? ''],
       announcements: [{ content: 'Updated timeline item' }],
@@ -78,5 +84,34 @@ describe('notification feed ordering', () => {
     assert.equal(updatedFeed[0]?.unread, true)
     assert.equal(updatedFeed[1]?.unread, true)
     assert.notEqual(initialAnnouncement?.key, updatedFeed[1]?.key)
+  })
+
+  test('keeps an unread discount notice above other unread notifications', () => {
+    const feed = buildNotificationFeed({
+      discountNotice: 'GPT-5 is 20% off through August 31.',
+      notice: 'Scheduled maintenance',
+      announcements: [{ id: 1, content: 'New model available' }],
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [],
+    })
+
+    assert.equal(feed[0]?.source, 'discount')
+    assert.equal(feed[0]?.unread, true)
+    assert.equal(feed[0]?.content, 'GPT-5 is 20% off through August 31.')
+  })
+
+  test('treats an edited discount notice as unread', () => {
+    const feed = buildNotificationFeed({
+      discountNotice: 'GPT-5 is now 30% off.',
+      notice: '',
+      announcements: [],
+      lastReadDiscountNotice: 'GPT-5 is 20% off.',
+      lastReadNotice: '',
+      readAnnouncementKeys: [],
+    })
+
+    assert.equal(feed[0]?.source, 'discount')
+    assert.equal(feed[0]?.unread, true)
   })
 })

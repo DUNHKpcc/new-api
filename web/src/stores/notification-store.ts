@@ -20,6 +20,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 interface NotificationState {
+  // Last read discount notification content signature (full trimmed message)
+  lastReadDiscountNotice: string
   // Last read Notice content signature (full trimmed message)
   lastReadNotice: string
   // Array of read announcement keys (id or content hash)
@@ -28,6 +30,7 @@ interface NotificationState {
   closedUntilDate: string | null
 
   // Actions
+  markDiscountNoticeRead: (noticeContent: string) => void
   markNoticeRead: (noticeContent: string) => void
   markAnnouncementsRead: (keys: string[]) => void
   setClosedUntilDate: (date: string | null) => void
@@ -36,15 +39,20 @@ interface NotificationState {
 }
 
 /**
- * Notification store for tracking read status of Notice and Announcements
+ * Notification store for tracking read status of discount notices, Notice, and Announcements
  * Persists to localStorage to maintain state across sessions
  */
 export const useNotificationStore = create<NotificationState>()(
   persist(
     (set, get) => ({
+      lastReadDiscountNotice: '',
       lastReadNotice: '',
       readAnnouncementKeys: [],
       closedUntilDate: null,
+
+      markDiscountNoticeRead: (noticeContent: string) => {
+        set({ lastReadDiscountNotice: noticeContent.trim() })
+      },
 
       markNoticeRead: (noticeContent: string) => {
         // Persist the full trimmed content so edits beyond 100 chars register
@@ -79,6 +87,7 @@ export const useNotificationStore = create<NotificationState>()(
     {
       name: 'notification-storage',
       partialize: (state) => ({
+        lastReadDiscountNotice: state.lastReadDiscountNotice,
         lastReadNotice: state.lastReadNotice,
         readAnnouncementKeys: state.readAnnouncementKeys,
         closedUntilDate: state.closedUntilDate,

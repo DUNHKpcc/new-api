@@ -30,7 +30,7 @@ import { getNotice } from '@/lib/api'
 import { useNotificationStore } from '@/stores/notification-store'
 
 /**
- * Hook to manage notifications (Notice + Announcements)
+ * Hook to manage notifications (Discount Notice + Notice + Announcements)
  * Provides unread counts and read status management
  */
 export function useNotifications() {
@@ -54,8 +54,10 @@ export function useNotifications() {
 
   // Notification store
   const {
+    lastReadDiscountNotice,
     lastReadNotice,
     readAnnouncementKeys,
+    markDiscountNoticeRead,
     markNoticeRead,
     markAnnouncementsRead,
   } = useNotificationStore()
@@ -64,21 +66,36 @@ export function useNotifications() {
   const noticeContent = noticeResponse?.success
     ? (noticeResponse.data || '').trim()
     : ''
+  const discountNoticeContent = status?.discount_notice?.trim() ?? ''
 
   const items = useMemo(
     () =>
       buildNotificationFeed({
+        discountNotice: discountNoticeContent,
         notice: noticeContent,
         announcements,
+        lastReadDiscountNotice,
         lastReadNotice,
         readAnnouncementKeys,
       }),
-    [announcements, lastReadNotice, noticeContent, readAnnouncementKeys]
+    [
+      announcements,
+      discountNoticeContent,
+      lastReadDiscountNotice,
+      lastReadNotice,
+      noticeContent,
+      readAnnouncementKeys,
+    ]
   )
 
   const markAsRead = useCallback(
     (item: NotificationFeedItem) => {
       if (!item.unread) return
+
+      if (item.source === 'discount') {
+        markDiscountNoticeRead(item.content)
+        return
+      }
 
       if (item.source === 'notice') {
         markNoticeRead(item.content)
@@ -87,10 +104,14 @@ export function useNotifications() {
 
       markAnnouncementsRead([item.key])
     },
-    [markAnnouncementsRead, markNoticeRead]
+    [markAnnouncementsRead, markDiscountNoticeRead, markNoticeRead]
   )
 
   const markAllAsRead = useCallback(() => {
+    if (discountNoticeContent) {
+      markDiscountNoticeRead(discountNoticeContent)
+    }
+
     if (noticeContent) {
       markNoticeRead(noticeContent)
     }
@@ -102,7 +123,14 @@ export function useNotifications() {
         )
       )
     }
-  }, [announcements, markAnnouncementsRead, markNoticeRead, noticeContent])
+  }, [
+    announcements,
+    discountNoticeContent,
+    markAnnouncementsRead,
+    markDiscountNoticeRead,
+    markNoticeRead,
+    noticeContent,
+  ])
 
   return {
     items,
