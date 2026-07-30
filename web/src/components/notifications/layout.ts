@@ -20,8 +20,10 @@ export const globalNotificationCenterLayout = {
   root: 'pointer-events-none fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+var(--notification-bottom-offset))] z-[60] sm:right-4',
   panel:
     'bg-popover/95 text-popover-foreground pointer-events-auto w-[min(22rem,calc(100vw-5rem))] overflow-hidden rounded-lg border shadow-xl backdrop-blur-xl',
+  unreadList:
+    'pointer-events-auto flex w-[min(18rem,calc(100vw-5rem))] max-h-[min(16rem,calc(100svh-6rem))] flex-col gap-2 overflow-y-auto overscroll-contain pe-1 [scrollbar-gutter:stable] [scrollbar-width:thin]',
   preview:
-    'border-destructive/30 bg-popover/95 text-popover-foreground pointer-events-auto w-[min(18rem,calc(100vw-5rem))] rounded-lg border px-3 py-2 text-left shadow-lg backdrop-blur-xl transition-colors hover:bg-muted focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none',
+    'border-destructive/30 bg-popover/95 text-popover-foreground pointer-events-auto h-20 w-full shrink-0 rounded-lg border px-3 py-2 text-left backdrop-blur-xl transition-colors hover:bg-muted focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none',
   trigger:
     'bg-popover/95 pointer-events-auto relative size-16 touch-none flex-col gap-1 rounded-lg p-0 shadow-lg backdrop-blur-xl cursor-grab active:cursor-grabbing',
   triggerIcon: 'size-7',

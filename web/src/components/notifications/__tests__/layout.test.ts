@@ -41,13 +41,34 @@ describe('global notification center layout', () => {
 
   test('bounds the unread preview and expanded feed on small screens', () => {
     const panelClasses = globalNotificationCenterLayout.panel.split(' ')
-    const previewClasses = globalNotificationCenterLayout.preview.split(' ')
+    const unreadListClasses =
+      globalNotificationCenterLayout.unreadList.split(' ')
     const feedClasses = globalNotificationCenterLayout.feed.split(' ')
 
     assert.ok(panelClasses.includes('w-[min(22rem,calc(100vw-5rem))]'))
-    assert.ok(previewClasses.includes('w-[min(18rem,calc(100vw-5rem))]'))
+    assert.ok(unreadListClasses.includes('w-[min(18rem,calc(100vw-5rem))]'))
     assert.ok(feedClasses.includes('max-h-[min(52svh,24rem)]'))
     assert.ok(feedClasses.includes('overflow-y-auto'))
+  })
+
+  test('shows three unread previews before scrolling additional items', () => {
+    const unreadListClasses =
+      globalNotificationCenterLayout.unreadList.split(' ')
+    const previewClasses = globalNotificationCenterLayout.preview.split(' ')
+
+    assert.ok(unreadListClasses.includes('gap-2'))
+    assert.ok(
+      unreadListClasses.includes('max-h-[min(16rem,calc(100svh-6rem))]')
+    )
+    assert.ok(unreadListClasses.includes('overflow-y-auto'))
+    assert.ok(unreadListClasses.includes('overscroll-contain'))
+    assert.ok(previewClasses.includes('h-20'))
+    assert.ok(previewClasses.includes('w-full'))
+    assert.ok(previewClasses.includes('shrink-0'))
+    assert.equal(
+      previewClasses.some((className) => className.startsWith('shadow')),
+      false
+    )
   })
 
   test('expands uniformly from the compact button origin', () => {

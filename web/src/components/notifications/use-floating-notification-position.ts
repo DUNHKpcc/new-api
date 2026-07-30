@@ -143,6 +143,9 @@ export function useFloatingNotificationPosition(expanded: boolean) {
   const dragStateRef = useRef<DragState | null>(null)
   const suppressClickRef = useRef(false)
   const animationFrameRef = useRef<number | null>(null)
+  const resolvedOffsetRef = useRef<number>(
+    floatingNotificationPosition.viewportMargin
+  )
   const [preferredOffset, setPreferredOffset] = useState<number>(
     floatingNotificationPosition.viewportMargin
   )
@@ -151,17 +154,24 @@ export function useFloatingNotificationPosition(expanded: boolean) {
   )
   const [dragging, setDragging] = useState(false)
 
+  const updateResolvedOffset = useCallback((nextOffset: number) => {
+    if (resolvedOffsetRef.current === nextOffset) return
+    resolvedOffsetRef.current = nextOffset
+    setResolvedOffset(nextOffset)
+  }, [])
+
   const resolvePosition = useCallback(() => {
     const root = rootRef.current
     if (!root || dragging) return
 
     const rect = root.getBoundingClientRect()
+    const currentOffset = resolvedOffsetRef.current
     const safeAreaBottom = Math.max(
       0,
-      window.innerHeight - rect.bottom - resolvedOffset
+      window.innerHeight - rect.bottom - currentOffset
     )
     const usableViewportHeight = window.innerHeight - safeAreaBottom
-    const desiredOffset = expanded ? resolvedOffset : preferredOffset
+    const desiredOffset = expanded ? currentOffset : preferredOffset
     let nextOffset = clampNotificationBottomOffset(
       desiredOffset,
       rect.height,
@@ -191,10 +201,8 @@ export function useFloatingNotificationPosition(expanded: boolean) {
       }
     }
 
-    setResolvedOffset((currentOffset) =>
-      currentOffset === nextOffset ? currentOffset : nextOffset
-    )
-  }, [dragging, expanded, preferredOffset, resolvedOffset])
+    updateResolvedOffset(nextOffset)
+  }, [dragging, expanded, preferredOffset, updateResolvedOffset])
 
   const schedulePositionResolution = useCallback(() => {
     if (animationFrameRef.current !== null) {
@@ -274,9 +282,9 @@ export function useFloatingNotificationPosition(expanded: boolean) {
       if (Math.abs(delta) >= 4) dragState.moved = true
       const nextOffset = getClampedOffset(dragState.startOffset + delta)
       setPreferredOffset(nextOffset)
-      setResolvedOffset(nextOffset)
+      updateResolvedOffset(nextOffset)
     },
-    [getClampedOffset]
+    [getClampedOffset, updateResolvedOffset]
   )
 
   const finishDragging = useCallback(
@@ -291,14 +299,14 @@ export function useFloatingNotificationPosition(expanded: boolean) {
       dragStateRef.current = null
       setDragging(false)
       setPreferredOffset(finalOffset)
-      setResolvedOffset(finalOffset)
+      updateResolvedOffset(finalOffset)
       storeOffset(finalOffset)
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId)
       }
       schedulePositionResolution()
     },
-    [getClampedOffset, schedulePositionResolution]
+    [getClampedOffset, schedulePositionResolution, updateResolvedOffset]
   )
 
   const cancelDragging = useCallback(
@@ -320,10 +328,10 @@ export function useFloatingNotificationPosition(expanded: boolean) {
         resolvedOffset + direction * floatingNotificationPosition.keyboardStep
       )
       setPreferredOffset(nextOffset)
-      setResolvedOffset(nextOffset)
+      updateResolvedOffset(nextOffset)
       storeOffset(nextOffset)
     },
-    [getClampedOffset, resolvedOffset]
+    [getClampedOffset, resolvedOffset, updateResolvedOffset]
   )
 
   const shouldOpenFromTrigger = useCallback(() => {

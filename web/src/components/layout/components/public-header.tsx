@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,7 @@ export interface PublicHeaderProps {
   rightContent?: React.ReactNode
   showNavigation?: boolean
   showAuthButtons?: boolean
+  showNotifications?: boolean
   className?: string
 }
 
@@ -67,6 +69,7 @@ export function PublicHeader(props: PublicHeaderProps) {
     siteName: customSiteName,
     homeUrl = '/',
     showAuthButtons = true,
+    showNotifications = true,
   } = props
 
   const { t } = useTranslation()
@@ -269,10 +272,13 @@ export function PublicHeader(props: PublicHeaderProps) {
                 )
               })}
 
-              {(showLanguageSwitcher || showThemeSwitch) && (
+              {(showNotifications ||
+                showLanguageSwitcher ||
+                showThemeSwitch) && (
                 <div className='bg-border/40 mx-2 h-4 w-px' />
               )}
 
+              {showNotifications && <NotificationPopover />}
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
 
@@ -286,6 +292,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Mobile: compact actions + hamburger */}
             <div className='flex items-center gap-2 sm:hidden'>
+              {showNotifications && <NotificationPopover />}
               {showThemeSwitch && <ThemeSwitch />}
               {showAuthButtons && !loading && isAuthenticated && (
                 <ProfileDropdown />

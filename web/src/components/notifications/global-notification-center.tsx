@@ -179,21 +179,68 @@ function NotificationItem(props: NotificationItemProps) {
   )
 }
 
+type CompactNotificationPreviewProps = {
+  item: NotificationFeedItem
+  unreadCount?: number
+  onOpen: (key: string) => void
+}
+
+function CompactNotificationPreview(props: CompactNotificationPreviewProps) {
+  const { t } = useTranslation()
+  const preview = getNotificationPreview(props.item.content, 88)
+  const label = props.item.source === 'discount' ? t('Discount') : t('Unread')
+
+  return (
+    <button
+      type='button'
+      className={globalNotificationCenterLayout.preview}
+      aria-label={`${label}: ${preview}`}
+      onClick={() => props.onOpen(props.item.key)}
+    >
+      <span className='flex items-center gap-2'>
+        {props.item.source === 'discount' ? (
+          <BadgePercent
+            className='text-destructive size-4 shrink-0'
+            aria-hidden='true'
+          />
+        ) : (
+          <span
+            className='bg-destructive size-2 shrink-0 rounded-full'
+            aria-hidden='true'
+          />
+        )}
+        <span className='text-destructive text-xs font-semibold'>{label}</span>
+        {props.unreadCount ? (
+          <Badge
+            variant='destructive'
+            className='ms-auto h-5 min-w-5 px-1.5 tabular-nums'
+          >
+            {props.unreadCount > 99 ? '99+' : props.unreadCount}
+          </Badge>
+        ) : null}
+      </span>
+      <span className='mt-1 line-clamp-2 block text-sm leading-5 font-medium'>
+        {preview}
+      </span>
+    </button>
+  )
+}
+
 export function GlobalNotificationCenter() {
   const { t } = useTranslation()
   const notifications = useNotifications()
   const [expanded, setExpanded] = useState(false)
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null)
   const floatingPosition = useFloatingNotificationPosition(expanded)
-  const firstUnreadItem = notifications.items.find((item) => item.unread)
-  const firstUnreadPreview = firstUnreadItem
-    ? getNotificationPreview(firstUnreadItem.content, 88)
-    : ''
-  const firstUnreadLabel =
-    firstUnreadItem?.source === 'discount' ? t('Discount') : t('Unread')
+  const unreadItems = notifications.items.filter((item) => item.unread)
 
   const handleItemExpandedChange = (key: string) => {
     setExpandedItemKey((currentKey) => (currentKey === key ? null : key))
+  }
+
+  const handlePreviewOpen = (key: string) => {
+    setExpandedItemKey(key)
+    setExpanded(true)
   }
 
   let feedContent: ReactNode
@@ -330,41 +377,23 @@ export function GlobalNotificationCenter() {
               }}
               className='flex flex-col items-end gap-2'
             >
-              {firstUnreadItem ? (
-                <button
-                  type='button'
-                  className={globalNotificationCenterLayout.preview}
-                  aria-label={`${firstUnreadLabel}: ${firstUnreadPreview}`}
-                  onClick={() => setExpanded(true)}
+              {unreadItems.length > 0 ? (
+                <div
+                  className={globalNotificationCenterLayout.unreadList}
+                  role='region'
+                  aria-label={t('Notifications')}
                 >
-                  <span className='flex items-center gap-2'>
-                    {firstUnreadItem.source === 'discount' ? (
-                      <BadgePercent
-                        className='text-destructive size-4 shrink-0'
-                        aria-hidden='true'
-                      />
-                    ) : (
-                      <span
-                        className='bg-destructive size-2 shrink-0 rounded-full'
-                        aria-hidden='true'
-                      />
-                    )}
-                    <span className='text-destructive text-xs font-semibold'>
-                      {firstUnreadLabel}
-                    </span>
-                    <Badge
-                      variant='destructive'
-                      className='ms-auto h-5 min-w-5 px-1.5 tabular-nums'
-                    >
-                      {notifications.unreadCount > 99
-                        ? '99+'
-                        : notifications.unreadCount}
-                    </Badge>
-                  </span>
-                  <span className='mt-1 line-clamp-2 block text-sm leading-5 font-medium'>
-                    {firstUnreadPreview}
-                  </span>
-                </button>
+                  {unreadItems.map((item, index) => (
+                    <CompactNotificationPreview
+                      key={item.key}
+                      item={item}
+                      unreadCount={
+                        index === 0 ? notifications.unreadCount : undefined
+                      }
+                      onOpen={handlePreviewOpen}
+                    />
+                  ))}
+                </div>
               ) : null}
 
               <Button
