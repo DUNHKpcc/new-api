@@ -40,6 +40,7 @@ import {
   getNotificationPreview,
   type NotificationFeedItem,
 } from './notification-feed'
+import { useFloatingNotificationPosition } from './use-floating-notification-position'
 
 const NOTIFICATION_FEED_ID = 'global-notification-feed'
 
@@ -157,6 +158,7 @@ export function GlobalNotificationCenter() {
   const notifications = useNotifications()
   const [expanded, setExpanded] = useState(false)
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null)
+  const floatingPosition = useFloatingNotificationPosition(expanded)
   const firstUnreadItem = notifications.items.find((item) => item.unread)
   const firstUnreadPreview = firstUnreadItem
     ? getNotificationPreview(firstUnreadItem.content, 88)
@@ -194,8 +196,16 @@ export function GlobalNotificationCenter() {
 
   return (
     <aside
-      className={globalNotificationCenterLayout.root}
+      ref={floatingPosition.rootRef}
+      className={cn(
+        globalNotificationCenterLayout.root,
+        floatingPosition.dragging
+          ? 'transition-none'
+          : 'transition-[bottom] duration-200'
+      )}
+      style={floatingPosition.style}
       aria-label={t('Notifications')}
+      data-floating-action='notification'
     >
       <TooltipProvider delay={150}>
         <AnimatePresence
@@ -327,7 +337,17 @@ export function GlobalNotificationCenter() {
                 className={globalNotificationCenterLayout.trigger}
                 aria-expanded='false'
                 aria-controls={NOTIFICATION_FEED_ID}
-                onClick={() => setExpanded(true)}
+                aria-keyshortcuts='ArrowUp ArrowDown'
+                onPointerDown={floatingPosition.handlePointerDown}
+                onPointerMove={floatingPosition.handlePointerMove}
+                onPointerUp={floatingPosition.finishDragging}
+                onPointerCancel={floatingPosition.cancelDragging}
+                onKeyDown={floatingPosition.handleKeyDown}
+                onClick={() => {
+                  if (floatingPosition.shouldOpenFromTrigger()) {
+                    setExpanded(true)
+                  }
+                }}
               >
                 <Bell
                   className={globalNotificationCenterLayout.triggerIcon}

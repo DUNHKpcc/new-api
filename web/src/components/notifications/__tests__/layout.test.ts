@@ -34,6 +34,8 @@ describe('global notification center layout', () => {
     assert.ok(rootClasses.includes('z-[60]'))
     assert.ok(triggerClasses.includes('size-16'))
     assert.ok(triggerClasses.includes('flex-col'))
+    assert.ok(triggerClasses.includes('touch-none'))
+    assert.ok(triggerClasses.includes('cursor-grab'))
     assert.ok(triggerIconClasses.includes('size-7'))
   })
 

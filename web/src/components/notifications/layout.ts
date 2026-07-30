@@ -17,13 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 export const globalNotificationCenterLayout = {
-  root: 'pointer-events-none fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-[60] sm:right-4',
+  root: 'pointer-events-none fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+var(--notification-bottom-offset))] z-[60] sm:right-4',
   panel:
     'bg-popover/95 text-popover-foreground pointer-events-auto w-[min(22rem,calc(100vw-5rem))] overflow-hidden rounded-lg border shadow-xl backdrop-blur-xl',
   preview:
     'border-destructive/30 bg-popover/95 text-popover-foreground pointer-events-auto w-[min(18rem,calc(100vw-5rem))] rounded-lg border px-3 py-2 text-left shadow-lg backdrop-blur-xl transition-colors hover:bg-muted focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none',
   trigger:
-    'bg-popover/95 pointer-events-auto relative size-16 flex-col gap-1 rounded-lg p-0 shadow-lg backdrop-blur-xl',
+    'bg-popover/95 pointer-events-auto relative size-16 touch-none flex-col gap-1 rounded-lg p-0 shadow-lg backdrop-blur-xl cursor-grab active:cursor-grabbing',
   triggerIcon: 'size-7',
   feed: 'max-h-[min(52svh,24rem)] overflow-y-auto overscroll-contain',
   presenceMode: 'wait',
