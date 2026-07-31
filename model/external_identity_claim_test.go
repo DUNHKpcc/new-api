@@ -60,6 +60,36 @@ func TestClearTelegramBindingReleasesIdentityClaim(t *testing.T) {
 	assert.Zero(t, count)
 }
 
+func TestClearWeChatBindingReleasesIdentityClaims(t *testing.T) {
+	truncateTables(t)
+
+	user := User{Username: "wechat-unbind", Password: "password", WeChatId: "wechat-unbind-id"}
+	require.NoError(t, DB.Create(&user).Error)
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		if err := ClaimExternalIdentityWithTx(
+			tx,
+			ExternalIdentityProviderWeChat,
+			user.WeChatId,
+			user.Id,
+		); err != nil {
+			return err
+		}
+		return ClaimExternalIdentityWithTx(
+			tx,
+			ExternalIdentityProviderWeChatUnionID,
+			"wechat-unbind-union-id",
+			user.Id,
+		)
+	}))
+
+	require.NoError(t, user.ClearBinding(ExternalIdentityProviderWeChat))
+	assert.Empty(t, user.WeChatId)
+
+	var count int64
+	require.NoError(t, DB.Model(&ExternalIdentityClaim{}).Where("user_id = ?", user.Id).Count(&count).Error)
+	assert.Zero(t, count)
+}
+
 func TestInitializeExternalIdentityClaimsIsIdempotent(t *testing.T) {
 	truncateTables(t)
 

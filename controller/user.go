@@ -32,6 +32,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type registerRequest struct {
+	model.User
+	WeChatVerificationToken string `json:"wechat_verification_token"`
+}
+
 var (
 	errUserPasswordUnset    = errors.New("user password is not set")
 	errOriginalPasswordFail = errors.New("original password is incorrect")
@@ -213,12 +218,22 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordRegisterDisabled)
 		return
 	}
-	var user model.User
-	err := common.DecodeJson(c.Request.Body, &user)
+	if common.WeChatRegistrationVerificationEnabled &&
+		(!common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "") {
+		writeWeChatRegistrationError(
+			c,
+			weChatRegistrationErrorUnavailable,
+			i18n.MsgUserWeChatVerificationUnavailable,
+		)
+		return
+	}
+	var request registerRequest
+	err := common.DecodeJson(c.Request.Body, &request)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	user := request.User
 	user.Username = strings.TrimSpace(user.Username)
 	user.Email = model.NormalizeEmail(user.Email)
 	if user.Username == "" {
@@ -247,6 +262,14 @@ func Register(c *gin.Context) {
 			return
 		}
 	}
+	if common.WeChatRegistrationVerificationEnabled && request.WeChatVerificationToken == "" {
+		writeWeChatRegistrationError(
+			c,
+			weChatRegistrationErrorRequired,
+			i18n.MsgUserWeChatVerificationRequired,
+		)
+		return
+	}
 	emailForExistCheck := ""
 	if common.EmailVerificationEnabled {
 		emailForExistCheck = user.Email
@@ -273,13 +296,39 @@ func Register(c *gin.Context) {
 	if common.EmailVerificationEnabled {
 		cleanUser.Email = user.Email
 	}
-	if err := cleanUser.Insert(inviterId); err != nil {
+	if common.WeChatRegistrationVerificationEnabled {
+		err = insertUserWithWeChatVerification(&cleanUser, request.WeChatVerificationToken, inviterId)
+	} else {
+		err = cleanUser.Insert(inviterId)
+	}
+	if err != nil {
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
 			return
 		}
+		if errors.Is(err, model.ErrAuthFlowInvalid) ||
+			errors.Is(err, model.ErrAuthFlowExpired) ||
+			errors.Is(err, model.ErrAuthFlowConsumed) {
+			writeWeChatRegistrationError(
+				c,
+				weChatRegistrationErrorInvalid,
+				i18n.MsgUserWeChatVerificationInvalid,
+			)
+			return
+		}
+		if errors.Is(err, model.ErrExternalIdentityAlreadyClaimed) {
+			writeWeChatRegistrationError(
+				c,
+				weChatRegistrationErrorBound,
+				i18n.MsgUserWeChatIdentityAlreadyBound,
+			)
+			return
+		}
 		common.ApiError(c, err)
 		return
+	}
+	if common.WeChatRegistrationVerificationEnabled {
+		cleanUser.FinishInsert(inviterId)
 	}
 
 	// 获取插入后的用户ID
@@ -322,6 +371,64 @@ func Register(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+func insertUserWithWeChatVerification(user *model.User, verificationToken string, inviterId int) error {
+	if user == nil || strings.TrimSpace(verificationToken) == "" {
+		return model.ErrAuthFlowInvalid
+	}
+	_, err := model.ConsumeAuthFlowWithAction(
+		verificationToken,
+		model.AuthFlowMatch{
+			Purpose:  model.AuthFlowPurposeWeChatRegistration,
+			Provider: "wechat",
+			Intent:   model.AuthFlowIntentRegister,
+		},
+		func(tx *gorm.DB, flow *model.AuthFlow) error {
+			var payload weChatRegistrationVerificationPayload
+			if err := common.UnmarshalJsonStr(flow.Payload, &payload); err != nil {
+				return model.ErrAuthFlowInvalid
+			}
+			payload.ProviderUserID = strings.TrimSpace(payload.ProviderUserID)
+			payload.UnionID = strings.TrimSpace(payload.UnionID)
+			if payload.ProviderUserID == "" {
+				return model.ErrAuthFlowInvalid
+			}
+
+			var existingCount int64
+			if err := tx.Model(&model.User{}).
+				Where("wechat_id = ?", payload.ProviderUserID).
+				Count(&existingCount).Error; err != nil {
+				return err
+			}
+			if existingCount > 0 {
+				return model.ErrExternalIdentityAlreadyClaimed
+			}
+
+			user.WeChatId = payload.ProviderUserID
+			if err := user.InsertWithTx(tx, inviterId); err != nil {
+				return err
+			}
+			if err := model.ClaimExternalIdentityWithTx(
+				tx,
+				model.ExternalIdentityProviderWeChat,
+				payload.ProviderUserID,
+				user.Id,
+			); err != nil {
+				return err
+			}
+			if payload.UnionID == "" {
+				return nil
+			}
+			return model.ClaimExternalIdentityWithTx(
+				tx,
+				model.ExternalIdentityProviderWeChatUnionID,
+				payload.UnionID,
+				user.Id,
+			)
+		},
+	)
+	return err
 }
 
 func GetAllUsers(c *gin.Context) {

@@ -36,7 +36,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { register } from '@/features/auth/api'
+import { createOAuthFlow, register } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { registerFormSchema } from '@/features/auth/constants'
@@ -47,8 +47,20 @@ import {
   getAffiliateCode,
   saveAffiliateCode,
 } from '@/features/auth/lib/storage'
+import {
+  clearWeChatRegistrationVerification,
+  getWeChatRegistrationVerification,
+  resolveWeChatRegistrationVerificationState,
+  saveWeChatRegistrationReturnTo,
+  WECHAT_REGISTRATION_RESET_CODES,
+  type WeChatRegistrationVerification as StoredWeChatRegistrationVerification,
+} from '@/features/auth/lib/wechat-registration-verification'
 import { useStatus } from '@/hooks/use-status'
+import { buildWeChatOAuthUrl } from '@/lib/oauth'
+import { getServerErrorMessageKey } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
+
+import { WeChatRegistrationVerification } from './wechat-registration-verification'
 
 type SignUpFormProps = React.HTMLAttributes<HTMLFormElement> & {
   redirectTo?: string
@@ -64,6 +76,11 @@ export function SignUpForm({
   const [verificationCode, setVerificationCode] = useState('')
   const [agreedToLegal, setAgreedToLegal] = useState(false)
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0)
+  const [isWeChatRedirecting, setIsWeChatRedirecting] = useState(false)
+  const [weChatVerification, setWeChatVerification] =
+    useState<StoredWeChatRegistrationVerification | null>(() =>
+      getWeChatRegistrationVerification()
+    )
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
 
   const { status } = useStatus()
@@ -97,6 +114,16 @@ export function SignUpForm({
 
   const emailValue = form.watch('email')
   const emailVerificationRequired = !!status?.email_verification
+  const weChatVerificationRequired = !!status?.wechat_registration_verification
+  const weChatVerificationAvailable =
+    !!status?.wechat_login && !!status?.wechat_app_id
+  const weChatVerificationState = resolveWeChatRegistrationVerificationState(
+    weChatVerificationRequired,
+    weChatVerificationAvailable,
+    weChatVerification
+  )
+  const weChatVerificationPending =
+    weChatVerificationRequired && weChatVerificationState !== 'verified'
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
@@ -121,6 +148,22 @@ export function SignUpForm({
     }
   }, [])
 
+  useEffect(() => {
+    if (!weChatVerification) return
+    const expiresIn = weChatVerification.expiresAt * 1000 - Date.now()
+    if (expiresIn <= 0) {
+      clearWeChatRegistrationVerification()
+      setWeChatVerification(null)
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      clearWeChatRegistrationVerification()
+      setWeChatVerification(null)
+      toast.error(t('WeChat verification expired. Please verify again.'))
+    }, expiresIn)
+    return () => window.clearTimeout(timeout)
+  }, [t, weChatVerification])
+
   async function onSubmit(data: z.infer<typeof registerFormSchema>) {
     if (requiresLegalConsent && !agreedToLegal) {
       toast.error(legalConsentErrorMessage)
@@ -138,6 +181,10 @@ export function SignUpForm({
         return
       }
     }
+    if (weChatVerificationRequired && weChatVerificationState !== 'verified') {
+      toast.error(t('Please complete WeChat verification first'))
+      return
+    }
 
     if (!validateTurnstile()) return
 
@@ -148,20 +195,56 @@ export function SignUpForm({
         password: data.password,
         email: data.email || undefined,
         verification_code: verificationCode || undefined,
+        wechat_verification_token:
+          weChatVerificationRequired && weChatVerificationState === 'verified'
+            ? weChatVerification?.token
+            : undefined,
         aff_code: getAffiliateCode(),
         turnstile: turnstileToken,
       })
 
       if (res?.success) {
+        clearWeChatRegistrationVerification()
+        setWeChatVerification(null)
         toast.success(t('Account created! Please sign in'))
         redirectToLogin(redirectTo)
       } else {
-        toast.error(res?.message || t('Failed to create account'))
+        if (res?.code && WECHAT_REGISTRATION_RESET_CODES.has(res.code)) {
+          clearWeChatRegistrationVerification()
+          setWeChatVerification(null)
+        }
+        const messageKey = getServerErrorMessageKey(res)
+        toast.error(
+          messageKey
+            ? t(messageKey)
+            : res?.message || t('Failed to create account')
+        )
       }
     } catch {
       // Errors are handled by global interceptor
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleWeChatVerification() {
+    if (!weChatVerificationAvailable || !status?.wechat_app_id) {
+      toast.error(
+        t(
+          'WeChat verification is required but temporarily unavailable. Please contact the administrator.'
+        )
+      )
+      return
+    }
+    setIsWeChatRedirecting(true)
+    try {
+      saveWeChatRegistrationReturnTo(redirectTo)
+      const state = await createOAuthFlow('wechat', 'register')
+      window.location.assign(buildWeChatOAuthUrl(status.wechat_app_id, state))
+    } catch {
+      saveWeChatRegistrationReturnTo()
+      toast.error(t('Failed to start WeChat verification'))
+      setIsWeChatRedirecting(false)
     }
   }
 
@@ -185,9 +268,18 @@ export function SignUpForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('grid gap-4', className)}
+        className={cn('grid gap-4 pb-20 sm:pb-0', className)}
         {...props}
       >
+        {weChatVerificationRequired && (
+          <WeChatRegistrationVerification
+            state={weChatVerificationState}
+            emailVerificationRequired={emailVerificationRequired}
+            redirecting={isWeChatRedirecting}
+            onVerify={handleWeChatVerification}
+          />
+        )}
+
         {/* Username Field */}
         <FormField
           control={form.control}
@@ -196,7 +288,11 @@ export function SignUpForm({
             <FormItem>
               <FormLabel>{t('Username')}</FormLabel>
               <FormControl>
-                <Input placeholder={t('Enter your username')} {...field} />
+                <Input
+                  placeholder={t('Enter your username')}
+                  disabled={weChatVerificationPending}
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -213,6 +309,7 @@ export function SignUpForm({
               <FormControl>
                 <PasswordInput
                   placeholder={t('Enter password (8-20 characters)')}
+                  disabled={weChatVerificationPending}
                   {...field}
                 />
               </FormControl>
@@ -229,7 +326,11 @@ export function SignUpForm({
             <FormItem>
               <FormLabel>{t('Confirm password')}</FormLabel>
               <FormControl>
-                <PasswordInput placeholder={t('Confirm password')} {...field} />
+                <PasswordInput
+                  placeholder={t('Confirm password')}
+                  disabled={weChatVerificationPending}
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -252,6 +353,7 @@ export function SignUpForm({
                     <Input
                       placeholder={t('name@example.com')}
                       type='email'
+                      disabled={weChatVerificationPending}
                       {...field}
                     />
                   </FormControl>
@@ -266,6 +368,7 @@ export function SignUpForm({
                 <Input
                   placeholder={t('Verification code')}
                   value={verificationCode}
+                  disabled={weChatVerificationPending}
                   onChange={(e) => setVerificationCode(e.target.value)}
                 />
               </div>
@@ -274,6 +377,7 @@ export function SignUpForm({
                 type='button'
                 disabled={
                   isLoading ||
+                  weChatVerificationPending ||
                   isSendingCode ||
                   isActive ||
                   !emailValue ||
@@ -284,6 +388,13 @@ export function SignUpForm({
                 {verificationCodeAction}
               </Button>
             </div>
+            {weChatVerificationRequired && (
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Email verification is also required. Your account is created only after both checks pass.'
+                )}
+              </p>
+            )}
           </>
         )}
 
@@ -312,14 +423,16 @@ export function SignUpForm({
           disabled={
             isLoading ||
             (requiresLegalConsent && !agreedToLegal) ||
-            !turnstileReady
+            !turnstileReady ||
+            (weChatVerificationRequired &&
+              weChatVerificationState !== 'verified')
           }
         >
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
           {t('Create account')}
         </Button>
 
-        {oauthRegisterEnabled && (
+        {oauthRegisterEnabled && !weChatVerificationRequired && (
           <OAuthProviders
             status={status}
             redirectTo={redirectTo}

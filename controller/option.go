@@ -226,6 +226,30 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+		if option.Value == "false" && common.WeChatRegistrationVerificationEnabled {
+			common.ApiErrorMsg(c, "新用户微信验证已启用，请先关闭该验证要求再停用微信登录")
+			return
+		}
+	case "WeChatRegistrationVerificationEnabled":
+		if option.Value == "true" &&
+			(!common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "") {
+			common.ApiErrorMsg(c, "无法启用新用户微信验证，请先完整配置并启用微信 OAuth")
+			return
+		}
+		if option.Value == "true" && !common.PasswordRegisterEnabled {
+			common.ApiErrorMsg(c, "无法启用新用户微信验证，请先启用密码注册")
+			return
+		}
+	case "PasswordRegisterEnabled":
+		if option.Value == "false" && common.WeChatRegistrationVerificationEnabled {
+			common.ApiErrorMsg(c, "新用户微信验证已启用，请先关闭该验证要求再停用密码注册")
+			return
+		}
+	case "WeChatAppId", "WeChatAppSecret":
+		if strings.TrimSpace(option.Value.(string)) == "" && common.WeChatRegistrationVerificationEnabled {
+			common.ApiErrorMsg(c, "新用户微信验证已启用，微信 OAuth 配置不能为空")
+			return
+		}
 	case "TurnstileCheckEnabled":
 		if option.Value == "true" && common.TurnstileSiteKey == "" {
 			c.JSON(http.StatusOK, gin.H{

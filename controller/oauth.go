@@ -19,6 +19,14 @@ import (
 
 const oauthAuthFlowTTL = 10 * time.Minute
 
+const (
+	weChatRegistrationActionVerified   = "wechat_registration_verified"
+	weChatRegistrationErrorRequired    = "WECHAT_REGISTRATION_VERIFICATION_REQUIRED"
+	weChatRegistrationErrorInvalid     = "WECHAT_REGISTRATION_VERIFICATION_INVALID"
+	weChatRegistrationErrorBound       = "WECHAT_REGISTRATION_IDENTITY_BOUND"
+	weChatRegistrationErrorUnavailable = "WECHAT_REGISTRATION_UNAVAILABLE"
+)
+
 type oauthStateRequest struct {
 	Provider string `json:"provider"`
 	Intent   string `json:"intent"`
@@ -27,6 +35,11 @@ type oauthStateRequest struct {
 
 type oauthFlowPayload struct {
 	AffiliateCode string `json:"affiliate_code,omitempty"`
+}
+
+type weChatRegistrationVerificationPayload struct {
+	ProviderUserID string `json:"provider_user_id"`
+	UnionID        string `json:"union_id,omitempty"`
 }
 
 // providerParams returns map with Provider key for i18n templates
@@ -38,7 +51,21 @@ func claimWeChatUnionIDWithTx(tx *gorm.DB, provider oauth.Provider, oauthUser *o
 	if _, ok := provider.(*oauth.WeChatProvider); !ok {
 		return nil
 	}
-	if oauthUser == nil || oauthUser.Extra == nil {
+	if oauthUser == nil {
+		return nil
+	}
+	providerUserID := strings.TrimSpace(oauthUser.ProviderUserID)
+	if providerUserID != "" {
+		if err := model.ClaimExternalIdentityWithTx(
+			tx,
+			model.ExternalIdentityProviderWeChat,
+			providerUserID,
+			userID,
+		); err != nil {
+			return err
+		}
+	}
+	if oauthUser.Extra == nil {
 		return nil
 	}
 	unionID, _ := oauthUser.Extra["union_id"].(string)
@@ -54,6 +81,57 @@ func claimWeChatUnionIDWithTx(tx *gorm.DB, provider oauth.Provider, oauthUser *o
 	)
 }
 
+func writeWeChatRegistrationError(c *gin.Context, code, messageKey string) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": false,
+		"message": i18n.T(c, messageKey),
+		"code":    code,
+	})
+}
+
+func createWeChatRegistrationVerification(oauthUser *oauth.OAuthUser) (string, time.Time, error) {
+	if oauthUser == nil || strings.TrimSpace(oauthUser.ProviderUserID) == "" {
+		return "", time.Time{}, model.ErrAuthFlowInvalid
+	}
+	unionID := ""
+	if oauthUser.Extra != nil {
+		unionID, _ = oauthUser.Extra["union_id"].(string)
+	}
+	payload, err := common.Marshal(weChatRegistrationVerificationPayload{
+		ProviderUserID: strings.TrimSpace(oauthUser.ProviderUserID),
+		UnionID:        strings.TrimSpace(unionID),
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	expiresAt := time.Now().Add(oauthAuthFlowTTL)
+	token, _, err := model.CreateAuthFlow(model.AuthFlowCreate{
+		Purpose:   model.AuthFlowPurposeWeChatRegistration,
+		Provider:  "wechat",
+		Intent:    model.AuthFlowIntentRegister,
+		Payload:   string(payload),
+		ExpiresAt: expiresAt,
+	})
+	return token, expiresAt, err
+}
+
+func writeWeChatRegistrationVerification(c *gin.Context, oauthUser *oauth.OAuthUser) {
+	token, expiresAt, err := createWeChatRegistrationVerification(oauthUser)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"action":             weChatRegistrationActionVerified,
+			"verification_token": token,
+			"expires_at":         expiresAt.Unix(),
+		},
+	})
+}
+
 // GenerateOAuthCode generates a state code for OAuth CSRF protection
 func GenerateOAuthCode(c *gin.Context) {
 	var request oauthStateRequest
@@ -65,10 +143,25 @@ func GenerateOAuthCode(c *gin.Context) {
 	request.Intent = strings.TrimSpace(request.Intent)
 	request.Aff = strings.TrimSpace(request.Aff)
 	if oauth.GetProvider(request.Provider) == nil ||
-		(request.Intent != model.AuthFlowIntentLogin && request.Intent != model.AuthFlowIntentBind) ||
+		(request.Intent != model.AuthFlowIntentLogin &&
+			request.Intent != model.AuthFlowIntentBind &&
+			request.Intent != model.AuthFlowIntentRegister) ||
 		len(request.Aff) > 32 ||
-		(request.Intent == model.AuthFlowIntentBind && request.Aff != "") {
+		(request.Intent != model.AuthFlowIntentLogin && request.Aff != "") ||
+		(request.Intent == model.AuthFlowIntentRegister && request.Provider != "wechat") {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if request.Intent == model.AuthFlowIntentRegister &&
+		(!common.WeChatRegistrationVerificationEnabled ||
+			!common.RegisterEnabled ||
+			!common.PasswordRegisterEnabled ||
+			!oauth.GetProvider(request.Provider).IsEnabled()) {
+		writeWeChatRegistrationError(
+			c,
+			weChatRegistrationErrorUnavailable,
+			i18n.MsgUserWeChatVerificationUnavailable,
+		)
 		return
 	}
 	userID := 0
@@ -154,7 +247,8 @@ func HandleOAuth(c *gin.Context) {
 		}
 		consumeMatch.UserId = identity.UserID
 		consumeMatch.SessionId = identity.SessionID
-	} else if pendingFlow.Intent != model.AuthFlowIntentLogin {
+	} else if pendingFlow.Intent != model.AuthFlowIntentLogin &&
+		pendingFlow.Intent != model.AuthFlowIntentRegister {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
@@ -162,6 +256,17 @@ func HandleOAuth(c *gin.Context) {
 	// 3. Check if provider is enabled
 	if !provider.IsEnabled() {
 		common.ApiErrorI18n(c, i18n.MsgOAuthNotEnabled, providerParams(provider.GetName()))
+		return
+	}
+	if pendingFlow.Intent == model.AuthFlowIntentRegister &&
+		(!common.WeChatRegistrationVerificationEnabled ||
+			!common.RegisterEnabled ||
+			!common.PasswordRegisterEnabled) {
+		writeWeChatRegistrationError(
+			c,
+			weChatRegistrationErrorUnavailable,
+			i18n.MsgUserWeChatVerificationUnavailable,
+		)
 		return
 	}
 
@@ -213,6 +318,38 @@ func HandleOAuth(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if pendingFlow.Intent == model.AuthFlowIntentRegister {
+		if provider.IsUserIDTaken(oauthUser.ProviderUserID) {
+			writeWeChatRegistrationError(
+				c,
+				weChatRegistrationErrorBound,
+				i18n.MsgUserWeChatIdentityAlreadyBound,
+			)
+			return
+		}
+		writeWeChatRegistrationVerification(c, oauthUser)
+		return
+	}
+	if common.WeChatRegistrationVerificationEnabled &&
+		common.EmailVerificationEnabled &&
+		!provider.IsUserIDTaken(oauthUser.ProviderUserID) {
+		if _, ok := provider.(*oauth.WeChatProvider); ok {
+			if !common.RegisterEnabled {
+				common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
+				return
+			}
+			if !common.PasswordRegisterEnabled {
+				writeWeChatRegistrationError(
+					c,
+					weChatRegistrationErrorUnavailable,
+					i18n.MsgUserWeChatVerificationUnavailable,
+				)
+				return
+			}
+			writeWeChatRegistrationVerification(c, oauthUser)
+			return
+		}
+	}
 	user, err := findOrCreateOAuthUser(c, provider, oauthUser, payload.AffiliateCode)
 	if err != nil {
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
@@ -226,6 +363,12 @@ func HandleOAuth(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
 		case *OAuthEmailAlreadyTakenError:
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
+		case *OAuthWeChatVerificationRequiredError:
+			writeWeChatRegistrationError(
+				c,
+				weChatRegistrationErrorRequired,
+				i18n.MsgUserWeChatVerificationRequired,
+			)
 		default:
 			common.ApiError(c, err)
 		}
@@ -367,6 +510,12 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		}
 	}
 
+	if common.WeChatRegistrationVerificationEnabled {
+		if _, ok := provider.(*oauth.WeChatProvider); !ok {
+			return nil, &OAuthWeChatVerificationRequiredError{}
+		}
+	}
+
 	// User doesn't exist, create new user if registration is enabled
 	if !common.RegisterEnabled {
 		return nil, &OAuthRegistrationDisabledError{}
@@ -490,6 +639,12 @@ type OAuthEmailAlreadyTakenError struct{}
 
 func (e *OAuthEmailAlreadyTakenError) Error() string {
 	return "email is already in use"
+}
+
+type OAuthWeChatVerificationRequiredError struct{}
+
+func (e *OAuthWeChatVerificationRequiredError) Error() string {
+	return "WeChat verification is required for new accounts"
 }
 
 // handleOAuthError handles OAuth errors and returns translated message

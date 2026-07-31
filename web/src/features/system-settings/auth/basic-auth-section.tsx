@@ -48,6 +48,7 @@ const basicAuthSchema = z.object({
   PasswordLoginEnabled: z.boolean(),
   PasswordRegisterEnabled: z.boolean(),
   EmailVerificationEnabled: z.boolean(),
+  WeChatRegistrationVerificationEnabled: z.boolean(),
   RegisterEnabled: z.boolean(),
   EmailDomainRestrictionEnabled: z.boolean(),
   EmailAliasRestrictionEnabled: z.boolean(),
@@ -58,9 +59,13 @@ type BasicAuthFormValues = z.infer<typeof basicAuthSchema>
 
 type BasicAuthSectionProps = {
   defaultValues: BasicAuthFormValues
+  weChatOAuthReady: boolean
 }
 
-export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
+export function BasicAuthSection({
+  defaultValues,
+  weChatOAuthReady,
+}: BasicAuthSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
 
@@ -81,6 +86,11 @@ export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
   })
 
   useResetForm(form, formDefaults)
+  const emailVerificationEnabled = form.watch('EmailVerificationEnabled')
+  const passwordRegistrationEnabled = form.watch('PasswordRegisterEnabled')
+  const weChatRegistrationVerificationEnabled = form.watch(
+    'WeChatRegistrationVerificationEnabled'
+  )
 
   const onSubmit = async (data: BasicAuthFormValues) => {
     const updates: Array<{ key: string; value: string | boolean }> = []
@@ -100,6 +110,19 @@ export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
         updates.push({ key, value })
       }
     })
+
+    const disableWeChatVerificationIndex = updates.findIndex(
+      (update) =>
+        update.key === 'WeChatRegistrationVerificationEnabled' &&
+        update.value === false
+    )
+    if (disableWeChatVerificationIndex > 0) {
+      const [disableWeChatVerification] = updates.splice(
+        disableWeChatVerificationIndex,
+        1
+      )
+      updates.unshift(disableWeChatVerification)
+    }
 
     for (const update of updates) {
       await updateOption.mutateAsync(update)
@@ -164,17 +187,70 @@ export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
                 <SettingsSwitchContent>
                   <FormLabel>{t('Password Registration')}</FormLabel>
                   <FormDescription>
-                    {t('Allow registration with password')}
+                    {weChatRegistrationVerificationEnabled
+                      ? t(
+                          'Turn off WeChat registration verification before disabling password registration.'
+                        )
+                      : t('Allow registration with password')}
                   </FormDescription>
                 </SettingsSwitchContent>
                 <FormControl>
                   <Switch
                     checked={field.value}
                     onCheckedChange={field.onChange}
+                    disabled={weChatRegistrationVerificationEnabled}
                   />
                 </FormControl>
               </SettingsSwitchItem>
             )}
+          />
+
+          <FormField
+            control={form.control}
+            name='WeChatRegistrationVerificationEnabled'
+            render={({ field }) => {
+              let description = t(
+                'Require WeChat verification for new accounts'
+              )
+              if (!weChatOAuthReady) {
+                description = t(
+                  'Configure and enable WeChat OAuth before turning on this requirement.'
+                )
+              } else if (!passwordRegistrationEnabled) {
+                description = t(
+                  'Enable password registration before turning on this requirement.'
+                )
+              } else if (field.value && emailVerificationEnabled) {
+                description = t(
+                  'Every new account must complete both email code and WeChat verification.'
+                )
+              } else if (field.value) {
+                description = t(
+                  'Every new account must complete WeChat verification before registration.'
+                )
+              }
+
+              return (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>
+                      {t('WeChat Registration Verification')}
+                    </FormLabel>
+                    <FormDescription>{description}</FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={
+                        !field.value &&
+                        (!weChatOAuthReady || !passwordRegistrationEnabled)
+                      }
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )
+            }}
           />
 
           <FormField

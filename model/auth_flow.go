@@ -30,6 +30,11 @@ const (
 	AuthFlowDefaultCleanupRetention  = 24 * time.Hour
 )
 
+const (
+	AuthFlowPurposeWeChatRegistration = "wechat_registration"
+	AuthFlowIntentRegister            = "register"
+)
+
 var (
 	ErrAuthFlowInvalid  = errors.New("auth flow is invalid")
 	ErrAuthFlowExpired  = errors.New("auth flow has expired")

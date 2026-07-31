@@ -19,15 +19,18 @@ func TestGetStatusAdvertisesWeChatOnlyWithCompleteConfiguration(t *testing.T) {
 	originalEnabled := common.WeChatAuthEnabled
 	originalAppID := common.WeChatAppId
 	originalAppSecret := common.WeChatAppSecret
+	originalRegistrationVerification := common.WeChatRegistrationVerificationEnabled
 	originalOptionMap := common.OptionMap
 	common.OptionMap = map[string]string{}
 	common.WeChatAuthEnabled = true
 	common.WeChatAppId = "wx-app-id"
 	common.WeChatAppSecret = ""
+	common.WeChatRegistrationVerificationEnabled = true
 	t.Cleanup(func() {
 		common.WeChatAuthEnabled = originalEnabled
 		common.WeChatAppId = originalAppID
 		common.WeChatAppSecret = originalAppSecret
+		common.WeChatRegistrationVerificationEnabled = originalRegistrationVerification
 		common.OptionMap = originalOptionMap
 	})
 
@@ -49,6 +52,7 @@ func TestGetStatusAdvertisesWeChatOnlyWithCompleteConfiguration(t *testing.T) {
 	incomplete := getStatus()
 	assert.Equal(t, false, incomplete["wechat_login"])
 	assert.Equal(t, "wx-app-id", incomplete["wechat_app_id"])
+	assert.Equal(t, true, incomplete["wechat_registration_verification"])
 
 	common.WeChatAppSecret = "wx-app-secret"
 	complete := getStatus()
@@ -101,6 +105,13 @@ func TestWeChatOAuthUnionIDCreatesDurableIdentityClaim(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Equal(t, "wechat-union-id", subject)
+	subject, err = model.GetExternalIdentitySubjectByUserWithTx(
+		db,
+		model.ExternalIdentityProviderWeChat,
+		7,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "wechat-union-id", subject)
 
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		return claimWeChatUnionIDWithTx(tx, provider, &oauth.OAuthUser{
@@ -114,4 +125,11 @@ func TestWeChatOAuthUnionIDCreatesDurableIdentityClaim(t *testing.T) {
 		8,
 	)
 	assert.ErrorIs(t, err, model.ErrExternalIdentityNotClaimed)
+	subject, err = model.GetExternalIdentitySubjectByUserWithTx(
+		db,
+		model.ExternalIdentityProviderWeChat,
+		8,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "openid-fallback", subject)
 }

@@ -969,6 +969,9 @@ func (user *User) ClearBinding(bindingType string) error {
 		case ExternalIdentityProviderTelegram:
 			return ReleaseExternalIdentityWithTx(tx, ExternalIdentityProviderTelegram, user.Id)
 		case "wechat":
+			if err := ReleaseExternalIdentityWithTx(tx, ExternalIdentityProviderWeChat, user.Id); err != nil {
+				return err
+			}
 			return ReleaseExternalIdentityWithTx(tx, ExternalIdentityProviderWeChatUnionID, user.Id)
 		}
 		return nil

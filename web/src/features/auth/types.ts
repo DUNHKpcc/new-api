@@ -38,6 +38,7 @@ export interface RegisterPayload {
   password: string
   email?: string
   verification_code?: string
+  wechat_verification_token?: string
   aff_code?: string
   turnstile?: string
 }
@@ -82,6 +83,7 @@ export interface Login2FAResponse {
 export interface ApiResponse<T = unknown> {
   success: boolean
   message: string
+  code?: string
   data?: T
 }
 
@@ -110,6 +112,7 @@ export interface SystemStatus {
     passkey_login?: boolean
     wechat_login?: boolean
     wechat_app_id?: string
+    wechat_registration_verification?: boolean
     turnstile_check?: boolean
     turnstile_site_key?: string
     email_verification?: boolean
@@ -150,6 +153,7 @@ export interface SystemStatus {
   passkey_login?: boolean
   wechat_login?: boolean
   wechat_app_id?: string
+  wechat_registration_verification?: boolean
   turnstile_check?: boolean
   turnstile_site_key?: string
   email_verification?: boolean

@@ -34,11 +34,16 @@ const AUTH_SECTIONS = [
           PasswordLoginEnabled: settings.PasswordLoginEnabled,
           PasswordRegisterEnabled: settings.PasswordRegisterEnabled,
           EmailVerificationEnabled: settings.EmailVerificationEnabled,
+          WeChatRegistrationVerificationEnabled:
+            settings.WeChatRegistrationVerificationEnabled,
           RegisterEnabled: settings.RegisterEnabled,
           EmailDomainRestrictionEnabled: settings.EmailDomainRestrictionEnabled,
           EmailAliasRestrictionEnabled: settings.EmailAliasRestrictionEnabled,
           EmailDomainWhitelist: settings.EmailDomainWhitelist,
         }}
+        weChatOAuthReady={
+          settings.WeChatAuthEnabled && Boolean(settings.WeChatAppId.trim())
+        }
       />
     ),
   },

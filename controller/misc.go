@@ -124,6 +124,7 @@ func GetStatus(c *gin.Context) {
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 	}
+	data["wechat_registration_verification"] = common.WeChatRegistrationVerificationEnabled
 
 	// 根据启用状态注入可选内容
 	if cs.ApiInfoEnabled {

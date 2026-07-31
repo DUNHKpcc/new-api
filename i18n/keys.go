@@ -120,6 +120,13 @@ const (
 	MsgUserQuotaChangeZero           = "user.quota_change_zero"
 )
 
+const (
+	MsgUserWeChatVerificationRequired    = "user.wechat_verification_required"
+	MsgUserWeChatVerificationInvalid     = "user.wechat_verification_invalid"
+	MsgUserWeChatIdentityAlreadyBound    = "user.wechat_identity_already_bound"
+	MsgUserWeChatVerificationUnavailable = "user.wechat_verification_unavailable"
+)
+
 // Quota related messages
 const (
 	MsgQuotaNegative        = "quota.negative"

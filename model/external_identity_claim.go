@@ -12,6 +12,7 @@ import (
 
 const (
 	ExternalIdentityProviderTelegram           = "telegram"
+	ExternalIdentityProviderWeChat             = "wechat"
 	ExternalIdentityProviderWeChatUnionID      = "wechat_unionid"
 	ExternalIdentityProviderPccAgentGiftWeChat = "pcc_agent_gift_wechat"
 )

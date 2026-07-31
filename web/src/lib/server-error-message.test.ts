@@ -67,4 +67,21 @@ describe('server error message mapping', () => {
       expected.TELEGRAM_BIND_INTERNAL_ERROR
     )
   })
+
+  test('maps WeChat registration failures to actionable guidance', () => {
+    const expected = {
+      WECHAT_REGISTRATION_VERIFICATION_REQUIRED:
+        'New accounts must verify with WeChat. Complete WeChat verification on the sign-up page.',
+      WECHAT_REGISTRATION_VERIFICATION_INVALID:
+        'WeChat verification is invalid or has expired. Please verify again.',
+      WECHAT_REGISTRATION_IDENTITY_BOUND:
+        'This WeChat account is already linked. Sign in with WeChat instead.',
+      WECHAT_REGISTRATION_UNAVAILABLE:
+        'WeChat verification is temporarily unavailable. Please contact the administrator.',
+    }
+
+    for (const [code, message] of Object.entries(expected)) {
+      assert.equal(getServerErrorMessageKey({ code }), message)
+    }
+  })
 })

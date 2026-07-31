@@ -32,6 +32,14 @@ const serverErrorMessageKeys = {
   TELEGRAM_BIND_USER_DELETED: 'This user account no longer exists.',
   TELEGRAM_BIND_USER_DISABLED: 'This user account is disabled.',
   TELEGRAM_BIND_INTERNAL_ERROR: 'Telegram binding failed. Please try again.',
+  WECHAT_REGISTRATION_VERIFICATION_REQUIRED:
+    'New accounts must verify with WeChat. Complete WeChat verification on the sign-up page.',
+  WECHAT_REGISTRATION_VERIFICATION_INVALID:
+    'WeChat verification is invalid or has expired. Please verify again.',
+  WECHAT_REGISTRATION_IDENTITY_BOUND:
+    'This WeChat account is already linked. Sign in with WeChat instead.',
+  WECHAT_REGISTRATION_UNAVAILABLE:
+    'WeChat verification is temporarily unavailable. Please contact the administrator.',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {

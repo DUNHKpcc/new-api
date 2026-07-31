@@ -38,6 +38,11 @@ import {
   postTelegramBindResult,
   startOAuthBindResponseDeadline,
 } from '@/features/auth/lib/oauth-bind-window'
+import {
+  consumeWeChatRegistrationReturnTo,
+  parseWeChatRegistrationVerificationResponse,
+  saveWeChatRegistrationVerification,
+} from '@/features/auth/lib/wechat-registration-verification'
 import { api, applyAuthBundle, isAuthBundle } from '@/lib/api'
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 
@@ -183,6 +188,24 @@ function OAuthCallback() {
           skipBusinessError: true,
         }
         const response = await api.get(`/api/oauth/${provider}`, config)
+        const registrationVerification =
+          parseWeChatRegistrationVerificationResponse(response.data?.data)
+        if (response.data?.success && registrationVerification) {
+          saveWeChatRegistrationVerification({
+            token: registrationVerification.verification_token,
+            expiresAt: registrationVerification.expires_at,
+          })
+          const returnTo = sanitizeAuthRedirect(
+            consumeWeChatRegistrationReturnTo(),
+            window.location.origin
+          )
+          const signUpTarget = returnTo
+            ? `/sign-up?redirect=${encodeURIComponent(returnTo)}`
+            : '/sign-up'
+          safeNavigate(signUpTarget, '/sign-up')
+          toast.success(i18next.t('WeChat verified. Continue registration.'))
+          return
+        }
         if (response.data?.success && isAuthBundle(response.data?.data)) {
           applyAuthBundle(response.data.data)
           safeNavigate(search.redirect)
@@ -195,6 +218,12 @@ function OAuthCallback() {
             ? i18next.t(messageKey)
             : response.data?.message || i18next.t('OAuth failed')
         )
+        if (
+          response.data?.code === 'WECHAT_REGISTRATION_VERIFICATION_REQUIRED'
+        ) {
+          safeNavigate('/sign-up', '/sign-up')
+          return
+        }
       } catch (error: unknown) {
         const messageKey = getServerErrorMessageKey(error)
         const responseMessage = (
