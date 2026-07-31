@@ -118,6 +118,10 @@ export function SidebarModulesSection({
         title: t('Task logs'),
         description: t('Background job tracker for queued work.'),
       },
+      resource: {
+        title: t('Resource Downloads'),
+        description: t('Resources'),
+      },
     },
     personal: {
       topup: {

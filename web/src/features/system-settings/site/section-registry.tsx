@@ -28,6 +28,7 @@ import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { ResourceDownloadsSection } from './resource-downloads-section'
 
 const SITE_SECTIONS = [
   {
@@ -86,6 +87,13 @@ const SITE_SECTIONS = [
         />
       )
     },
+  },
+  {
+    id: 'resource-downloads',
+    titleKey: 'Resource Downloads',
+    build: (settings: SiteSettings) => (
+      <ResourceDownloadsSection value={settings.ResourceDownloadItems} />
+    ),
   },
 ] as const
 

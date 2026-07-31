@@ -103,6 +103,11 @@ export function SidebarModulesCard() {
           title: t('Task Logs'),
           description: t('System task records'),
         },
+        {
+          key: 'resource',
+          title: t('Resource Downloads'),
+          description: t('Resources'),
+        },
       ],
     },
     {

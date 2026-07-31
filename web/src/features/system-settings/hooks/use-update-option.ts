@@ -58,6 +58,9 @@ export function useUpdateOption() {
             /* empty */
           }
         }
+        if (variables.key === 'ResourceDownloadItems') {
+          queryClient.invalidateQueries({ queryKey: ['resource-downloads'] })
+        }
 
         toast.success(i18next.t('Setting updated successfully'))
       } else {
