@@ -17,10 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, BookOpen } from 'lucide-react'
+import { ArrowRight, BookOpen, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { useIsSidebarModuleVisible } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +35,7 @@ interface HeroProps {
 export function Hero(props: HeroProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
+  const showResourceDownloads = useIsSidebarModuleVisible('/resource-downloads')
   const docsUrl =
     (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
 
@@ -82,7 +84,7 @@ export function Hero(props: HeroProps) {
           <span className='text-primary'>{t('Vast Range of AI Models')}</span>
         </h1>
         <div
-          className='landing-animate-fade-up mt-8 flex flex-wrap items-center justify-center gap-3 opacity-0 min-[700px]:relative min-[700px]:top-[9px] min-[700px]:z-40'
+          className='landing-animate-fade-up mt-8 flex w-full flex-col items-stretch justify-center gap-3 opacity-0 min-[700px]:relative min-[700px]:top-[9px] min-[700px]:z-40 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center'
           style={{ animationDelay: '60ms' }}
         >
           {props.isAuthenticated ? (
@@ -114,6 +116,19 @@ export function Hero(props: HeroProps) {
               </Button>
               {renderDocsButton()}
             </>
+          )}
+          {showResourceDownloads && (
+            <Button
+              variant='outline'
+              className='group border-border/50 hover:border-border hover:bg-muted/50 inline-flex h-11 items-center gap-1.5 rounded-lg px-5 text-sm font-medium'
+              render={<Link to='/resource-downloads' />}
+            >
+              <Download
+                aria-hidden='true'
+                className='text-muted-foreground/80 group-hover:text-foreground size-4 transition-colors duration-200'
+              />
+              <span>{t('Resource Downloads')}</span>
+            </Button>
           )}
         </div>
       </div>
