@@ -25,6 +25,7 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
+import { appHeaderLayoutClasses } from './app-header-layout'
 import { Header } from './header'
 import { SystemBrand } from './system-brand'
 import { TopNav } from './top-nav'
@@ -115,17 +116,19 @@ export function AppHeader({
       ) : null}
 
       {rightContent ?? (
-        <div className='ms-auto flex items-center gap-1 sm:gap-2'>
+        <div className={appHeaderLayoutClasses.actions}>
           {showTopNav && (
-            <div className='me-1 hidden lg:block'>
+            <div className={appHeaderLayoutClasses.nav}>
               <TopNav links={links} />
             </div>
           )}
-          {showSearch && <Search />}
-          {showNotifications && <NotificationPopover />}
-          <LanguageSwitcher />
-          {showConfigDrawer && <ConfigDrawer />}
-          {showProfileDropdown && <ProfileDropdown />}
+          {showSearch && <Search className={appHeaderLayoutClasses.search} />}
+          <div className={appHeaderLayoutClasses.utilities}>
+            {showNotifications && <NotificationPopover />}
+            <LanguageSwitcher />
+            {showConfigDrawer && <ConfigDrawer />}
+            {showProfileDropdown && <ProfileDropdown />}
+          </div>
         </div>
       )}
     </Header>

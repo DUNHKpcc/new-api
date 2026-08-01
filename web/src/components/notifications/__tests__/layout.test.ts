@@ -55,6 +55,8 @@ describe('global notification center layout', () => {
     const unreadListClasses =
       globalNotificationCenterLayout.unreadList.split(' ')
     const previewClasses = globalNotificationCenterLayout.preview.split(' ')
+    const previewTextClasses =
+      globalNotificationCenterLayout.previewText.split(' ')
 
     assert.ok(unreadListClasses.includes('gap-2'))
     assert.ok(
@@ -65,6 +67,12 @@ describe('global notification center layout', () => {
     assert.ok(previewClasses.includes('h-20'))
     assert.ok(previewClasses.includes('w-full'))
     assert.ok(previewClasses.includes('shrink-0'))
+    assert.ok(previewClasses.includes('overflow-hidden'))
+    assert.ok(previewTextClasses.includes('line-clamp-2'))
+    assert.ok(previewTextClasses.includes('min-w-0'))
+    assert.ok(previewTextClasses.includes('overflow-hidden'))
+    assert.ok(previewTextClasses.includes('break-words'))
+    assert.equal(previewTextClasses.includes('block'), false)
     assert.equal(
       previewClasses.some((className) => className.startsWith('shadow')),
       false

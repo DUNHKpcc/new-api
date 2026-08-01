@@ -61,18 +61,18 @@ export function splitPublicHeaderLinks(links: readonly TopNavLink[]) {
 
 export const publicHeaderLayoutClasses = {
   header: {
-    base: 'pointer-events-auto fixed inset-x-0 top-0 z-50 border-b backdrop-blur-xl transition-[height,background-color,border-color,box-shadow] duration-200 ease-out motion-reduce:transition-none',
+    base: 'pointer-events-auto fixed inset-x-0 top-0 z-50 h-[var(--app-header-height,3.75rem)] border-b backdrop-blur-xl transition-[height,background-color,border-color,box-shadow] duration-200 ease-out motion-reduce:transition-none',
     idle: 'border-border/50 bg-background/90 shadow-none',
     scrolled:
       'border-border/80 bg-background/96 shadow-[0_8px_24px_-22px_rgba(0,0,0,0.45)]',
   },
   shell: {
-    base: 'mx-auto max-w-7xl px-4 md:px-6',
+    base: 'mx-auto h-full max-w-7xl px-4 md:px-6',
   },
   bar: {
     base: 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center transition-[height] duration-200 ease-out motion-reduce:transition-none',
-    idle: 'h-[4.5rem]',
-    scrolled: 'h-[3.75rem]',
+    idle: 'h-full',
+    scrolled: 'h-full',
   },
   brand: {
     link: 'group flex min-w-0 items-center gap-3 justify-self-start',

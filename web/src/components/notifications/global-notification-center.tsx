@@ -219,7 +219,7 @@ function CompactNotificationPreview(props: CompactNotificationPreviewProps) {
           </Badge>
         ) : null}
       </span>
-      <span className='mt-1 line-clamp-2 block text-sm leading-5 font-medium'>
+      <span className={globalNotificationCenterLayout.previewText}>
         {preview}
       </span>
     </button>

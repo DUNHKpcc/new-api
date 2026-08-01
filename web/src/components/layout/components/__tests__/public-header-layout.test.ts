@@ -33,16 +33,24 @@ function tokens(classes: string) {
 }
 
 describe('public header layout', () => {
-  test('keeps a stable editorial header while compressing on scroll', () => {
+  test('keeps the public header at the shared app header height', () => {
     assert.ok(
       tokens(publicHeaderLayoutClasses.header.base).includes('border-b')
     )
     assert.ok(
+      tokens(publicHeaderLayoutClasses.header.base).includes(
+        'h-[var(--app-header-height,3.75rem)]'
+      )
+    )
+    assert.ok(
       tokens(publicHeaderLayoutClasses.shell.base).includes('max-w-7xl')
     )
-    assert.ok(tokens(publicHeaderLayoutClasses.bar.idle).includes('h-[4.5rem]'))
-    assert.ok(
-      tokens(publicHeaderLayoutClasses.bar.scrolled).includes('h-[3.75rem]')
+    assert.ok(tokens(publicHeaderLayoutClasses.shell.base).includes('h-full'))
+    assert.ok(tokens(publicHeaderLayoutClasses.bar.idle).includes('h-full'))
+    assert.ok(tokens(publicHeaderLayoutClasses.bar.scrolled).includes('h-full'))
+    assert.equal(
+      publicHeaderLayoutClasses.bar.idle,
+      publicHeaderLayoutClasses.bar.scrolled
     )
     assert.equal(
       tokens(publicHeaderLayoutClasses.header.scrolled).includes('rounded-2xl'),
