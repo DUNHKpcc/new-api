@@ -22,6 +22,7 @@ import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { VersionUpdatePopover } from '@/components/version-update-popover'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
@@ -139,6 +140,7 @@ export function AppHeader({
               />
             )}
             {showNotifications && <NotificationPopover />}
+            <VersionUpdatePopover />
             <LanguageSwitcher />
             {showConfigDrawer && <ConfigDrawer />}
             {showProfileDropdown && <ProfileDropdown />}

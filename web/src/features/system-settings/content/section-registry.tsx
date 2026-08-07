@@ -26,6 +26,7 @@ import { DiscountNoticeSection } from './discount-notice-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
+import { VersionUpdateSection } from './version-update-section'
 
 /**
  * Validate and coerce DataExportDefaultTime to a safe value
@@ -69,6 +70,13 @@ const CONTENT_SECTIONS = [
     titleKey: 'Discount Notice',
     build: (settings: ContentSettings) => (
       <DiscountNoticeSection defaultValue={settings.DiscountNotice} />
+    ),
+  },
+  {
+    id: 'version-update',
+    titleKey: 'Version update details',
+    build: (settings: ContentSettings) => (
+      <VersionUpdateSection defaultValue={settings.VersionUpdateDetails} />
     ),
   },
   {

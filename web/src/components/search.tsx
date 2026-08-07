@@ -50,7 +50,7 @@ export function Search({
         onClick={() => setOpen(true)}
         aria-label={resolvedPlaceholder}
       >
-        <SearchIcon aria-hidden='true' />
+        <SearchIcon className='size-[1.2rem]' aria-hidden='true' />
       </Button>
     )
   }

@@ -21,12 +21,20 @@ import { describe, test } from 'node:test'
 
 import { CONTENT_SECTION_IDS, getContentSectionMeta } from '../section-registry'
 
-describe('discount notice settings section', () => {
+describe('content settings navigation', () => {
   test('exposes a dedicated content settings navigation entry', () => {
     assert.equal(CONTENT_SECTION_IDS.includes('discount-notice'), true)
     assert.equal(
       getContentSectionMeta('discount-notice').titleKey,
       'Discount Notice'
+    )
+  })
+
+  test('exposes version update details as a dedicated content section', () => {
+    assert.equal(CONTENT_SECTION_IDS.includes('version-update'), true)
+    assert.equal(
+      getContentSectionMeta('version-update').titleKey,
+      'Version update details'
     )
   })
 })

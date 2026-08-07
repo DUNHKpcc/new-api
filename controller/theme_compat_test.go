@@ -73,6 +73,31 @@ func TestGetStatusIncludesDiscountNotice(t *testing.T) {
 	)
 }
 
+func TestGetStatusIncludesVersionUpdateDetails(t *testing.T) {
+	previousMap := common.OptionMap
+	common.OptionMap = map[string]string{
+		"VersionUpdateDetails": "## v1.2.0\n\n- Improved model access.",
+	}
+	t.Cleanup(func() { common.OptionMap = previousMap })
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+
+	GetStatus(context)
+
+	var payload struct {
+		Success bool           `json:"success"`
+		Data    map[string]any `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+	assert.True(t, payload.Success)
+	assert.Equal(
+		t,
+		"## v1.2.0\n\n- Improved model access.",
+		payload.Data["version_update_details"],
+	)
+}
+
 func TestUpdateOptionRejectsInvalidPccAgentGiftConfiguration(t *testing.T) {
 	confirmPaymentComplianceForTest(t)
 	previousEnabled := common.WeChatAuthEnabled

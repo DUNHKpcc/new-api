@@ -169,6 +169,7 @@ export type AuthSettings = {
 
 export type ContentSettings = {
   DiscountNotice: string
+  VersionUpdateDetails: string
   'console_setting.api_info': string
   'console_setting.announcements': string
   'console_setting.faq': string
