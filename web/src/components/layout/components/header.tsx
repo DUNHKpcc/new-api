@@ -21,16 +21,25 @@ import { cn } from '@/lib/utils'
 
 import { appHeaderLayoutClasses } from './app-header-layout'
 
-type HeaderProps = React.HTMLAttributes<HTMLElement>
+type HeaderProps = React.HTMLAttributes<HTMLElement> & {
+  showSidebarTrigger?: boolean
+}
 
-export function Header({ className, children, ...props }: HeaderProps) {
+export function Header({
+  className,
+  showSidebarTrigger = true,
+  children,
+  ...props
+}: HeaderProps) {
   return (
     <header className={cn(appHeaderLayoutClasses.root, className)} {...props}>
       <div className={appHeaderLayoutClasses.bar}>
-        <SidebarTrigger
-          variant='ghost'
-          className={appHeaderLayoutClasses.sidebarTrigger}
-        />
+        {showSidebarTrigger ? (
+          <SidebarTrigger
+            variant='ghost'
+            className={appHeaderLayoutClasses.sidebarTrigger}
+          />
+        ) : null}
         {children}
       </div>
     </header>

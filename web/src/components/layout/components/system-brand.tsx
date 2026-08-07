@@ -64,14 +64,14 @@ export function SystemBrand(props: SystemBrandProps) {
         aria-label={t('Go to home')}
         className={cn(
           appHeaderLayoutClasses.brand.link,
-          'hover:bg-accent focus-visible:ring-ring/40 focus-visible:ring-2'
+          'focus-visible:ring-ring/40 focus-visible:ring-2'
         )}
       >
         <div className={appHeaderLayoutClasses.brand.mark}>
           <img
             src={logo}
             alt={t('Logo')}
-            className='size-full rounded-md object-cover'
+            className='size-full rounded-lg object-contain'
           />
         </div>
         <span className={appHeaderLayoutClasses.brand.name}>{name}</span>

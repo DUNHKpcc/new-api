@@ -18,23 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 export const appHeaderLayoutClasses = {
-  root: 'bg-background/95 sticky top-0 z-40 h-[var(--app-header-height,3.75rem)] w-full shrink-0 border-b backdrop-blur-xl',
-  bar: 'flex h-full min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4',
+  root: 'border-border/50 bg-background/90 sticky top-0 z-40 h-[var(--app-header-height,3.75rem)] w-full shrink-0 border-b backdrop-blur-xl',
+  bar: 'mx-auto grid h-full max-w-7xl min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-4 md:px-6',
+  left: 'col-start-1 row-start-1 flex min-w-0 items-center gap-2 justify-self-start',
   sidebarTrigger: 'size-10 shrink-0 rounded-md [&_svg]:size-5',
-  actions: 'ms-auto flex min-w-0 items-center gap-1.5 sm:gap-2',
-  nav: 'me-1 hidden lg:block',
-  search: 'h-10 sm:w-44 lg:w-56 xl:w-64',
+  actions: 'col-start-3 row-start-1 flex min-w-0 items-center justify-self-end',
+  nav: 'col-start-2 row-start-1 hidden h-full shrink-0 items-center justify-self-center lg:flex',
+  search: 'size-10 shrink-0 rounded-md',
   utilities:
     'flex shrink-0 items-center gap-0.5 [&>button]:size-10 [&>button]:rounded-md [&>button_svg]:size-5 [&_[data-slot=avatar]]:size-7',
   brand: {
-    link: 'text-foreground inline-flex h-10 min-w-0 items-center gap-2.5 rounded-md px-2 font-medium transition-colors outline-none select-none',
+    link: 'text-foreground inline-flex h-10 min-w-0 items-center gap-3 font-medium transition-colors outline-none select-none',
     mark: 'flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg',
     name: 'hidden max-w-[12rem] min-w-0 truncate text-xl leading-none font-semibold [font-family:var(--font-serif)] md:block',
   },
   topNav: {
-    compact: 'xl:hidden',
+    compact: 'lg:hidden',
     compactTrigger: 'size-10 rounded-md [&_svg]:size-5',
-    desktop: 'hidden h-10 items-center gap-1 xl:flex',
-    link: 'hover:bg-accent hover:text-accent-foreground flex h-10 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap transition-colors',
+    desktop: 'hidden h-full items-stretch lg:flex',
+    link: "relative flex h-full shrink-0 items-center px-2.5 text-sm font-medium whitespace-nowrap [font-family:var(--font-sans)] transition-colors duration-150 after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-6 after:-translate-x-1/2 after:bg-transparent after:content-[''] hover:text-primary",
+    linkActive: 'text-foreground after:bg-primary',
   },
 } as const

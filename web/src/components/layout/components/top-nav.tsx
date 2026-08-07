@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 
 import type { TopNavLink } from '../types'
 import { appHeaderLayoutClasses } from './app-header-layout'
+import { isPublicNavLinkActive } from './public-header-layout'
 
 type TopNavProps = React.HTMLAttributes<HTMLElement> & {
   links: TopNavLink[]
@@ -43,11 +44,11 @@ type TopNavProps = React.HTMLAttributes<HTMLElement> & {
  */
 export function TopNav({ className, links, ...props }: TopNavProps) {
   const { t } = useTranslation()
+  const pathname = useRouterState().location.pathname
   // 规范化链接，确保所有可选属性都有默认值
   const normalizedLinks = useMemo(
     () =>
       links.map((link) => ({
-        isActive: false,
         disabled: false,
         external: false,
         ...link,
@@ -73,33 +74,35 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
             <Menu aria-hidden='true' />
           </DropdownMenuTrigger>
           <DropdownMenuContent side='bottom' align='start'>
-            {normalizedLinks.map(
-              ({ title, href, isActive, disabled, external }) => (
+            {normalizedLinks.map((link) => {
+              const isActive = isPublicNavLinkActive(pathname, link)
+
+              return (
                 <DropdownMenuItem
-                  key={`${title}-${href}`}
+                  key={`${link.title}-${link.href}`}
                   render={
-                    external ? (
+                    link.external ? (
                       <a
-                        href={href}
+                        href={link.href}
                         target='_blank'
                         rel='noopener noreferrer'
                         className={!isActive ? 'text-muted-foreground' : ''}
                       >
-                        {title}
+                        {link.title}
                       </a>
                     ) : (
                       <Link
-                        to={href}
+                        to={link.href}
                         className={!isActive ? 'text-muted-foreground' : ''}
-                        disabled={disabled}
+                        disabled={link.disabled}
                       >
-                        {title}
+                        {link.title}
                       </Link>
                     )
                   }
                 />
               )
-            )}
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -109,34 +112,41 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
         className={cn(appHeaderLayoutClasses.topNav.desktop, className)}
         {...props}
       >
-        {normalizedLinks.map(({ title, href, isActive, disabled, external }) =>
-          external ? (
+        {normalizedLinks.map((link) => {
+          const isActive = isPublicNavLinkActive(pathname, link)
+
+          return link.external ? (
             <a
-              key={`${title}-${href}`}
-              href={href}
+              key={`${link.title}-${link.href}`}
+              href={link.href}
               target='_blank'
               rel='noopener noreferrer'
               className={cn(
                 appHeaderLayoutClasses.topNav.link,
-                !isActive && 'text-muted-foreground'
+                isActive
+                  ? appHeaderLayoutClasses.topNav.linkActive
+                  : 'text-muted-foreground'
               )}
             >
-              {title}
+              {link.title}
             </a>
           ) : (
             <Link
-              key={`${title}-${href}`}
-              to={href}
-              disabled={disabled}
+              key={`${link.title}-${link.href}`}
+              to={link.href}
+              disabled={link.disabled}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 appHeaderLayoutClasses.topNav.link,
-                !isActive && 'text-muted-foreground'
+                isActive
+                  ? appHeaderLayoutClasses.topNav.linkActive
+                  : 'text-muted-foreground'
               )}
             >
-              {title}
+              {link.title}
             </Link>
           )
-        )}
+        })}
       </nav>
     </>
   )

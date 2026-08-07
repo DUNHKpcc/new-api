@@ -21,6 +21,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
+import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
@@ -69,7 +70,7 @@ type AppHeaderProps = {
   leftContent?: React.ReactNode
   /**
    * Whether to show search box
-   * @default true
+   * @default true, shown as a compact icon to preserve public-header continuity
    */
   showSearch?: boolean
   /**
@@ -108,29 +109,42 @@ export function AppHeader({
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
 
   return (
-    <Header>
-      <SystemBrand variant='inline' />
+    <Header showSidebarTrigger={false}>
+      <div className={appHeaderLayoutClasses.left}>
+        <SystemBrand variant='inline' />
+        <SidebarTrigger
+          variant='ghost'
+          className={appHeaderLayoutClasses.sidebarTrigger}
+        />
+        {leftContent ? (
+          <div className='ms-2 flex items-center'>{leftContent}</div>
+        ) : null}
+      </div>
 
-      {leftContent ? (
-        <div className='ms-2 flex items-center'>{leftContent}</div>
-      ) : null}
+      {showTopNav && !rightContent && (
+        <div className={appHeaderLayoutClasses.nav}>
+          <TopNav links={links} />
+        </div>
+      )}
 
-      {rightContent ?? (
-        <div className={appHeaderLayoutClasses.actions}>
-          {showTopNav && (
-            <div className={appHeaderLayoutClasses.nav}>
-              <TopNav links={links} />
-            </div>
-          )}
-          {showSearch && <Search className={appHeaderLayoutClasses.search} />}
+      <div className={appHeaderLayoutClasses.actions}>
+        {rightContent ? (
+          rightContent
+        ) : (
           <div className={appHeaderLayoutClasses.utilities}>
+            {showSearch && (
+              <Search
+                variant='icon'
+                className={appHeaderLayoutClasses.search}
+              />
+            )}
             {showNotifications && <NotificationPopover />}
             <LanguageSwitcher />
             {showConfigDrawer && <ConfigDrawer />}
             {showProfileDropdown && <ProfileDropdown />}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </Header>
   )
 }
