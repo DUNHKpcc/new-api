@@ -56,6 +56,9 @@ const (
 	MsgTokenStatusUnavailable    = "token.status_unavailable"
 	MsgTokenDbError              = "token.db_error"
 	MsgTokenPccAgentReadOnly     = "token.pcc_agent_read_only"
+	MsgTokenAutoGroupsTooMany    = "token.auto_groups_too_many"
+	MsgTokenAutoGroupsDuplicate  = "token.auto_groups_duplicate"
+	MsgTokenAutoGroupsInvalid    = "token.auto_groups_invalid"
 )
 
 // Redemption related messages

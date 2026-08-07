@@ -31,6 +31,7 @@ import { resetModelRatios } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { positiveIntegerSchema } from '../utils/numeric-field'
 import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
 import { ToolPriceSettings } from './tool-price-settings'
@@ -130,6 +131,7 @@ const createGroupSchema = (t: Translate) =>
         parsed.every((item) => typeof item === 'string'),
       predicateMessage: 'Expected a JSON array of group identifiers',
     }),
+    MaxTokenAutoGroups: positiveIntegerSchema(t('Enter a positive integer')),
     DefaultUseAutoGroup: z.boolean(),
     GroupSpecialUsableGroup: createJsonStringField(t),
     DesktopClaudeGroup: z.string().min(1),
@@ -207,6 +209,7 @@ export function RatioSettingsCard({
     UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
     GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
     AutoGroups: normalizeJsonString(groupDefaults.AutoGroups),
+    MaxTokenAutoGroups: groupDefaults.MaxTokenAutoGroups,
     DefaultUseAutoGroup: groupDefaults.DefaultUseAutoGroup,
     GroupSpecialUsableGroup: normalizeJsonString(
       groupDefaults.GroupSpecialUsableGroup
@@ -299,6 +302,7 @@ export function RatioSettingsCard({
       UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
       GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
       AutoGroups: normalizeJsonString(groupDefaults.AutoGroups),
+      MaxTokenAutoGroups: groupDefaults.MaxTokenAutoGroups,
       DefaultUseAutoGroup: groupDefaults.DefaultUseAutoGroup,
       GroupSpecialUsableGroup: normalizeJsonString(
         groupDefaults.GroupSpecialUsableGroup
@@ -375,6 +379,7 @@ export function RatioSettingsCard({
         UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
         GroupGroupRatio: normalizeJsonString(values.GroupGroupRatio),
         AutoGroups: normalizeJsonString(values.AutoGroups),
+        MaxTokenAutoGroups: values.MaxTokenAutoGroups,
         DefaultUseAutoGroup: values.DefaultUseAutoGroup,
         GroupSpecialUsableGroup: normalizeJsonString(
           values.GroupSpecialUsableGroup
