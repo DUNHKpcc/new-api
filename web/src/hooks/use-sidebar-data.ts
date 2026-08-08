@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
+  BadgePercent,
   Box,
   CreditCard,
   Download,
@@ -38,6 +39,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
+import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -48,6 +50,8 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const hasPromotion = Boolean(status?.discount_notice?.trim())
 
   return {
     navGroups: [
@@ -113,6 +117,9 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+            iconBadge: hasPromotion
+              ? { icon: BadgePercent, label: t('Discount') }
+              : undefined,
           },
           {
             title: t('Profile'),

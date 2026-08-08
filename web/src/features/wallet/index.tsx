@@ -328,6 +328,7 @@ export function Wallet(props: WalletProps) {
                   enableWaffoPancakeTopup={
                     topupInfo?.enable_waffo_pancake_topup
                   }
+                  promotionContent={status?.discount_notice}
                 />
               </div>
 

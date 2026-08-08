@@ -48,13 +48,14 @@ import {
 } from '@/components/ui/sidebar'
 
 import { checkIsActive } from '../lib/url-utils'
-import {
-  type NavCollapsible,
-  type NavChatPresets,
-  type NavLink,
-  type NavGroup as NavGroupProps,
+import type {
+  NavCollapsible,
+  NavChatPresets,
+  NavLink,
+  NavGroup as NavGroupProps,
 } from '../types'
 import { ChatPresetsItem } from './chat-presets-item'
+import { NavItemIcon } from './nav-item-icon'
 
 /**
  * Sidebar navigation group component
@@ -129,7 +130,7 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
         tooltip={item.title}
         render={<Link to={item.url} onClick={() => setOpenMobile(false)} />}
       >
-        {item.icon && <item.icon className='shrink-0' />}
+        <NavItemIcon icon={item.icon} badge={item.iconBadge} />
         <span className='min-w-0 flex-1 truncate'>{item.title}</span>
         {item.badge && <NavBadge>{item.badge}</NavBadge>}
       </SidebarMenuButton>
@@ -172,7 +173,7 @@ function SidebarMenuCollapsible({
         className='group/collapsible-trigger'
         render={<SidebarMenuButton tooltip={item.title} />}
       >
-        {item.icon && <item.icon className='shrink-0' />}
+        <NavItemIcon icon={item.icon} badge={item.iconBadge} />
         <span className='min-w-0 flex-1 truncate'>{item.title}</span>
         {item.badge && <NavBadge>{item.badge}</NavBadge>}
         <ChevronRight className='ms-auto size-4 shrink-0 transition-transform duration-200 group-data-[panel-open]/collapsible-trigger:rotate-90' />
@@ -187,7 +188,7 @@ function SidebarMenuCollapsible({
                   <Link to={subItem.url} onClick={() => setOpenMobile(false)} />
                 }
               >
-                {subItem.icon && <subItem.icon className='shrink-0' />}
+                <NavItemIcon icon={subItem.icon} badge={subItem.iconBadge} />
                 <span className='min-w-0 flex-1 truncate'>{subItem.title}</span>
                 {subItem.badge && <NavBadge>{subItem.badge}</NavBadge>}
               </SidebarMenuSubButton>
@@ -221,7 +222,7 @@ function SidebarMenuCollapsedDropdown({
             />
           }
         >
-          {item.icon && <item.icon className='shrink-0' />}
+          <NavItemIcon icon={item.icon} badge={item.iconBadge} />
           <span className='min-w-0 flex-1 truncate'>{item.title}</span>
           {item.badge && <NavBadge>{item.badge}</NavBadge>}
           <ChevronRight className='ms-auto size-4 shrink-0 transition-transform duration-200 group-data-[popup-open]/dropdown-trigger:rotate-90' />
@@ -242,7 +243,7 @@ function SidebarMenuCollapsedDropdown({
                   />
                 }
               >
-                {sub.icon && <sub.icon />}
+                <NavItemIcon icon={sub.icon} badge={sub.iconBadge} />
                 <span className='max-w-52 text-wrap'>{sub.title}</span>
                 {sub.badge && (
                   <span className='ms-auto text-xs'>{sub.badge}</span>
