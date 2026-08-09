@@ -16,15 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-// ============================================================================
-// Wallet Hooks Exports
-// ============================================================================
+export type LotteryItem = {
+  id: string
+  title: string
+  content: string
+  winnerInfo: string
+  image: string
+  publishDate: string
+}
 
-export * from './use-topup-info'
-export * from './use-topup-summary'
-export * from './use-payment'
-export * from './use-affiliate'
-export * from './use-redemption'
-export * from './use-creem-payment'
-export * from './use-waffo-payment'
-export * from './use-waffo-pancake-payment'
+export type LotteryItemsResponse = {
+  success: boolean
+  message: string
+  data?: LotteryItem[]
+}

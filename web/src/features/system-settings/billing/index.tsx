@@ -65,6 +65,7 @@ const defaultBillingSettings: BillingSettings = {
   PayAddress: '',
   EpayId: '',
   EpayKey: '',
+  'payment_setting.epay_currency': 'CNY',
   Price: 7.3,
   MinTopUp: 1,
   CustomCallbackAddress: '',

@@ -21,13 +21,17 @@ import type { NotificationFeedItem } from './notification-feed'
 type NotificationSections = {
   notice: NotificationFeedItem[]
   timeline: NotificationFeedItem[]
+  lottery: NotificationFeedItem[]
 }
 
 export function partitionNotificationItems(
   items: NotificationFeedItem[]
 ): NotificationSections {
   return {
-    notice: items.filter((item) => item.source !== 'announcement'),
+    notice: items.filter(
+      (item) => item.source === 'discount' || item.source === 'notice'
+    ),
     timeline: items.filter((item) => item.source === 'announcement'),
+    lottery: items.filter((item) => item.source === 'lottery'),
   }
 }

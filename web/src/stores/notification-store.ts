@@ -26,6 +26,8 @@ interface NotificationState {
   lastReadNotice: string
   // Array of read announcement keys (id or content hash)
   readAnnouncementKeys: string[]
+  // Array of read lottery keys (id or content hash)
+  readLotteryKeys: string[]
   // Timestamp of last "Close Today" action
   closedUntilDate: string | null
 
@@ -33,13 +35,14 @@ interface NotificationState {
   markDiscountNoticeRead: (noticeContent: string) => void
   markNoticeRead: (noticeContent: string) => void
   markAnnouncementsRead: (keys: string[]) => void
+  markLotteriesRead: (keys: string[]) => void
   setClosedUntilDate: (date: string | null) => void
   isAnnouncementRead: (key: string) => boolean
   isNoticeClosed: () => boolean
 }
 
 /**
- * Notification store for tracking read status of discount notices, Notice, and Announcements
+ * Notification store for tracking read status across the notification center.
  * Persists to localStorage to maintain state across sessions
  */
 export const useNotificationStore = create<NotificationState>()(
@@ -48,6 +51,7 @@ export const useNotificationStore = create<NotificationState>()(
       lastReadDiscountNotice: '',
       lastReadNotice: '',
       readAnnouncementKeys: [],
+      readLotteryKeys: [],
       closedUntilDate: null,
 
       markDiscountNoticeRead: (noticeContent: string) => {
@@ -65,6 +69,12 @@ export const useNotificationStore = create<NotificationState>()(
           readAnnouncementKeys: [
             ...new Set([...state.readAnnouncementKeys, ...keys]),
           ],
+        }))
+      },
+
+      markLotteriesRead: (keys: string[]) => {
+        set((state) => ({
+          readLotteryKeys: [...new Set([...state.readLotteryKeys, ...keys])],
         }))
       },
 
@@ -90,6 +100,7 @@ export const useNotificationStore = create<NotificationState>()(
         lastReadDiscountNotice: state.lastReadDiscountNotice,
         lastReadNotice: state.lastReadNotice,
         readAnnouncementKeys: state.readAnnouncementKeys,
+        readLotteryKeys: state.readLotteryKeys,
         closedUntilDate: state.closedUntilDate,
       }),
     }

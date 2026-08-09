@@ -22,6 +22,7 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  Gift,
   Megaphone,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -64,7 +65,9 @@ function NotificationItem(props: NotificationItemProps) {
     /[^a-zA-Z0-9_-]/g,
     '-'
   )}`
-  const preview = getNotificationPreview(props.item.content)
+  const preview = getNotificationPreview(
+    [props.item.title, props.item.content].filter(Boolean).join(' ')
+  )
   const publishedAt = props.item.publishDate
     ? new Date(props.item.publishDate)
     : null
@@ -97,6 +100,11 @@ function NotificationItem(props: NotificationItemProps) {
         className='text-destructive size-3.5 shrink-0'
         aria-hidden='true'
       />
+    )
+  } else if (props.item.source === 'lottery') {
+    sourceLabel = t('Lottery')
+    sourceMarker = (
+      <Gift className='text-primary size-3.5 shrink-0' aria-hidden='true' />
     )
   }
 
@@ -167,10 +175,30 @@ function NotificationItem(props: NotificationItemProps) {
 
       {props.expanded ? (
         <div id={detailId} className='bg-muted/20 border-t px-3 py-3 text-sm'>
-          <RichContent breaks content={props.item.content} />
+          {props.item.title ? (
+            <h3 className='mb-2 font-semibold break-words'>
+              {props.item.title}
+            </h3>
+          ) : null}
+          {props.item.image ? (
+            <img
+              src={props.item.image}
+              alt={props.item.title || t('Lottery image')}
+              className='mb-3 aspect-video w-full rounded-md border object-cover'
+            />
+          ) : null}
+          <div className='break-words'>
+            <RichContent breaks content={props.item.content} />
+          </div>
           {props.item.extra ? (
             <div className='text-muted-foreground mt-2 text-xs'>
               <RichContent breaks content={props.item.extra} />
+            </div>
+          ) : null}
+          {props.item.winnerInfo ? (
+            <div className='bg-background mt-3 rounded-md border p-2.5 text-xs'>
+              <p className='mb-1 font-medium'>{t('Winning information')}</p>
+              <RichContent breaks content={props.item.winnerInfo} />
             </div>
           ) : null}
         </div>
@@ -187,8 +215,34 @@ type CompactNotificationPreviewProps = {
 
 function CompactNotificationPreview(props: CompactNotificationPreviewProps) {
   const { t } = useTranslation()
-  const preview = getNotificationPreview(props.item.content, 88)
-  const label = props.item.source === 'discount' ? t('Discount') : t('Unread')
+  const preview = getNotificationPreview(
+    [props.item.title, props.item.content].filter(Boolean).join(' '),
+    88
+  )
+  let label = t('Unread')
+  if (props.item.source === 'discount') {
+    label = t('Discount')
+  } else if (props.item.source === 'lottery') {
+    label = t('Lottery')
+  }
+  let marker: ReactNode = (
+    <span
+      className='bg-destructive size-2 shrink-0 rounded-full'
+      aria-hidden='true'
+    />
+  )
+  if (props.item.source === 'discount') {
+    marker = (
+      <BadgePercent
+        className='text-destructive size-4 shrink-0'
+        aria-hidden='true'
+      />
+    )
+  } else if (props.item.source === 'lottery') {
+    marker = (
+      <Gift className='text-primary size-4 shrink-0' aria-hidden='true' />
+    )
+  }
 
   return (
     <button
@@ -198,17 +252,7 @@ function CompactNotificationPreview(props: CompactNotificationPreviewProps) {
       onClick={() => props.onOpen(props.item.key)}
     >
       <span className='flex items-center gap-2'>
-        {props.item.source === 'discount' ? (
-          <BadgePercent
-            className='text-destructive size-4 shrink-0'
-            aria-hidden='true'
-          />
-        ) : (
-          <span
-            className='bg-destructive size-2 shrink-0 rounded-full'
-            aria-hidden='true'
-          />
-        )}
+        {marker}
         <span className='text-destructive text-xs font-semibold'>{label}</span>
         {props.unreadCount ? (
           <Badge

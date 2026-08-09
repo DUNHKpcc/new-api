@@ -303,6 +303,13 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "payment_setting.epay_currency":
+		currency, currencyErr := operation_setting.NormalizeEpayCurrency(option.Value.(string))
+		if currencyErr != nil {
+			common.ApiErrorMsg(c, currencyErr.Error())
+			return
+		}
+		option.Value = currency
 	case operation_setting.ToolPriceOptionKey:
 		err = operation_setting.ValidateToolPricesJSON(option.Value.(string))
 		if err != nil {
@@ -413,6 +420,12 @@ func UpdateOption(c *gin.Context) {
 		}
 	case "ResourceDownloadItems":
 		_, err = parseResourceDownloadItems(option.Value.(string))
+		if err != nil {
+			common.ApiErrorMsg(c, err.Error())
+			return
+		}
+	case "LotteryItems":
+		_, err = parseLotteryItems(option.Value.(string))
 		if err != nil {
 			common.ApiErrorMsg(c, err.Error())
 			return

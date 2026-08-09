@@ -102,6 +102,13 @@ const paymentSchema = z.object({
   }, 'Provide a valid callback URL starting with http:// or https://'),
   EpayId: z.string(),
   EpayKey: z.string(),
+  EpayCurrency: z
+    .string()
+    .trim()
+    .regex(
+      /^[A-Za-z]{3}$/,
+      'Enter a three-letter currency code, for example CNY'
+    ),
   Price: z.coerce.number().min(0),
   MinTopUp: z.coerce.number().min(0),
   CustomCallbackAddress: z
@@ -421,6 +428,7 @@ export function PaymentSettingsSection({
       PayAddress: removeTrailingSlash(values.PayAddress),
       EpayId: values.EpayId.trim(),
       EpayKey: values.EpayKey.trim(),
+      EpayCurrency: values.EpayCurrency.trim().toUpperCase() || 'CNY',
       Price: values.Price,
       MinTopUp: values.MinTopUp,
       CustomCallbackAddress: removeTrailingSlash(values.CustomCallbackAddress),
@@ -463,6 +471,7 @@ export function PaymentSettingsSection({
       PayAddress: removeTrailingSlash(initialRef.current.PayAddress),
       EpayId: initialRef.current.EpayId.trim(),
       EpayKey: initialRef.current.EpayKey.trim(),
+      EpayCurrency: initialRef.current.EpayCurrency.trim().toUpperCase(),
       Price: initialRef.current.Price,
       MinTopUp: initialRef.current.MinTopUp,
       CustomCallbackAddress: removeTrailingSlash(
@@ -518,6 +527,13 @@ export function PaymentSettingsSection({
 
     if (sanitized.EpayKey && sanitized.EpayKey !== initial.EpayKey) {
       updates.push({ key: 'EpayKey', value: sanitized.EpayKey })
+    }
+
+    if (sanitized.EpayCurrency !== initial.EpayCurrency) {
+      updates.push({
+        key: 'payment_setting.epay_currency',
+        value: sanitized.EpayCurrency,
+      })
     }
 
     if (sanitized.Price !== initial.Price) {
@@ -1244,6 +1260,39 @@ export function PaymentSettingsSection({
                         </FormControl>
                         <FormDescription>
                           {t('Leave blank unless rotating the secret')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='EpayCurrency'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Epay settlement currency')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder='CNY'
+                            minLength={3}
+                            maxLength={3}
+                            pattern='[A-Za-z]{3}'
+                            autoComplete='off'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(
+                                event.target.value
+                                  .replaceAll(/[^A-Za-z]/g, '')
+                                  .toUpperCase()
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Currency used by Epay callbacks, for example CNY or USD'
+                          )}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

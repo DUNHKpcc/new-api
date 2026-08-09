@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { BadgePercent, Bell, Check, CheckCheck, Megaphone } from 'lucide-react'
+import {
+  BadgePercent,
+  Bell,
+  Check,
+  CheckCheck,
+  Gift,
+  Megaphone,
+} from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -43,6 +50,7 @@ type NotificationListProps = {
   items: NotificationFeedItem[]
   loading: boolean
   emptyMessage: string
+  emptyIcon?: ReactNode
   onMarkRead: (item: NotificationFeedItem) => void
 }
 
@@ -60,7 +68,7 @@ function NotificationList(props: NotificationListProps) {
   if (props.items.length === 0) {
     return (
       <div className='text-muted-foreground flex h-48 flex-col items-center justify-center gap-2 text-sm'>
-        <Megaphone className='size-5' aria-hidden='true' />
+        {props.emptyIcon ?? <Megaphone className='size-5' aria-hidden='true' />}
         <span>{props.emptyMessage}</span>
       </div>
     )
@@ -93,6 +101,14 @@ function NotificationList(props: NotificationListProps) {
             sourceMarker = (
               <BadgePercent
                 className='text-destructive size-3.5 shrink-0'
+                aria-hidden='true'
+              />
+            )
+          } else if (item.source === 'lottery') {
+            sourceLabel = t('Lottery')
+            sourceMarker = (
+              <Gift
+                className='text-primary size-3.5 shrink-0'
                 aria-hidden='true'
               />
             )
@@ -134,12 +150,30 @@ function NotificationList(props: NotificationListProps) {
                   </Button>
                 ) : null}
               </div>
-              <div className='text-sm leading-6'>
+              {item.title ? (
+                <h3 className='mb-2 text-sm font-semibold break-words'>
+                  {item.title}
+                </h3>
+              ) : null}
+              {item.image ? (
+                <img
+                  src={item.image}
+                  alt={item.title || t('Lottery image')}
+                  className='mb-3 aspect-video w-full rounded-md border object-cover'
+                />
+              ) : null}
+              <div className='text-sm leading-6 break-words'>
                 <RichContent breaks content={item.content} />
               </div>
               {item.extra ? (
                 <div className='text-muted-foreground mt-2 text-xs'>
                   <RichContent breaks content={item.extra} />
+                </div>
+              ) : null}
+              {item.winnerInfo ? (
+                <div className='bg-muted/40 mt-3 rounded-md border p-2.5 text-xs'>
+                  <p className='mb-1 font-medium'>{t('Winning information')}</p>
+                  <RichContent breaks content={item.winnerInfo} />
                 </div>
               ) : null}
             </article>
@@ -200,7 +234,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
         </PopoverHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className='grid w-full grid-cols-2'>
+          <TabsList className='grid w-full grid-cols-3'>
             <TabsTrigger value='notice' className='gap-1.5'>
               <Bell className='size-3.5' aria-hidden='true' />
               {t('Notice')}
@@ -208,6 +242,10 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             <TabsTrigger value='timeline' className='gap-1.5'>
               <Megaphone className='size-3.5' aria-hidden='true' />
               {t('Timeline')}
+            </TabsTrigger>
+            <TabsTrigger value='lottery' className='gap-1.5'>
+              <Gift className='size-3.5' aria-hidden='true' />
+              {t('Lottery')}
             </TabsTrigger>
           </TabsList>
 
@@ -225,6 +263,16 @@ export function NotificationPopover(props: NotificationPopoverProps) {
               items={sections.timeline}
               loading={notifications.loading}
               emptyMessage={t('No system announcements')}
+              onMarkRead={notifications.markAsRead}
+            />
+          </TabsContent>
+
+          <TabsContent value='lottery' className='mt-2'>
+            <NotificationList
+              items={sections.lottery}
+              loading={notifications.loading}
+              emptyMessage={t('No lottery content at this time')}
+              emptyIcon={<Gift className='size-5' aria-hidden='true' />}
               onMarkRead={notifications.markAsRead}
             />
           </TabsContent>

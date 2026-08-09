@@ -25,6 +25,7 @@ import { DashboardSection } from './dashboard-section'
 import { DiscountNoticeSection } from './discount-notice-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
+import { LotterySection } from './lottery-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
 import { VersionUpdateSection } from './version-update-section'
 
@@ -63,6 +64,13 @@ const CONTENT_SECTIONS = [
         enabled={settings['console_setting.announcements_enabled']}
         data={settings['console_setting.announcements']}
       />
+    ),
+  },
+  {
+    id: 'lottery',
+    titleKey: 'Lottery',
+    build: (settings: ContentSettings) => (
+      <LotterySection value={settings.LotteryItems} />
     ),
   },
   {

@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,14 +11,12 @@ import (
 	"github.com/QuantumNous/new-api/common"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/image/webp"
 )
 
 const (
-	maxResourceDownloadItems   = 12
-	maxResourceThumbnailBytes  = 300 * 1024
-	maxResourceDownloadConfig  = maxResourceDownloadItems * ((maxResourceThumbnailBytes*4+2)/3 + 4*1024)
-	maxResourceThumbnailPixels = 4096 * 4096
+	maxResourceDownloadItems  = 12
+	maxResourceThumbnailBytes = 300 * 1024
+	maxResourceDownloadConfig = maxResourceDownloadItems * ((maxResourceThumbnailBytes*4+2)/3 + 4*1024)
 )
 
 type ResourceDownloadItem struct {
@@ -75,25 +71,8 @@ func parseResourceDownloadItems(value string) ([]ResourceDownloadItem, error) {
 			return nil, fmt.Errorf("第 %d 个资源的下载链接必须是有效的 HTTP(S) 地址", itemNumber)
 		}
 
-		const webpDataPrefix = "data:image/webp;base64,"
-		if !strings.HasPrefix(item.Thumbnail, webpDataPrefix) {
-			return nil, fmt.Errorf("第 %d 个资源的缩略图必须是 WebP 格式", itemNumber)
-		}
-		thumbnailBytes, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(item.Thumbnail, webpDataPrefix))
-		if err != nil {
-			return nil, fmt.Errorf("第 %d 个资源的缩略图数据无效", itemNumber)
-		}
-		if len(thumbnailBytes) == 0 || len(thumbnailBytes) > maxResourceThumbnailBytes {
-			return nil, fmt.Errorf("第 %d 个资源的缩略图不能超过 300 KB", itemNumber)
-		}
-		thumbnailConfig, err := webp.DecodeConfig(bytes.NewReader(thumbnailBytes))
-		if err != nil {
-			return nil, fmt.Errorf("第 %d 个资源的缩略图不是有效的 WebP 图片", itemNumber)
-		}
-		if thumbnailConfig.Width <= 0 ||
-			thumbnailConfig.Height <= 0 ||
-			thumbnailConfig.Width > maxResourceThumbnailPixels/thumbnailConfig.Height {
-			return nil, fmt.Errorf("第 %d 个资源的缩略图尺寸过大", itemNumber)
+		if err := validateManagedWebPDataURL(item.Thumbnail, maxResourceThumbnailBytes); err != nil {
+			return nil, fmt.Errorf("第 %d 个资源的缩略图%s", itemNumber, err.Error())
 		}
 	}
 

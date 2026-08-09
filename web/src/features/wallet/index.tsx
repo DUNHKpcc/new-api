@@ -35,6 +35,7 @@ import { WalletStatsCard } from './components/wallet-stats-card'
 import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
 import {
   useTopupInfo,
+  useTopupSummary,
   usePayment,
   useAffiliate,
   useRedemption,
@@ -83,6 +84,7 @@ export function Wallet(props: WalletProps) {
   const { status } = useStatus()
   const { currency } = useSystemConfig()
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
+  const topupSummaryQuery = useTopupSummary()
 
   // Calculate effective exchange rate - when display type is USD, use rate of 1
   const effectiveUsdExchangeRate = useMemo(() => {
@@ -288,7 +290,13 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <WalletStatsCard user={user} loading={userLoading} />
+            <WalletStatsCard
+              user={user}
+              topupSummary={topupSummaryQuery.data ?? null}
+              topupSummaryError={topupSummaryQuery.isError}
+              topupSummaryLoading={topupSummaryQuery.isLoading}
+              loading={userLoading}
+            />
 
             <div
               className={

@@ -16,15 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-// ============================================================================
-// Wallet Hooks Exports
-// ============================================================================
+import assert from 'node:assert/strict'
+import { describe, test } from 'node:test'
 
-export * from './use-topup-info'
-export * from './use-topup-summary'
-export * from './use-payment'
-export * from './use-affiliate'
-export * from './use-redemption'
-export * from './use-creem-payment'
-export * from './use-waffo-payment'
-export * from './use-waffo-pancake-payment'
+import { formatPaymentMinorAmount } from '../format'
+
+describe('verified payment amount formatting', () => {
+  test('formats integer minor units without quota conversion', () => {
+    const formatted = formatPaymentMinorAmount('1234', 'CNY')
+
+    assert.match(formatted, /12\.34/)
+  })
+
+  test('returns unavailable marker for unsafe or invalid amounts', () => {
+    assert.equal(formatPaymentMinorAmount('9007199254740992', 'CNY'), '--')
+    assert.equal(formatPaymentMinorAmount('1234', 'invalid'), '--')
+  })
+})

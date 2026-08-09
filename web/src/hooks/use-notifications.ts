@@ -22,15 +22,17 @@ import { useCallback, useMemo } from 'react'
 import {
   buildNotificationFeed,
   getAnnouncementNotificationKey,
+  getLotteryNotificationKey,
   type AnnouncementNotification,
   type NotificationFeedItem,
 } from '@/components/notifications/notification-feed'
+import { getLotteryItems } from '@/features/lottery/api'
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
 import { useNotificationStore } from '@/stores/notification-store'
 
 /**
- * Hook to manage notifications (Discount Notice + Notice + Announcements)
+ * Hook to manage all notification center sources.
  * Provides unread counts and read status management
  */
 export function useNotifications() {
@@ -39,6 +41,11 @@ export function useNotifications() {
     queryKey: ['notice'],
     queryFn: getNotice,
     staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+  const { data: lotteryResponse, isLoading: lotteryLoading } = useQuery({
+    queryKey: ['lottery-items'],
+    queryFn: getLotteryItems,
+    staleTime: 1000 * 60 * 5,
   })
 
   // Fetch Announcements from status
@@ -51,15 +58,21 @@ export function useNotifications() {
       20
     )
   }, [announcementsEnabled, status?.announcements])
+  const lotteries = useMemo(
+    () => (lotteryResponse?.success ? lotteryResponse.data || [] : []),
+    [lotteryResponse]
+  )
 
   // Notification store
   const {
     lastReadDiscountNotice,
     lastReadNotice,
     readAnnouncementKeys,
+    readLotteryKeys,
     markDiscountNoticeRead,
     markNoticeRead,
     markAnnouncementsRead,
+    markLotteriesRead,
   } = useNotificationStore()
 
   // Extract notice content
@@ -77,6 +90,8 @@ export function useNotifications() {
         lastReadDiscountNotice,
         lastReadNotice,
         readAnnouncementKeys,
+        lotteries,
+        readLotteryKeys,
       }),
     [
       announcements,
@@ -85,6 +100,8 @@ export function useNotifications() {
       lastReadNotice,
       noticeContent,
       readAnnouncementKeys,
+      readLotteryKeys,
+      lotteries,
     ]
   )
 
@@ -102,9 +119,19 @@ export function useNotifications() {
         return
       }
 
+      if (item.source === 'lottery') {
+        markLotteriesRead([item.key])
+        return
+      }
+
       markAnnouncementsRead([item.key])
     },
-    [markAnnouncementsRead, markDiscountNoticeRead, markNoticeRead]
+    [
+      markAnnouncementsRead,
+      markDiscountNoticeRead,
+      markLotteriesRead,
+      markNoticeRead,
+    ]
   )
 
   const markAllAsRead = useCallback(() => {
@@ -123,18 +150,23 @@ export function useNotifications() {
         )
       )
     }
+    if (lotteries.length > 0) {
+      markLotteriesRead(lotteries.map(getLotteryNotificationKey))
+    }
   }, [
     announcements,
     discountNoticeContent,
+    lotteries,
     markAnnouncementsRead,
     markDiscountNoticeRead,
+    markLotteriesRead,
     markNoticeRead,
     noticeContent,
   ])
 
   return {
     items,
-    loading: noticeLoading || statusLoading,
+    loading: noticeLoading || lotteryLoading || statusLoading,
     unreadCount: items.filter((item) => item.unread).length,
     markAsRead,
     markAllAsRead,

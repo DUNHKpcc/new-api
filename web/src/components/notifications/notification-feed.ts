@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { LotteryItem } from '@/features/lottery/types'
+
 export type AnnouncementNotification = {
   id?: number | string
   type?: string
@@ -26,10 +28,13 @@ export type AnnouncementNotification = {
 
 export type NotificationFeedItem = {
   key: string
-  source: 'discount' | 'notice' | 'announcement'
+  source: 'discount' | 'notice' | 'announcement' | 'lottery'
   type?: string
+  title?: string
   content: string
   extra?: string
+  winnerInfo?: string
+  image?: string
   publishDate?: string | Date
   unread: boolean
 }
@@ -41,6 +46,8 @@ type BuildNotificationFeedOptions = {
   lastReadDiscountNotice: string
   lastReadNotice: string
   readAnnouncementKeys: string[]
+  lotteries?: LotteryItem[]
+  readLotteryKeys?: string[]
 }
 
 const notificationSourcePriority: Record<
@@ -49,7 +56,22 @@ const notificationSourcePriority: Record<
 > = {
   discount: 0,
   notice: 1,
-  announcement: 2,
+  lottery: 2,
+  announcement: 3,
+}
+
+export function getLotteryNotificationKey(lottery: LotteryItem): string {
+  const fingerprint = hashString(
+    JSON.stringify({
+      title: lottery.title.trim(),
+      content: lottery.content.trim(),
+      winnerInfo: lottery.winnerInfo.trim(),
+      publishDate: lottery.publishDate,
+    })
+  )
+  if (lottery.id) return `lottery:id:${lottery.id}:${fingerprint}`
+
+  return `lottery:hash:${fingerprint}`
 }
 
 function hashString(input: string): string {
@@ -137,6 +159,22 @@ export function buildNotificationFeed(
     })
   }
 
+  const readLotteryKeys = new Set(options.readLotteryKeys ?? [])
+  for (const lottery of options.lotteries ?? []) {
+    const key = getLotteryNotificationKey(lottery)
+    items.push({
+      key,
+      source: 'lottery',
+      title: lottery.title.trim(),
+      content: lottery.content.trim(),
+      winnerInfo: lottery.winnerInfo.trim() || undefined,
+      image: lottery.image,
+      publishDate: lottery.publishDate,
+      unread: !readLotteryKeys.has(key),
+      originalIndex: items.length,
+    })
+  }
+
   items.sort((left, right) => {
     if (left.unread !== right.unread) return left.unread ? -1 : 1
     if (left.source !== right.source) {
@@ -163,8 +201,11 @@ export function buildNotificationFeed(
     key: item.key,
     source: item.source,
     type: item.type,
+    title: item.title,
     content: item.content,
     extra: item.extra,
+    winnerInfo: item.winnerInfo,
+    image: item.image,
     publishDate: item.publishDate,
     unread: item.unread,
   }))

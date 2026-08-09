@@ -19,9 +19,18 @@ type TopUp struct {
 	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	PaidAmountMinor int64   `json:"-"`
+	PaidCurrency    string  `json:"-" gorm:"type:varchar(3)"`
+	ProviderTradeNo string  `json:"-" gorm:"type:varchar(255);index"`
 	CreateTime      int64   `json:"create_time"`
 	CompleteTime    int64   `json:"complete_time"`
 	Status          string  `json:"status"`
+}
+
+type VerifiedTopUpPaymentTotal struct {
+	PaymentProvider string `json:"payment_provider"`
+	Currency        string `json:"currency" gorm:"column:paid_currency"`
+	AmountMinor     int64  `json:"amount_minor,string" gorm:"column:paid_amount_minor"`
 }
 
 const (
@@ -77,6 +86,28 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 		return nil
 	}
 	return topUp
+}
+
+// GetVerifiedTopUpPaymentTotals returns provider-confirmed payment totals without
+// converting them to quota. Passing no providers includes every verified provider.
+func GetVerifiedTopUpPaymentTotals(userId int, providers ...string) ([]VerifiedTopUpPaymentTotal, error) {
+	totals := make([]VerifiedTopUpPaymentTotal, 0)
+	query := DB.Model(&TopUp{}).
+		Select("payment_provider, paid_currency, SUM(paid_amount_minor) AS paid_amount_minor").
+		Where(
+			"user_id = ? AND status = ? AND paid_amount_minor > 0 AND paid_currency <> ? AND provider_trade_no <> ?",
+			userId,
+			common.TopUpStatusSuccess,
+			"",
+			"",
+		)
+	if len(providers) > 0 {
+		query = query.Where("payment_provider IN ?", providers)
+	}
+	err := query.Group("payment_provider, paid_currency").
+		Order("payment_provider ASC, paid_currency ASC").
+		Scan(&totals).Error
+	return totals, err
 }
 
 func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, targetStatus string) error {

@@ -64,6 +64,9 @@ export function useUpdateOption() {
         if (variables.key === 'ResourceDownloadItems') {
           queryClient.invalidateQueries({ queryKey: ['resource-downloads'] })
         }
+        if (variables.key === 'LotteryItems') {
+          queryClient.invalidateQueries({ queryKey: ['lottery-items'] })
+        }
 
         toast.success(i18next.t('Setting updated successfully'))
       } else {

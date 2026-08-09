@@ -61,6 +61,31 @@ export function formatCurrency(amount: number | string): string {
   }).format(numeric)
 }
 
+export function formatPaymentMinorAmount(
+  amountMinor: string,
+  currency: string
+): string {
+  const numericMinor = Number(amountMinor)
+  const normalizedCurrency = currency.trim().toUpperCase()
+  if (
+    !Number.isSafeInteger(numericMinor) ||
+    !/^[A-Z]{3}$/.test(normalizedCurrency)
+  ) {
+    return '--'
+  }
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numericMinor / 100)
+  } catch {
+    return `${normalizedCurrency} ${(numericMinor / 100).toFixed(2)}`
+  }
+}
+
 /**
  * Get discount label for display (e.g., "20% OFF")
  */

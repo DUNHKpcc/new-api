@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -20,6 +21,39 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+const epayMinorUnitsPerMajor = int64(100)
+
+func parseEpayPaidAmountMinor(money string) (int64, error) {
+	amount, err := decimal.NewFromString(money)
+	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
+		return 0, fmt.Errorf("invalid Epay paid amount")
+	}
+	scaled := amount.Mul(decimal.NewFromInt(epayMinorUnitsPerMajor))
+	if !scaled.IsInteger() || scaled.GreaterThan(decimal.NewFromInt(math.MaxInt64)) {
+		return 0, fmt.Errorf("invalid Epay paid amount precision or range")
+	}
+	return scaled.IntPart(), nil
+}
+
+func applyEpayVerifiedPayment(topUp *model.TopUp, verifyInfo *epay.VerifyRes) (decimal.Decimal, error) {
+	if topUp == nil || verifyInfo == nil {
+		return decimal.Zero, fmt.Errorf("missing Epay payment data")
+	}
+	paidAmountMinor, err := parseEpayPaidAmountMinor(verifyInfo.Money)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	if verifyInfo.TradeNo == "" {
+		return decimal.Zero, fmt.Errorf("missing Epay provider trade number")
+	}
+
+	topUp.PaidAmountMinor = paidAmountMinor
+	topUp.PaidCurrency = operation_setting.GetEpayCurrency()
+	topUp.ProviderTradeNo = verifyInfo.TradeNo
+	actualMoney := decimal.NewFromInt(paidAmountMinor).Div(decimal.NewFromInt(epayMinorUnitsPerMajor))
+	return actualMoney, nil
+}
 
 func GetTopUpInfo(c *gin.Context) {
 	complianceConfirmed := operation_setting.IsPaymentComplianceConfirmed()
@@ -383,6 +417,15 @@ func EpayNotify(c *gin.Context) {
 			return
 		}
 		if topUp.Status == common.TopUpStatusPending {
+			actualMoney, paidAmountErr := applyEpayVerifiedPayment(topUp, verifyInfo)
+			if paidAmountErr != nil {
+				logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 实付金额未记录 trade_no=%s provider_trade_no=%s callback_money=%q client_ip=%s error=%q", verifyInfo.ServiceTradeNo, verifyInfo.TradeNo, verifyInfo.Money, c.ClientIP(), paidAmountErr))
+			} else {
+				expectedMoney := decimal.NewFromFloat(topUp.Money).Round(2)
+				if !expectedMoney.Equal(actualMoney) {
+					logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 回调实付金额与下单金额不同 trade_no=%s provider_trade_no=%s expected_money=%s actual_money=%s currency=%s client_ip=%s", verifyInfo.ServiceTradeNo, verifyInfo.TradeNo, expectedMoney.StringFixed(2), actualMoney.StringFixed(2), topUp.PaidCurrency, c.ClientIP()))
+				}
+			}
 			if topUp.PaymentMethod != verifyInfo.Type {
 				logger.LogInfo(c.Request.Context(), fmt.Sprintf("易支付 实际支付方式与订单不同 trade_no=%s order_payment_method=%s actual_type=%s client_ip=%s", verifyInfo.ServiceTradeNo, topUp.PaymentMethod, verifyInfo.Type, c.ClientIP()))
 				topUp.PaymentMethod = verifyInfo.Type
@@ -460,6 +503,20 @@ func GetUserTopUps(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(topups)
 	common.ApiSuccess(c, pageInfo)
+}
+
+func GetUserTopUpSummary(c *gin.Context) {
+	totals, err := model.GetVerifiedTopUpPaymentTotals(c.GetInt("id"), model.PaymentProviderEpay)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"basis":             "provider_verified_payment",
+		"covered_providers": []string{model.PaymentProviderEpay},
+		"default_currency":  operation_setting.GetEpayCurrency(),
+		"totals":            totals,
+	})
 }
 
 // GetAllTopUps 管理员获取全平台充值记录

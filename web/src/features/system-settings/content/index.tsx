@@ -26,6 +26,7 @@ import {
 
 const defaultContentSettings: ContentSettings = {
   DiscountNotice: '',
+  LotteryItems: '[]',
   VersionUpdateDetails: '',
   'console_setting.api_info': '[]',
   'console_setting.announcements': '[]',

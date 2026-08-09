@@ -114,4 +114,66 @@ describe('notification feed ordering', () => {
     assert.equal(feed[0]?.source, 'discount')
     assert.equal(feed[0]?.unread, true)
   })
+
+  test('preserves lottery image and winning information in the unread feed', () => {
+    const feed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      announcements: [],
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [],
+      readLotteryKeys: [],
+      lotteries: [
+        {
+          id: 'summer-draw',
+          title: 'Summer draw',
+          content: 'Join before Friday.',
+          winnerInfo: 'Winner #42',
+          image: 'data:image/webp;base64,UklGRg==',
+          publishDate: '2026-08-09T08:00:00Z',
+        },
+      ],
+    })
+
+    assert.equal(feed[0]?.source, 'lottery')
+    assert.match(feed[0]?.key ?? '', /^lottery:id:summer-draw:/)
+    assert.equal(feed[0]?.title, 'Summer draw')
+    assert.equal(feed[0]?.winnerInfo, 'Winner #42')
+    assert.equal(feed[0]?.image, 'data:image/webp;base64,UklGRg==')
+    assert.equal(feed[0]?.unread, true)
+  })
+
+  test('treats newly published winning information as unread', () => {
+    const lottery = {
+      id: 'summer-draw',
+      title: 'Summer draw',
+      content: 'Join before Friday.',
+      winnerInfo: '',
+      image: 'data:image/webp;base64,UklGRg==',
+      publishDate: '2026-08-09T08:00:00Z',
+    }
+    const initialFeed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      announcements: [],
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [],
+      lotteries: [lottery],
+    })
+    const updatedFeed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      announcements: [],
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [],
+      readLotteryKeys: [initialFeed[0]?.key ?? ''],
+      lotteries: [{ ...lottery, winnerInfo: 'Winner #42' }],
+    })
+
+    assert.notEqual(initialFeed[0]?.key, updatedFeed[0]?.key)
+    assert.equal(updatedFeed[0]?.unread, true)
+  })
 })

@@ -52,7 +52,7 @@ function blobToDataUrl(blob: Blob) {
   })
 }
 
-export async function compressResourceThumbnail(file: File): Promise<string> {
+export async function compressImageToWebP(file: File): Promise<string> {
   if (
     !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ||
     file.size === 0 ||
@@ -90,3 +90,5 @@ export async function compressResourceThumbnail(file: File): Promise<string> {
 
   throw new Error('Thumbnail is too large')
 }
+
+export const compressResourceThumbnail = compressImageToWebP

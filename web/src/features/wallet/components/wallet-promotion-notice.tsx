@@ -31,7 +31,10 @@ export function WalletPromotionNotice(props: WalletPromotionNoticeProps) {
   return (
     <Alert className='border-destructive/25 bg-destructive/[0.04]'>
       <BadgePercent className='text-destructive' aria-hidden='true' />
-      <AlertDescription className='text-foreground/90 break-words whitespace-pre-wrap'>
+      <AlertDescription
+        className='text-foreground/90 focus-visible:ring-ring/50 max-h-[min(30svh,16rem)] [scrollbar-width:thin] [scrollbar-gutter:stable] overflow-y-auto overscroll-contain pe-1 break-words whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none'
+        tabIndex={0}
+      >
         {content}
       </AlertDescription>
     </Alert>

@@ -41,6 +41,7 @@ export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
+export type TopupSummaryResponse = ApiResponse<TopupSummary>
 export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
 export type WaffoPaymentResponse = ApiResponse<
   { payment_url?: string } | string
@@ -242,6 +243,19 @@ export interface UserWalletData {
   aff_count: number
   /** User group */
   group: string
+}
+
+export interface VerifiedTopupPaymentTotal {
+  payment_provider: string
+  currency: string
+  amount_minor: string
+}
+
+export interface TopupSummary {
+  basis: 'provider_verified_payment'
+  covered_providers: string[]
+  default_currency: string
+  totals: VerifiedTopupPaymentTotal[]
 }
 
 /**

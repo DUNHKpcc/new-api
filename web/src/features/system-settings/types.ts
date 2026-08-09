@@ -169,6 +169,7 @@ export type AuthSettings = {
 
 export type ContentSettings = {
   DiscountNotice: string
+  LotteryItems: string
   VersionUpdateDetails: string
   'console_setting.api_info': string
   'console_setting.announcements': string
@@ -290,6 +291,7 @@ export type BillingSettings = {
   PayAddress: string
   EpayId: string
   EpayKey: string
+  'payment_setting.epay_currency': string
   Price: number
   MinTopUp: number
   CustomCallbackAddress: string
