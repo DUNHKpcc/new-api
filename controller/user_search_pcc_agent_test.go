@@ -25,10 +25,14 @@ func setupPccAgentUserSearchTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(
 		&model.User{},
+		&model.Option{},
 		&model.DesktopGrant{},
 		&model.ExternalIdentityClaim{},
 		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
+		&model.AffiliateProfile{},
+		&model.AffiliateCommission{},
+		&model.TopUp{},
 	))
 	model.DB = db
 	common.SetMainDatabaseType(common.DatabaseTypeSQLite)

@@ -136,6 +136,22 @@ func MaskEmail(email string) string {
 	return "***@" + email[atIndex+1:]
 }
 
+// MaskUsername keeps enough of a username to distinguish invited users without
+// exposing the complete account name.
+func MaskUsername(username string) string {
+	runes := []rune(strings.TrimSpace(username))
+	switch len(runes) {
+	case 0, 1:
+		return "***"
+	case 2:
+		return string(runes[:1]) + "***"
+	case 3:
+		return string(runes[:1]) + "***" + string(runes[2:])
+	default:
+		return string(runes[:2]) + "***" + string(runes[len(runes)-2:])
+	}
+}
+
 // MaskSensitiveInfo moved to the conversion kit (kitutil) because the types
 // package error formatting depends on it; host callers keep this name.
 func MaskSensitiveInfo(str string) string {

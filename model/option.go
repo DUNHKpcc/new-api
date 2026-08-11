@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -13,11 +15,37 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Option struct {
 	Key   string `json:"key" gorm:"primaryKey"`
 	Value string `json:"value"`
+}
+
+const (
+	EpayCurrencyOptionKey                  = "payment_setting.epay_currency"
+	PaymentComplianceConfirmedOptionKey    = "payment_setting.compliance_confirmed"
+	PaymentComplianceTermsVersionOptionKey = "payment_setting.compliance_terms_version"
+)
+
+var (
+	ErrOptionVersionConflict         = errors.New("option version conflict")
+	ErrPaymentComplianceRequired     = errors.New("payment compliance is required")
+	ErrAffiliateEpayCurrencyConflict = errors.New("Epay currency conflicts with the enabled affiliate commission setting")
+	ErrProtectedOptionKey            = errors.New("protected option key must use its canonical write path")
+)
+
+var protectedOptionKeys = []string{
+	operation_setting.AffiliateSettingOptionKey,
+	EpayCurrencyOptionKey,
+	"QuotaForInviter",
+	"QuotaForInvitee",
+	PaymentComplianceConfirmedOptionKey,
+	PaymentComplianceTermsVersionOptionKey,
+	"payment_setting.compliance_confirmed_at",
+	"payment_setting.compliance_confirmed_by",
+	"payment_setting.compliance_confirmed_ip",
 }
 
 func AllOption() ([]*Option, error) {
@@ -27,7 +55,7 @@ func AllOption() ([]*Option, error) {
 	return options, err
 }
 
-func InitOptionMap() {
+func InitOptionMap() error {
 	common.OptionMapRWMutex.Lock()
 	common.OptionMap = make(map[string]string)
 
@@ -138,6 +166,12 @@ func InitOptionMap() {
 	common.OptionMap["QuotaForNewUser"] = strconv.Itoa(common.QuotaForNewUser)
 	common.OptionMap["QuotaForInviter"] = strconv.Itoa(common.QuotaForInviter)
 	common.OptionMap["QuotaForInvitee"] = strconv.Itoa(common.QuotaForInvitee)
+	affiliateSettingJSON, err := operation_setting.MarshalAffiliateSetting(operation_setting.DefaultAffiliateSetting())
+	if err != nil {
+		common.SysError("failed to serialize default affiliate setting: " + err.Error())
+	} else {
+		common.OptionMap[operation_setting.AffiliateSettingOptionKey] = affiliateSettingJSON
+	}
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
@@ -188,28 +222,90 @@ func InitOptionMap() {
 	}
 
 	common.OptionMapRWMutex.Unlock()
-	loadOptionsFromDatabase()
+	if err := loadOptionsFromDatabase(); err != nil {
+		return fmt.Errorf("load options from database: %w", err)
+	}
+	result, err := backfillLegacyEpayEvidence()
+	if err != nil {
+		return fmt.Errorf("backfill legacy Epay evidence: %w", err)
+	}
+	if result.SuccessBackfilled != 0 || result.SuccessBlocked != 0 {
+		common.SysLog(fmt.Sprintf(
+			"legacy Epay evidence migration completed: success_backfilled=%d success_blocked=%d",
+			result.SuccessBackfilled,
+			result.SuccessBlocked,
+		))
+	}
+	return nil
 }
 
-func loadOptionsFromDatabase() {
-	options, _ := AllOption()
+func loadOptionsFromDatabase() error {
+	options, err := AllOption()
+	if err != nil {
+		return fmt.Errorf("query options: %w", err)
+	}
+	affiliateSettingJSON := ""
+	hasAffiliateSetting := false
 	for _, option := range options {
+		if option.Key == operation_setting.AffiliateSettingOptionKey {
+			affiliateSettingJSON = option.Value
+			hasAffiliateSetting = true
+			continue
+		}
 		err := updateOptionMap(option.Key, option.Value)
 		if err != nil {
 			common.SysLog("failed to update option map: " + err.Error())
 		}
 	}
+	if hasAffiliateSetting {
+		if err := updateOptionMap(operation_setting.AffiliateSettingOptionKey, affiliateSettingJSON); err != nil {
+			return fmt.Errorf("load affiliate setting: %w", err)
+		}
+		return nil
+	}
+
+	legacySetting, err := operation_setting.AffiliateSettingFromLegacyRewardQuotas(
+		int64(common.QuotaForInviter),
+		int64(common.QuotaForInvitee),
+	)
+	if err != nil {
+		return fmt.Errorf("migrate legacy affiliate rewards: %w", err)
+	}
+	value, err := operation_setting.MarshalAffiliateSetting(legacySetting)
+	if err != nil {
+		return fmt.Errorf("serialize migrated affiliate setting: %w", err)
+	}
+	option := Option{Key: operation_setting.AffiliateSettingOptionKey, Value: value}
+	if err := DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&option).Error; err != nil {
+		return fmt.Errorf("persist migrated affiliate setting: %w", err)
+	}
+	if err := DB.Where(commonKeyCol+" = ?", operation_setting.AffiliateSettingOptionKey).First(&option).Error; err != nil {
+		return fmt.Errorf("reload migrated affiliate setting: %w", err)
+	}
+	if err := updateOptionMap(operation_setting.AffiliateSettingOptionKey, option.Value); err != nil {
+		return fmt.Errorf("apply migrated affiliate setting: %w", err)
+	}
+	return nil
 }
 
 func SyncOptions(frequency int) {
 	for {
 		time.Sleep(time.Duration(frequency) * time.Second)
 		common.SysLog("syncing options from database")
-		loadOptionsFromDatabase()
+		if err := loadOptionsFromDatabase(); err != nil {
+			common.SysError("failed to sync options from database: " + err.Error())
+		}
 	}
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == operation_setting.AffiliateSettingOptionKey {
+		return operation_setting.ValidateAffiliateSettingJSON(value)
+	}
+	if key == EpayCurrencyOptionKey {
+		_, err := operation_setting.NormalizeEpayCurrency(value)
+		return err
+	}
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
 	}
@@ -219,23 +315,271 @@ func validateOptionValue(key string, value string) error {
 	return nil
 }
 
+func validateProtectedOptionKey(key string, allowCompliance bool) error {
+	trimmedKey := strings.TrimSpace(key)
+	for _, canonicalKey := range protectedOptionKeys {
+		if !strings.EqualFold(trimmedKey, canonicalKey) {
+			continue
+		}
+		if key != canonicalKey {
+			return ErrProtectedOptionKey
+		}
+		if !allowCompliance && strings.HasPrefix(canonicalKey, "payment_setting.compliance_") {
+			return ErrProtectedOptionKey
+		}
+		return nil
+	}
+	if strings.HasPrefix(strings.ToLower(trimmedKey), "payment_setting.compliance_") {
+		return ErrProtectedOptionKey
+	}
+	return nil
+}
+
 func UpdateOption(key string, value string) error {
+	if err := validateProtectedOptionKey(key, false); err != nil {
+		return err
+	}
 	if err := validateOptionValue(key, value); err != nil {
 		return err
+	}
+	if key == EpayCurrencyOptionKey {
+		return updateEpayCurrencyOption(value)
 	}
 	// Save to database first
 	option := Option{
 		Key: key,
 	}
 	// https://gorm.io/docs/update.html#Save-All-Fields
-	DB.FirstOrCreate(&option, Option{Key: key})
+	if err := DB.FirstOrCreate(&option, Option{Key: key}).Error; err != nil {
+		return err
+	}
 	option.Value = value
 	// Save is a combination function.
 	// If save value does not contain primary key, it will execute Create,
 	// otherwise it will execute Update (with all fields).
-	DB.Save(&option)
+	if err := DB.Save(&option).Error; err != nil {
+		return err
+	}
 	// Update OptionMap
 	return updateOptionMap(key, value)
+}
+
+func optionValuesWithTx(tx *gorm.DB, keys ...string) (map[string]string, error) {
+	if tx == nil {
+		return nil, errors.New("option transaction is required")
+	}
+	options := make([]Option, 0, len(keys))
+	if err := tx.Where(commonKeyCol+" IN ?", keys).Find(&options).Error; err != nil {
+		return nil, err
+	}
+	values := make(map[string]string, len(options))
+	for _, option := range options {
+		values[option.Key] = option.Value
+	}
+	return values, nil
+}
+
+func affiliateSettingFromOptionValues(values map[string]string) (operation_setting.AffiliateSetting, error) {
+	value, ok := values[operation_setting.AffiliateSettingOptionKey]
+	if !ok {
+		return operation_setting.DefaultAffiliateSetting(), nil
+	}
+	return operation_setting.ParseAffiliateSettingJSON(value)
+}
+
+func paymentComplianceConfirmedFromOptionValues(values map[string]string) bool {
+	return strings.TrimSpace(values[PaymentComplianceConfirmedOptionKey]) == "true" &&
+		strings.TrimSpace(values[PaymentComplianceTermsVersionOptionKey]) == operation_setting.CurrentComplianceTermsVersion
+}
+
+func epayCurrencyFromOptionValues(values map[string]string) (string, error) {
+	value, ok := values[EpayCurrencyOptionKey]
+	if !ok {
+		return operation_setting.GetEpayCurrency(), nil
+	}
+	return operation_setting.NormalizeEpayCurrency(value)
+}
+
+func GetEpayCurrencySnapshot() (string, error) {
+	values, err := optionValuesWithTx(DB, EpayCurrencyOptionKey)
+	if err != nil {
+		return "", err
+	}
+	return epayCurrencyFromOptionValues(values)
+}
+
+func paymentComplianceConfirmedWithTx(tx *gorm.DB) (bool, error) {
+	values, err := optionValuesWithTx(tx,
+		PaymentComplianceConfirmedOptionKey,
+		PaymentComplianceTermsVersionOptionKey,
+	)
+	if err != nil {
+		return false, err
+	}
+	return paymentComplianceConfirmedFromOptionValues(values), nil
+}
+
+func updateEpayCurrencyOption(value string) error {
+	currency, err := operation_setting.NormalizeEpayCurrency(value)
+	if err != nil {
+		return err
+	}
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		var affiliateOption Option
+		if err := lockForUpdate(tx).
+			Where(commonKeyCol+" = ?", operation_setting.AffiliateSettingOptionKey).
+			First(&affiliateOption).Error; err != nil {
+			return fmt.Errorf("load affiliate setting for Epay currency update: %w", err)
+		}
+		affiliateSetting, err := operation_setting.ParseAffiliateSettingJSON(affiliateOption.Value)
+		if err != nil {
+			return err
+		}
+		option := Option{Key: EpayCurrencyOptionKey}
+		err = lockForUpdate(tx).Where(commonKeyCol+" = ?", EpayCurrencyOptionKey).First(&option).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			option.Value = operation_setting.GetEpayCurrency()
+			if err := tx.Create(&option).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		currentCurrency, err := operation_setting.NormalizeEpayCurrency(option.Value)
+		if err != nil {
+			return err
+		}
+		if affiliateSetting.CommissionEnabled && currentCurrency != currency {
+			return ErrAffiliateEpayCurrencyConflict
+		}
+		option.Value = currency
+		return tx.Save(&option).Error
+	})
+	if err != nil {
+		return err
+	}
+	return updateOptionMap(EpayCurrencyOptionKey, currency)
+}
+
+// UpdateAffiliateSettingOption uses the single JSON option as a compare-and-
+// swap record so concurrent administrators cannot overwrite each other's
+// financial configuration with the same version.
+type AffiliateSettingUpdateResult struct {
+	Previous operation_setting.AffiliateSetting
+	Current  operation_setting.AffiliateSetting
+}
+
+func UpdateAffiliateSettingOption(
+	expectedVersion int64,
+	next operation_setting.AffiliateSetting,
+	operatorId int,
+) (AffiliateSettingUpdateResult, error) {
+	if expectedVersion < 1 || operatorId <= 0 {
+		return AffiliateSettingUpdateResult{}, ErrOptionVersionConflict
+	}
+	var result AffiliateSettingUpdateResult
+	var savedJSON string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var option Option
+		err := lockForUpdate(tx).
+			Where(commonKeyCol+" = ?", operation_setting.AffiliateSettingOptionKey).
+			First(&option).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		optionMissing := errors.Is(err, gorm.ErrRecordNotFound)
+
+		current := operation_setting.DefaultAffiliateSetting()
+		if err == nil {
+			current, err = operation_setting.ParseAffiliateSettingJSON(option.Value)
+			if err != nil {
+				return err
+			}
+		}
+		if current.Version != expectedVersion {
+			return ErrOptionVersionConflict
+		}
+		if current.Version == int64(^uint64(0)>>1) {
+			return ErrOptionVersionConflict
+		}
+		next.Version = current.Version + 1
+		next, err = operation_setting.NormalizeAffiliateSetting(next)
+		if err != nil {
+			return err
+		}
+		requiresCompliance := (next.RegistrationRewardEnabled &&
+			(next.InviterRewardQuota > 0 || next.InviteeRewardQuota > 0)) ||
+			(next.CommissionEnabled && next.CommissionRateBPS > 0)
+		if requiresCompliance {
+			confirmed, err := paymentComplianceConfirmedWithTx(tx)
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				return ErrPaymentComplianceRequired
+			}
+		}
+		savedJSON, err = operation_setting.MarshalAffiliateSetting(next)
+		if err != nil {
+			return err
+		}
+		if optionMissing {
+			option = Option{Key: operation_setting.AffiliateSettingOptionKey, Value: savedJSON}
+			if err := tx.Create(&option).Error; err != nil {
+				return err
+			}
+		} else {
+			update := tx.Model(&Option{}).
+				Where(commonKeyCol+" = ? AND value = ?", operation_setting.AffiliateSettingOptionKey, option.Value).
+				Update("value", savedJSON)
+			if update.Error != nil {
+				return update.Error
+			}
+			if update.RowsAffected != 1 {
+				return ErrOptionVersionConflict
+			}
+		}
+		previousJSON, err := operation_setting.MarshalAffiliateSetting(current)
+		if err != nil {
+			return err
+		}
+		change := AffiliateConfigChange{
+			OperatorId:    operatorId,
+			VersionBefore: current.Version,
+			VersionAfter:  next.Version,
+			ValueBefore:   previousJSON,
+			ValueAfter:    savedJSON,
+			CreatedAt:     common.GetTimestamp(),
+		}
+		if err := tx.Create(&change).Error; err != nil {
+			return err
+		}
+		if _, err := EnqueueAffiliateEventWithTx(
+			tx,
+			"affiliate.config_changed:"+strconv.FormatInt(change.VersionAfter, 10),
+			operatorId,
+			"affiliate.config_changed",
+			LogTypeManage,
+			"Changed affiliate financial configuration",
+			map[string]interface{}{
+				"version_after":  change.VersionAfter,
+				"version_before": change.VersionBefore,
+			},
+			change.CreatedAt,
+		); err != nil {
+			return err
+		}
+		result.Previous = current
+		result.Current = next
+		return nil
+	})
+	if err != nil {
+		return AffiliateSettingUpdateResult{}, err
+	}
+	if err := updateOptionMap(operation_setting.AffiliateSettingOptionKey, savedJSON); err != nil {
+		return AffiliateSettingUpdateResult{}, err
+	}
+	return result, nil
 }
 
 // UpdateOptionsBulk persists multiple key/value pairs in a single database
@@ -248,6 +592,9 @@ func UpdateOptionsBulk(values map[string]string) error {
 		return nil
 	}
 	for key, value := range values {
+		if err := validateProtectedOptionKey(key, true); err != nil {
+			return err
+		}
 		if err := validateOptionValue(key, value); err != nil {
 			return err
 		}
@@ -268,8 +615,19 @@ func UpdateOptionsBulk(values map[string]string) error {
 	if err != nil {
 		return err
 	}
+	confirmedValue, hasConfirmedValue := values[PaymentComplianceConfirmedOptionKey]
 	for k, v := range values {
+		if k == PaymentComplianceConfirmedOptionKey {
+			continue
+		}
 		if err := updateOptionMap(k, v); err != nil {
+			return err
+		}
+	}
+	// Publish the eligibility switch last so in-process readers cannot observe a
+	// confirmed state before the terms version and audit metadata are refreshed.
+	if hasConfirmedValue {
+		if err := updateOptionMap(PaymentComplianceConfirmedOptionKey, confirmedValue); err != nil {
 			return err
 		}
 	}
@@ -277,6 +635,11 @@ func UpdateOptionsBulk(values map[string]string) error {
 }
 
 func updateOptionMap(key string, value string) (err error) {
+	if key == operation_setting.AffiliateSettingOptionKey {
+		if err := operation_setting.LoadAffiliateSettingJSON(value); err != nil {
+			return err
+		}
+	}
 	if key == retiredThemeOptionKey {
 		common.OptionMapRWMutex.Lock()
 		delete(common.OptionMap, key)
@@ -285,6 +648,9 @@ func updateOptionMap(key string, value string) (err error) {
 	}
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
 	common.OptionMap[key] = value
 
 	// 检查是否是模型配置 - 使用更规范的方式处理

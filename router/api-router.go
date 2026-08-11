@@ -120,6 +120,11 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/passkey/verify/finish", middleware.DisableCache(), controller.PasskeyVerifyFinish)
 				selfRoute.DELETE("/passkey", middleware.DisableCache(), controller.PasskeyDelete)
 				selfRoute.GET("/aff", controller.GetAffCode)
+				selfRoute.GET("/affiliate/overview", middleware.DisableCache(), controller.GetAffiliateOverview)
+				selfRoute.POST("/affiliate/activate", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.ActivateAffiliate)
+				selfRoute.GET("/affiliate/commissions", middleware.DisableCache(), controller.ListAffiliateCommissions)
+				selfRoute.POST("/affiliate/invite-rewards/transfer", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.TransferAffiliateInviteRewards)
+				selfRoute.POST("/affiliate/commissions/transfer", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.TransferAffiliateCommissions)
 				selfRoute.GET("/topup/info", controller.GetTopUpInfo)
 				selfRoute.GET("/topup/self", controller.GetUserTopUps)
 				selfRoute.GET("/topup/summary", middleware.DisableCache(), controller.GetUserTopUpSummary)
@@ -133,7 +138,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
 				selfRoute.POST("/waffo-pancake/amount", controller.RequestWaffoPancakeAmount)
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
-				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
+				selfRoute.POST("/aff_transfer", middleware.CriticalRateLimit(), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
 				// 2FA routes
@@ -173,6 +178,18 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/2fa/stats", controller.Admin2FAStats)
 				adminRoute.DELETE("/:id/2fa", controller.AdminDisable2FA)
 			}
+		}
+
+		affiliateRootUserRoute := apiRouter.Group("/user")
+		affiliateRootUserRoute.Use(middleware.RootAuth())
+		{
+			affiliateRootUserRoute.PUT("/:id/affiliate-access", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateAffiliateAccess)
+		}
+		affiliateAdminRoute := apiRouter.Group("/admin/affiliate")
+		affiliateAdminRoute.Use(middleware.RootAuth())
+		{
+			affiliateAdminRoute.GET("/commissions", middleware.DisableCache(), controller.AdminListAffiliateCommissions)
+			affiliateAdminRoute.POST("/commissions/:id/reverse", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.AdminReverseAffiliateCommission)
 		}
 
 		// Subscription billing (plans, purchase, admin management)
@@ -216,6 +233,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			optionRoute.GET("/", controller.GetOptions)
 			optionRoute.PUT("/", controller.UpdateOption)
+			optionRoute.PUT("/affiliate", middleware.CriticalRateLimit(), controller.UpdateAffiliateSetting)
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)

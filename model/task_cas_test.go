@@ -43,6 +43,7 @@ func TestMain(m *testing.M) {
 		&ExternalIdentityClaim{},
 		&Token{},
 		&PasskeyCredential{},
+		&Option{},
 		&TwoFA{},
 		&TwoFABackupCode{},
 		&Log{},
@@ -50,6 +51,16 @@ func TestMain(m *testing.M) {
 		&QuotaData{},
 		&Ability{},
 		&TopUp{},
+		&AffiliateReferral{},
+		&AffiliateSignupReward{},
+		&AffiliateSignupRewardTransfer{},
+		&AffiliateProfile{},
+		&AffiliateCommission{},
+		&AffiliateCommissionTransfer{},
+		&AffiliateCommissionReversal{},
+		&AffiliateAccessChange{},
+		&AffiliateConfigChange{},
+		&AffiliateOutboxEvent{},
 		&SubscriptionPlan{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
@@ -74,6 +85,7 @@ func truncateTables(t *testing.T) {
 		DB.Exec("DELETE FROM external_identity_claims")
 		DB.Exec("DELETE FROM user_sessions")
 		DB.Exec("DELETE FROM passkey_credentials")
+		DB.Exec("DELETE FROM options")
 		DB.Exec("DELETE FROM two_fa_backup_codes")
 		DB.Exec("DELETE FROM two_fas")
 		DB.Exec("DELETE FROM tokens")
@@ -84,6 +96,16 @@ func truncateTables(t *testing.T) {
 		DB.Exec("DELETE FROM quota_data")
 		DB.Exec("DELETE FROM abilities")
 		DB.Exec("DELETE FROM top_ups")
+		DB.Exec("DELETE FROM affiliate_outbox_events")
+		DB.Exec("DELETE FROM affiliate_access_changes")
+		DB.Exec("DELETE FROM affiliate_config_changes")
+		DB.Exec("DELETE FROM affiliate_commission_reversals")
+		DB.Exec("DELETE FROM affiliate_commission_transfers")
+		DB.Exec("DELETE FROM affiliate_commissions")
+		DB.Exec("DELETE FROM affiliate_profiles")
+		DB.Exec("DELETE FROM affiliate_signup_reward_transfers")
+		DB.Exec("DELETE FROM affiliate_signup_rewards")
+		DB.Exec("DELETE FROM affiliate_referrals")
 		DB.Exec("DELETE FROM subscription_orders")
 		DB.Exec("DELETE FROM subscription_plans")
 		DB.Exec("DELETE FROM user_subscriptions")

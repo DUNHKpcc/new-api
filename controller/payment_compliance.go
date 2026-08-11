@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +25,14 @@ func requirePaymentCompliance(c *gin.Context) bool {
 		common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
 		return false
 	}
+	return true
+}
+
+func writePaymentComplianceError(c *gin.Context, err error) bool {
+	if !errors.Is(err, model.ErrPaymentComplianceRequired) {
+		return false
+	}
+	common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
 	return true
 }
 
@@ -51,18 +60,16 @@ func ConfirmPaymentCompliance(c *gin.Context) {
 	clientIP := c.ClientIP()
 
 	updates := map[string]string{
-		"payment_setting.compliance_confirmed":     "true",
-		"payment_setting.compliance_terms_version": operation_setting.CurrentComplianceTermsVersion,
-		"payment_setting.compliance_confirmed_at":  strconv.FormatInt(now, 10),
-		"payment_setting.compliance_confirmed_by":  strconv.Itoa(userId),
-		"payment_setting.compliance_confirmed_ip":  clientIP,
+		model.PaymentComplianceConfirmedOptionKey:    "true",
+		model.PaymentComplianceTermsVersionOptionKey: operation_setting.CurrentComplianceTermsVersion,
+		"payment_setting.compliance_confirmed_at":    strconv.FormatInt(now, 10),
+		"payment_setting.compliance_confirmed_by":    strconv.Itoa(userId),
+		"payment_setting.compliance_confirmed_ip":    clientIP,
 	}
 
-	for key, value := range updates {
-		if err := model.UpdateOption(key, value); err != nil {
-			common.ApiError(c, err)
-			return
-		}
+	if err := model.UpdateOptionsBulk(updates); err != nil {
+		common.ApiError(c, err)
+		return
 	}
 
 	logger.LogInfo(c.Request.Context(), fmt.Sprintf(

@@ -8,6 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func providerTradeNo(value string) *string {
+	return &value
+}
+
 func TestGetVerifiedTopUpPaymentTotals(t *testing.T) {
 	truncateTables(t)
 
@@ -15,22 +19,22 @@ func TestGetVerifiedTopUpPaymentTotals(t *testing.T) {
 		{
 			UserId: 101, TradeNo: "epay-cny-1", PaymentProvider: PaymentProviderEpay,
 			Status: common.TopUpStatusSuccess, PaidAmountMinor: 1200, PaidCurrency: "CNY",
-			ProviderTradeNo: "provider-1", CreateTime: 100,
+			ProviderTradeNo: providerTradeNo("provider-1"), CompletionSource: CompletionSourceWebhook, CreateTime: 100,
 		},
 		{
 			UserId: 101, TradeNo: "epay-cny-2", PaymentProvider: PaymentProviderEpay,
 			Status: common.TopUpStatusSuccess, PaidAmountMinor: 34, PaidCurrency: "CNY",
-			ProviderTradeNo: "provider-2", CreateTime: 200,
+			ProviderTradeNo: providerTradeNo("provider-2"), CompletionSource: CompletionSourceWebhook, CreateTime: 200,
 		},
 		{
 			UserId: 101, TradeNo: "epay-usd", PaymentProvider: PaymentProviderEpay,
 			Status: common.TopUpStatusSuccess, PaidAmountMinor: 500, PaidCurrency: "USD",
-			ProviderTradeNo: "provider-3", CreateTime: 300,
+			ProviderTradeNo: providerTradeNo("provider-3"), CompletionSource: CompletionSourceWebhook, CreateTime: 300,
 		},
 		{
 			UserId: 101, TradeNo: "pending", PaymentProvider: PaymentProviderEpay,
 			Status: common.TopUpStatusPending, PaidAmountMinor: 9999, PaidCurrency: "CNY",
-			ProviderTradeNo: "provider-pending", CreateTime: 400,
+			ProviderTradeNo: providerTradeNo("provider-pending"), CompletionSource: CompletionSourceWebhook, CreateTime: 400,
 		},
 		{
 			UserId: 101, TradeNo: "manual-completion", PaymentProvider: PaymentProviderEpay,
@@ -38,28 +42,33 @@ func TestGetVerifiedTopUpPaymentTotals(t *testing.T) {
 		},
 		{
 			UserId: 101, TradeNo: "missing-provider-reference", PaymentProvider: PaymentProviderEpay,
-			Status: common.TopUpStatusSuccess, PaidAmountMinor: 8800, PaidCurrency: "CNY",
+			Status: common.TopUpStatusSuccess, CompletionSource: CompletionSourceWebhook, PaidAmountMinor: 8800, PaidCurrency: "CNY",
 			CreateTime: 510,
 		},
 		{
 			UserId: 101, TradeNo: "missing-paid-amount", PaymentProvider: PaymentProviderEpay,
-			Status: common.TopUpStatusSuccess, PaidCurrency: "CNY",
-			ProviderTradeNo: "provider-missing-amount", CreateTime: 520,
+			Status: common.TopUpStatusSuccess, CompletionSource: CompletionSourceWebhook, PaidCurrency: "CNY",
+			ProviderTradeNo: providerTradeNo("provider-missing-amount"), CreateTime: 520,
 		},
 		{
 			UserId: 101, TradeNo: "missing-currency", PaymentProvider: PaymentProviderEpay,
-			Status: common.TopUpStatusSuccess, PaidAmountMinor: 8800,
-			ProviderTradeNo: "provider-missing-currency", CreateTime: 530,
+			Status: common.TopUpStatusSuccess, CompletionSource: CompletionSourceWebhook, PaidAmountMinor: 8800,
+			ProviderTradeNo: providerTradeNo("provider-missing-currency"), CreateTime: 530,
 		},
 		{
 			UserId: 101, TradeNo: "stripe", PaymentProvider: PaymentProviderStripe,
 			Status: common.TopUpStatusSuccess, PaidAmountMinor: 700, PaidCurrency: "USD",
-			ProviderTradeNo: "stripe-provider", CreateTime: 600,
+			ProviderTradeNo: providerTradeNo("stripe-provider"), CompletionSource: CompletionSourceWebhook, CreateTime: 600,
 		},
 		{
 			UserId: 202, TradeNo: "other-user", PaymentProvider: PaymentProviderEpay,
 			Status: common.TopUpStatusSuccess, PaidAmountMinor: 900, PaidCurrency: "CNY",
-			ProviderTradeNo: "provider-other", CreateTime: 50,
+			ProviderTradeNo: providerTradeNo("provider-other"), CompletionSource: CompletionSourceWebhook, CreateTime: 50,
+		},
+		{
+			UserId: 101, TradeNo: "admin-with-evidence", PaymentProvider: PaymentProviderEpay,
+			Status: common.TopUpStatusSuccess, PaidAmountMinor: 9900, PaidCurrency: "CNY",
+			ProviderTradeNo: providerTradeNo("provider-admin"), CompletionSource: CompletionSourceAdmin, CreateTime: 610,
 		},
 	}
 	require.NoError(t, DB.Create(&topups).Error)

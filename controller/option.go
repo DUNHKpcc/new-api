@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -31,16 +32,7 @@ var completionRatioMetaOptionKeys = []string{
 }
 
 func isPaymentComplianceOptionKey(key string) bool {
-	return strings.HasPrefix(key, "payment_setting.compliance_")
-}
-
-func isPositiveOptionValue(value string) bool {
-	intValue, err := strconv.Atoi(strings.TrimSpace(value))
-	if err == nil {
-		return intValue > 0
-	}
-	floatValue, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	return err == nil && floatValue > 0
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(key)), "payment_setting.compliance_")
 }
 
 func collectModelNamesFromOptionValue(raw string, modelNames map[string]struct{}) {
@@ -81,7 +73,7 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
-		if k == "theme.frontend" {
+		if k == "theme.frontend" || strings.HasPrefix(k, "migration.") {
 			continue
 		}
 		value := common.Interface2String(v)
@@ -141,17 +133,21 @@ func UpdateOption(c *gin.Context) {
 	default:
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}
-	switch option.Key {
-	case "QuotaForInviter", "QuotaForInvitee":
-		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
-			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
-			return
-		}
-	default:
-		if isPaymentComplianceOptionKey(option.Key) {
-			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
-			return
-		}
+	trimmedKey := strings.TrimSpace(option.Key)
+	switch {
+	case strings.EqualFold(trimmedKey, "QuotaForInviter"),
+		strings.EqualFold(trimmedKey, "QuotaForInvitee"):
+		common.ApiErrorMsg(c, "邀请奖励请通过代理配置统一保存")
+		return
+	case strings.EqualFold(trimmedKey, operation_setting.AffiliateSettingOptionKey):
+		common.ApiErrorMsg(c, "代理配置不允许通过通用设置接口修改")
+		return
+	case isPaymentComplianceOptionKey(option.Key):
+		common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
+		return
+	case strings.EqualFold(trimmedKey, model.EpayCurrencyOptionKey) && option.Key != model.EpayCurrencyOptionKey:
+		common.ApiErrorMsg(c, "Epay 结算币种配置键无效")
+		return
 	}
 	switch option.Key {
 	case "desktop_agent_setting.gift_plan_id":
@@ -303,7 +299,7 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "payment_setting.epay_currency":
+	case model.EpayCurrencyOptionKey:
 		currency, currencyErr := operation_setting.NormalizeEpayCurrency(option.Value.(string))
 		if currencyErr != nil {
 			common.ApiErrorMsg(c, currencyErr.Error())
@@ -433,6 +429,10 @@ func UpdateOption(c *gin.Context) {
 	}
 	err = model.UpdateOption(option.Key, option.Value.(string))
 	if err != nil {
+		if errors.Is(err, model.ErrAffiliateEpayCurrencyConflict) {
+			common.ApiErrorMsg(c, "代理充值佣金开启期间不能修改 Epay 结算币种")
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}

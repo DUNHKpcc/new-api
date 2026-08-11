@@ -22,6 +22,7 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(affiliateOutboxHandler{})
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and
@@ -150,6 +151,38 @@ func (asyncTaskPollHandler) NewPayload() any { return nil }
 func (asyncTaskPollHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	summary := service.RunTaskPollingOnce(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
 	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+type affiliateOutboxHandler struct{}
+
+func (affiliateOutboxHandler) Type() string { return model.SystemTaskTypeAffiliateOutbox }
+
+func (affiliateOutboxHandler) Enabled() bool { return model.HasPendingAffiliateWork() }
+
+func (affiliateOutboxHandler) Interval() time.Duration { return 15 * time.Second }
+
+func (affiliateOutboxHandler) NewPayload() any { return nil }
+
+func (affiliateOutboxHandler) Run(_ context.Context, task *model.SystemTask, runnerID string) {
+	promoted, err := model.PromoteDueAffiliateCommissions(500, common.GetTimestamp())
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	delivered, failed, err := model.DispatchAffiliateOutbox(500)
+	result := map[string]int{
+		"commissions_promoted": promoted,
+		"events_delivered":     delivered,
+		"events_failed":        failed,
+	}
+	if err != nil || failed > 0 {
+		if err == nil {
+			err = fmt.Errorf("%d affiliate outbox events failed", failed)
+		}
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
 func finishSystemTaskHandler(task *model.SystemTask, runnerID string, status model.SystemTaskStatus, result any, runErr error) {

@@ -260,6 +260,12 @@ func migrateDB() error {
 	if err := ensureDesktopGrantCodexTokenColumnSQLite(); err != nil {
 		return err
 	}
+	if err := ensureNoLegacyPendingEpayOrders(); err != nil {
+		return err
+	}
+	if err := prepareTopUpProviderTradeUniqueIndex(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -276,6 +282,16 @@ func migrateDB() error {
 		&Log{},
 		&Midjourney{},
 		&TopUp{},
+		&AffiliateReferral{},
+		&AffiliateSignupReward{},
+		&AffiliateSignupRewardTransfer{},
+		&AffiliateProfile{},
+		&AffiliateCommission{},
+		&AffiliateCommissionTransfer{},
+		&AffiliateCommissionReversal{},
+		&AffiliateAccessChange{},
+		&AffiliateConfigChange{},
+		&AffiliateOutboxEvent{},
 		&QuotaData{},
 		&Task{},
 		&Model{},
@@ -315,10 +331,19 @@ func migrateDB() error {
 			return err
 		}
 	}
+	if err := backfillAffiliateReferrals(); err != nil {
+		return err
+	}
 	return nil
 }
 
 func migrateDBFast() error {
+	if err := ensureNoLegacyPendingEpayOrders(); err != nil {
+		return err
+	}
+	if err := prepareTopUpProviderTradeUniqueIndex(); err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 
@@ -340,6 +365,16 @@ func migrateDBFast() error {
 		{&Log{}, "Log"},
 		{&Midjourney{}, "Midjourney"},
 		{&TopUp{}, "TopUp"},
+		{&AffiliateReferral{}, "AffiliateReferral"},
+		{&AffiliateSignupReward{}, "AffiliateSignupReward"},
+		{&AffiliateSignupRewardTransfer{}, "AffiliateSignupRewardTransfer"},
+		{&AffiliateProfile{}, "AffiliateProfile"},
+		{&AffiliateCommission{}, "AffiliateCommission"},
+		{&AffiliateCommissionTransfer{}, "AffiliateCommissionTransfer"},
+		{&AffiliateCommissionReversal{}, "AffiliateCommissionReversal"},
+		{&AffiliateAccessChange{}, "AffiliateAccessChange"},
+		{&AffiliateConfigChange{}, "AffiliateConfigChange"},
+		{&AffiliateOutboxEvent{}, "AffiliateOutboxEvent"},
 		{&QuotaData{}, "QuotaData"},
 		{&Task{}, "Task"},
 		{&Model{}, "Model"},
@@ -396,6 +431,9 @@ func migrateDBFast() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := backfillAffiliateReferrals(); err != nil {
+		return err
 	}
 	common.SysLog("database migrated")
 	return nil

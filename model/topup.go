@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -12,19 +13,27 @@ import (
 )
 
 type TopUp struct {
-	Id              int     `json:"id"`
-	UserId          int     `json:"user_id" gorm:"index"`
-	Amount          int64   `json:"amount"`
-	Money           float64 `json:"money"`
-	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
-	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
-	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	PaidAmountMinor int64   `json:"-"`
-	PaidCurrency    string  `json:"-" gorm:"type:varchar(3)"`
-	ProviderTradeNo string  `json:"-" gorm:"type:varchar(255);index"`
-	CreateTime      int64   `json:"create_time"`
-	CompleteTime    int64   `json:"complete_time"`
-	Status          string  `json:"status"`
+	Id                      int     `json:"id"`
+	UserId                  int     `json:"user_id" gorm:"index"`
+	Amount                  int64   `json:"amount"`
+	Money                   float64 `json:"money"`
+	TradeNo                 string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
+	PaymentMethod           string  `json:"payment_method" gorm:"type:varchar(50)"`
+	PaymentProvider         string  `json:"payment_provider" gorm:"type:varchar(50);default:'';uniqueIndex:idx_top_ups_provider_trade,priority:1"`
+	ExpectedAmountMinor     int64   `json:"-"`
+	PaidAmountMinor         int64   `json:"-"`
+	PaidCurrency            string  `json:"-" gorm:"type:varchar(3)"`
+	ProviderTradeNo         *string `json:"-" gorm:"type:varchar(255);uniqueIndex:idx_top_ups_provider_trade,priority:2"`
+	QuotaAmount             int     `json:"-"`
+	UnitPriceSnapshot       string  `json:"-" gorm:"type:varchar(64)"`
+	QuotaPerUnitSnapshot    string  `json:"-" gorm:"type:varchar(64)"`
+	TopUpGroupRatioSnapshot string  `json:"-" gorm:"type:varchar(64)"`
+	AmountDiscountSnapshot  string  `json:"-" gorm:"type:varchar(64)"`
+	CommissionEligible      bool    `json:"-"`
+	CompletionSource        string  `json:"-" gorm:"type:varchar(32)"`
+	CreateTime              int64   `json:"create_time"`
+	CompleteTime            int64   `json:"complete_time"`
+	Status                  string  `json:"status"`
 }
 
 type VerifiedTopUpPaymentTotal struct {
@@ -42,6 +51,11 @@ const (
 )
 
 const (
+	CompletionSourceWebhook = "webhook"
+	CompletionSourceAdmin   = "admin"
+)
+
+const (
 	PaymentProviderEpay         = "epay"
 	PaymentProviderStripe       = "stripe"
 	PaymentProviderCreem        = "creem"
@@ -51,10 +65,198 @@ const (
 )
 
 var (
-	ErrPaymentMethodMismatch = errors.New("payment method mismatch")
-	ErrTopUpNotFound         = errors.New("topup not found")
-	ErrTopUpStatusInvalid    = errors.New("topup status invalid")
+	ErrPaymentMethodMismatch         = errors.New("payment method mismatch")
+	ErrTopUpNotFound                 = errors.New("topup not found")
+	ErrTopUpStatusInvalid            = errors.New("topup status invalid")
+	ErrEpayProviderTradeNoRequired   = errors.New("Epay provider trade number is required")
+	ErrEpayPaidAmountInvalid         = errors.New("Epay paid amount must be positive")
+	ErrEpayPaidAmountMismatch        = errors.New("Epay paid amount does not match the order")
+	ErrEpayOrderSnapshotInvalid      = errors.New("Epay order settlement snapshot is invalid")
+	ErrEpayQuotaOverflow             = errors.New("Epay topup would overflow the user quota balance")
+	ErrEpayCompletedEvidenceMismatch = errors.New("completed Epay order evidence does not match callback")
 )
+
+type EpaySettlement struct {
+	TradeNo         string
+	ProviderTradeNo string
+	PaidAmountMinor int64
+	PaymentMethod   string
+	CompletedAt     int64
+}
+
+type EpaySettlementResult struct {
+	TopUpID           int
+	UserID            int
+	QuotaAdded        int
+	CommissionID      int64
+	CommissionCreated bool
+	AlreadyCompleted  bool
+}
+
+func validPositiveDecimalSnapshot(value string) bool {
+	parsed, err := decimal.NewFromString(value)
+	return err == nil && parsed.GreaterThan(decimal.Zero)
+}
+
+// CompleteEpayTopUp atomically records verified payment evidence, completes the
+// order, and credits the user. Database locks and unique constraints provide
+// correctness across multiple application instances.
+func CompleteEpayTopUp(input EpaySettlement) (EpaySettlementResult, error) {
+	input.TradeNo = strings.TrimSpace(input.TradeNo)
+	input.ProviderTradeNo = strings.TrimSpace(input.ProviderTradeNo)
+	input.PaymentMethod = strings.TrimSpace(input.PaymentMethod)
+	if input.TradeNo == "" {
+		return EpaySettlementResult{}, ErrTopUpNotFound
+	}
+	if input.ProviderTradeNo == "" {
+		return EpaySettlementResult{}, ErrEpayProviderTradeNoRequired
+	}
+	if input.PaidAmountMinor <= 0 {
+		return EpaySettlementResult{}, ErrEpayPaidAmountInvalid
+	}
+	if input.CompletedAt <= 0 {
+		input.CompletedAt = common.GetTimestamp()
+	}
+
+	result := EpaySettlementResult{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		topUp := TopUp{}
+		if err := lockForUpdate(tx).Where("trade_no = ?", input.TradeNo).First(&topUp).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrTopUpNotFound
+			}
+			return err
+		}
+		result.TopUpID = topUp.Id
+		result.UserID = topUp.UserId
+
+		if topUp.PaymentProvider != PaymentProviderEpay {
+			return ErrPaymentMethodMismatch
+		}
+		if input.PaymentMethod == "" || topUp.PaymentMethod == "" || input.PaymentMethod != topUp.PaymentMethod {
+			return ErrPaymentMethodMismatch
+		}
+		if topUp.Status == common.TopUpStatusSuccess {
+			if topUp.CompletionSource != CompletionSourceAdmin &&
+				topUp.ProviderTradeNo != nil &&
+				*topUp.ProviderTradeNo == input.ProviderTradeNo &&
+				topUp.PaidAmountMinor == input.PaidAmountMinor {
+				result.AlreadyCompleted = true
+				return nil
+			}
+			return ErrEpayCompletedEvidenceMismatch
+		}
+		if topUp.Status != common.TopUpStatusPending {
+			return ErrTopUpStatusInvalid
+		}
+		if topUp.ExpectedAmountMinor <= 0 ||
+			topUp.QuotaAmount <= 0 ||
+			len(topUp.PaidCurrency) != 3 ||
+			!validPositiveDecimalSnapshot(topUp.UnitPriceSnapshot) ||
+			!validPositiveDecimalSnapshot(topUp.QuotaPerUnitSnapshot) ||
+			!validPositiveDecimalSnapshot(topUp.TopUpGroupRatioSnapshot) ||
+			!validPositiveDecimalSnapshot(topUp.AmountDiscountSnapshot) {
+			return ErrEpayOrderSnapshotInvalid
+		}
+		if input.PaidAmountMinor != topUp.ExpectedAmountMinor {
+			return ErrEpayPaidAmountMismatch
+		}
+		affiliateConfig, err := affiliateCommissionConfigWithTx(tx)
+		if err != nil {
+			return err
+		}
+
+		var user User
+		if err := lockForUpdate(tx).
+			Select("id", "quota").
+			Where("id = ?", topUp.UserId).
+			First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("Epay topup user does not exist")
+			}
+			return err
+		}
+		if user.Quota < 0 || topUp.QuotaAmount > common.MaxQuota-user.Quota {
+			return ErrEpayQuotaOverflow
+		}
+
+		providerTradeNo := input.ProviderTradeNo
+		paymentMethod := topUp.PaymentMethod
+		if input.PaymentMethod != "" {
+			paymentMethod = input.PaymentMethod
+		}
+		updates := map[string]interface{}{
+			"paid_amount_minor": input.PaidAmountMinor,
+			"provider_trade_no": &providerTradeNo,
+			"payment_method":    paymentMethod,
+			"completion_source": CompletionSourceWebhook,
+			"complete_time":     input.CompletedAt,
+			"status":            common.TopUpStatusSuccess,
+		}
+		orderUpdate := tx.Model(&TopUp{}).
+			Where("id = ? AND status = ?", topUp.Id, common.TopUpStatusPending).
+			Updates(updates)
+		if orderUpdate.Error != nil {
+			return orderUpdate.Error
+		}
+		if orderUpdate.RowsAffected != 1 {
+			return ErrTopUpStatusInvalid
+		}
+		quotaUpdate := tx.Model(&User{}).
+			Where("id = ? AND quota <= ?", topUp.UserId, common.MaxQuota-topUp.QuotaAmount).
+			Update("quota", gorm.Expr("quota + ?", topUp.QuotaAmount))
+		if quotaUpdate.Error != nil {
+			return quotaUpdate.Error
+		}
+		if quotaUpdate.RowsAffected != 1 {
+			return ErrEpayQuotaOverflow
+		}
+		commission, created, err := CreateAffiliateCommissionForTopUpWithTx(tx, AffiliateCommissionSettlement{
+			TopUp:           &topUp,
+			ProviderTradeNo: input.ProviderTradeNo,
+			PaidAmountMinor: input.PaidAmountMinor,
+			PaidCurrency:    topUp.PaidCurrency,
+			CompletedAt:     input.CompletedAt,
+			Config:          affiliateConfig,
+		})
+		if err != nil {
+			return err
+		}
+		if commission != nil {
+			result.CommissionID = commission.Id
+			result.CommissionCreated = created
+		}
+		if _, err := EnqueueAffiliateEventWithTx(
+			tx,
+			fmt.Sprintf("payment.topup_completed:%d", topUp.Id),
+			topUp.UserId,
+			"payment.topup_completed",
+			LogTypeTopup,
+			"Online top-up completed",
+			map[string]interface{}{
+				"paid_amount_minor": fmt.Sprintf("%d", input.PaidAmountMinor),
+				"paid_currency":     topUp.PaidCurrency,
+				"payment_method":    paymentMethod,
+				"quota_added":       topUp.QuotaAmount,
+				"topup_id":          topUp.Id,
+			},
+			input.CompletedAt,
+		); err != nil {
+			return err
+		}
+		result.QuotaAdded = topUp.QuotaAmount
+		return nil
+	})
+	if err != nil {
+		return EpaySettlementResult{}, err
+	}
+	if !result.AlreadyCompleted {
+		if err := InvalidateUserCache(result.UserID); err != nil {
+			common.SysError(fmt.Sprintf("failed to invalidate user cache after Epay topup: user_id=%d topup_id=%d error=%v", result.UserID, result.TopUpID, err))
+		}
+	}
+	return result, nil
+}
 
 func (topUp *TopUp) Insert() error {
 	var err error
@@ -62,10 +264,64 @@ func (topUp *TopUp) Insert() error {
 	return err
 }
 
+func (topUp *TopUp) InsertEpayWithCurrencySnapshot() error {
+	if topUp == nil || topUp.PaymentProvider != PaymentProviderEpay {
+		return ErrEpayOrderSnapshotInvalid
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		values, err := optionValuesWithTx(tx, EpayCurrencyOptionKey)
+		if err != nil {
+			return err
+		}
+		currency, err := epayCurrencyFromOptionValues(values)
+		if err != nil {
+			return err
+		}
+		topUp.PaidCurrency = currency
+		return tx.Create(topUp).Error
+	})
+}
+
 func (topUp *TopUp) Update() error {
 	var err error
 	err = DB.Save(topUp).Error
 	return err
+}
+
+func prepareTopUpProviderTradeUniqueIndex() error {
+	if !DB.Migrator().HasTable(&TopUp{}) || !DB.Migrator().HasColumn(&TopUp{}, "provider_trade_no") {
+		return nil
+	}
+	if err := DB.Model(&TopUp{}).
+		Where("provider_trade_no = ?", "").
+		UpdateColumn("provider_trade_no", nil).Error; err != nil {
+		return fmt.Errorf("normalize empty topup provider trade numbers: %w", err)
+	}
+
+	type duplicateProviderTrade struct {
+		PaymentProvider string
+		ProviderTradeNo string
+		Count           int64
+	}
+	duplicate := duplicateProviderTrade{}
+	if err := DB.Model(&TopUp{}).
+		Select("payment_provider, provider_trade_no, COUNT(*) AS count").
+		Where("provider_trade_no IS NOT NULL").
+		Group("payment_provider, provider_trade_no").
+		Having("COUNT(*) > 1").
+		Limit(1).
+		Scan(&duplicate).Error; err != nil {
+		return fmt.Errorf("inspect duplicate topup provider trade numbers: %w", err)
+	}
+	if duplicate.Count > 1 {
+		return fmt.Errorf(
+			"duplicate provider trade number requires manual audit: provider=%q provider_trade_no=%q count=%d",
+			duplicate.PaymentProvider,
+			duplicate.ProviderTradeNo,
+			duplicate.Count,
+		)
+	}
+	return nil
 }
 
 func GetTopUpById(id int) *TopUp {
@@ -90,19 +346,31 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 
 // GetVerifiedTopUpPaymentTotals returns provider-confirmed payment totals without
 // converting them to quota. Passing no providers includes every verified provider.
+func verifiedTopUpPayments(db *gorm.DB) *gorm.DB {
+	return db.Model(&TopUp{}).Where(
+		"top_ups.status = ? AND top_ups.completion_source = ? AND top_ups.paid_amount_minor > 0 AND top_ups.paid_currency <> ? AND top_ups.provider_trade_no IS NOT NULL AND top_ups.provider_trade_no <> ?",
+		common.TopUpStatusSuccess,
+		CompletionSourceWebhook,
+		"",
+		"",
+	)
+}
+
+func verifiedEpayPayments(db *gorm.DB, currency string) *gorm.DB {
+	return verifiedTopUpPayments(db).Where(
+		"top_ups.payment_provider = ? AND top_ups.paid_currency = ?",
+		PaymentProviderEpay,
+		currency,
+	)
+}
+
 func GetVerifiedTopUpPaymentTotals(userId int, providers ...string) ([]VerifiedTopUpPaymentTotal, error) {
 	totals := make([]VerifiedTopUpPaymentTotal, 0)
-	query := DB.Model(&TopUp{}).
+	query := verifiedTopUpPayments(DB).
 		Select("payment_provider, paid_currency, SUM(paid_amount_minor) AS paid_amount_minor").
-		Where(
-			"user_id = ? AND status = ? AND paid_amount_minor > 0 AND paid_currency <> ? AND provider_trade_no <> ?",
-			userId,
-			common.TopUpStatusSuccess,
-			"",
-			"",
-		)
+		Where("top_ups.user_id = ?", userId)
 	if len(providers) > 0 {
-		query = query.Where("payment_provider IN ?", providers)
+		query = query.Where("top_ups.payment_provider IN ?", providers)
 	}
 	err := query.Group("payment_provider, paid_currency").
 		Order("payment_provider ASC, paid_currency ASC").
@@ -362,6 +630,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	var quotaToAdd int
 	var payMoney float64
 	var paymentMethod string
+	var alreadyCompleted bool
 
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		topUp := &TopUp{}
@@ -372,6 +641,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 
 		// 幂等处理：已成功直接返回
 		if topUp.Status == common.TopUpStatusSuccess {
+			alreadyCompleted = true
 			return nil
 		}
 
@@ -382,28 +652,56 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 		// 计算应充值额度：
 		// - Stripe 订单：Money 代表经分组倍率换算后的美元数量，直接 * QuotaPerUnit
 		// - 其他订单（如易支付）：Amount 为美元数量，* QuotaPerUnit
-		if topUp.PaymentProvider == PaymentProviderStripe {
-			dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-			quotaToAdd = int(decimal.NewFromFloat(topUp.Money).Mul(dQuotaPerUnit).IntPart())
+		if topUp.QuotaAmount > 0 {
+			quotaToAdd = topUp.QuotaAmount
+		} else if topUp.PaymentProvider == PaymentProviderStripe {
+			var clamp *common.QuotaClamp
+			quotaToAdd, clamp = common.QuotaFromDecimalChecked(
+				decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+			)
+			if clamp != nil {
+				return clamp
+			}
 		} else {
-			dAmount := decimal.NewFromInt(topUp.Amount)
-			dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-			quotaToAdd = int(dAmount.Mul(dQuotaPerUnit).IntPart())
+			var clamp *common.QuotaClamp
+			quotaToAdd, clamp = common.QuotaFromDecimalChecked(
+				decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+			)
+			if clamp != nil {
+				return clamp
+			}
 		}
 		if quotaToAdd <= 0 {
 			return errors.New("无效的充值额度")
 		}
+		var user User
+		if err := lockForUpdate(tx).
+			Select("id", "quota").
+			Where("id = ?", topUp.UserId).
+			First(&user).Error; err != nil {
+			return errors.New("充值用户不存在")
+		}
+		if user.Quota < 0 || quotaToAdd > common.MaxQuota-user.Quota {
+			return ErrEpayQuotaOverflow
+		}
 
 		// 标记完成
 		topUp.CompleteTime = common.GetTimestamp()
+		topUp.CompletionSource = CompletionSourceAdmin
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
 
 		// 增加用户额度（立即写库，保持一致性）
-		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
-			return err
+		quotaUpdate := tx.Model(&User{}).
+			Where("id = ? AND quota = ?", topUp.UserId, user.Quota).
+			Update("quota", gorm.Expr("quota + ?", quotaToAdd))
+		if quotaUpdate.Error != nil {
+			return quotaUpdate.Error
+		}
+		if quotaUpdate.RowsAffected != 1 {
+			return ErrEpayQuotaOverflow
 		}
 
 		userId = topUp.UserId
@@ -415,8 +713,13 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	if err != nil {
 		return err
 	}
+	if alreadyCompleted {
+		return nil
+	}
+	if err := InvalidateUserCache(userId); err != nil {
+		common.SysError(fmt.Sprintf("failed to invalidate user cache after manual topup: user_id=%d error=%v", userId, err))
+	}
 
-	// 事务外记录日志，避免阻塞
 	RecordTopupLog(userId, fmt.Sprintf("管理员补单成功，充值金额: %v，支付金额：%f", logger.FormatQuota(quotaToAdd), payMoney), callerIp, paymentMethod, "admin")
 	return nil
 }
