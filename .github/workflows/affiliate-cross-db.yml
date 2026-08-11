@@ -1,0 +1,105 @@
+name: Affiliate Cross-Database
+
+on:
+  pull_request:
+    paths:
+      - "controller/affiliate*.go"
+      - "controller/option.go"
+      - "controller/payment_compliance.go"
+      - "controller/payment_webhook_availability*.go"
+      - "controller/system_task*.go"
+      - "controller/topup*.go"
+      - "model/affiliate*.go"
+      - "model/locking.go"
+      - "model/main.go"
+      - "model/option.go"
+      - "model/system_task.go"
+      - "model/topup*.go"
+      - "model/user.go"
+      - "router/api-router.go"
+      - "service/system_task*.go"
+      - "setting/operation_setting/affiliate_setting.go"
+      - "setting/operation_setting/payment_setting.go"
+      - ".github/workflows/affiliate-cross-db.yml"
+  push:
+    branches:
+      - dev
+    paths:
+      - "controller/affiliate*.go"
+      - "controller/option.go"
+      - "controller/payment_compliance.go"
+      - "controller/payment_webhook_availability*.go"
+      - "controller/system_task*.go"
+      - "controller/topup*.go"
+      - "model/affiliate*.go"
+      - "model/locking.go"
+      - "model/main.go"
+      - "model/option.go"
+      - "model/system_task.go"
+      - "model/topup*.go"
+      - "model/user.go"
+      - "router/api-router.go"
+      - "service/system_task*.go"
+      - "setting/operation_setting/affiliate_setting.go"
+      - "setting/operation_setting/payment_setting.go"
+      - ".github/workflows/affiliate-cross-db.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  affiliate-lifecycle:
+    name: ${{ matrix.compatibility }} database versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compatibility: Minimum
+            mysql_image: "mysql:5.7.44"
+            postgres_image: "postgres:9.6"
+          - compatibility: Current
+            mysql_image: "mysql:8.4"
+            postgres_image: "postgres:16"
+    services:
+      mysql:
+        image: ${{ matrix.mysql_image }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: newapi_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      postgres:
+        image: ${{ matrix.postgres_image }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: newapi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d newapi_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Configure MySQL schema charset
+        run: |
+          docker exec "${{ job.services.mysql.id }}" \
+            mysql -uroot -proot \
+            -e "ALTER DATABASE newapi_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+      - name: Run affiliate lifecycle on MySQL and PostgreSQL
+        env:
+          TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/newapi_test?charset=utf8mb4&parseTime=True&loc=UTC
+          TEST_POSTGRES_DSN: host=127.0.0.1 user=postgres password=postgres dbname=newapi_test port=5432 sslmode=disable TimeZone=UTC
+        run: go test -count=1 ./model -run '^TestAffiliateLifecycleConfiguredDatabases$'
