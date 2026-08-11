@@ -75,6 +75,7 @@ import {
   getFirstResponseTimeColor,
   getResponseTimeColor,
   renderAuditContent,
+  translateLogContent,
 } from '../../lib/format'
 import {
   getLogTypeConfig,
@@ -480,6 +481,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const { t } = useTranslation()
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
   const details = props.log.content ?? ''
+  const localizedDetails = translateLogContent(details, t)
   const other = parseLogOther(props.log.other)
   const typeConfig = getLogTypeConfig(props.log.type)
 
@@ -1235,18 +1237,18 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 variant='ghost'
                 size='sm'
                 className='absolute top-1.5 right-1.5 h-5 w-5 p-0'
-                onClick={() => copyToClipboard(details)}
+                onClick={() => copyToClipboard(localizedDetails)}
                 title={t('Copy to clipboard')}
                 aria-label={t('Copy to clipboard')}
               >
-                {copiedText === details ? (
+                {copiedText === localizedDetails ? (
                   <Check className='size-3 text-green-600' />
                 ) : (
                   <Copy className='size-3' />
                 )}
               </Button>
               <p className='min-w-0 pr-6 text-xs leading-relaxed break-all whitespace-pre-wrap sm:wrap-break-word'>
-                {details}
+                {localizedDetails}
               </p>
             </div>
           </div>

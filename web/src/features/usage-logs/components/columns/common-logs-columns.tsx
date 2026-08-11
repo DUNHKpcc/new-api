@@ -49,6 +49,7 @@ import {
   parseLogOther,
   isViolationFeeLog,
   renderAuditContent,
+  translateLogContent,
 } from '../../lib/format'
 import {
   isDisplayableLogType,
@@ -760,7 +761,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         } else if (log.content) {
           detailPreview = (
             <span className='text-muted-foreground truncate group-hover:underline'>
-              {log.content}
+              {translateLogContent(log.content, t)}
             </span>
           )
         }

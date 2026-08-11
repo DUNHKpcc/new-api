@@ -54,6 +54,26 @@ const PARAM_OVERRIDE_ACTION_MAP: Record<string, string> = {
   return_error: 'Return Error',
 }
 
+const LOCALIZED_LOG_CONTENT = new Set([
+  'Affiliate commission became available',
+  'Affiliate commission created',
+  'Affiliate commission offset an outstanding commission debt',
+  'Affiliate commission program activated',
+  'Affiliate commission reversed',
+  'Changed affiliate access',
+  'Changed affiliate financial configuration',
+  'Online top-up completed',
+  'Reversed affiliate commission',
+  'Transferred affiliate commissions to the main balance',
+])
+
+export function translateLogContent(
+  content: string,
+  t: (key: string) => string
+): string {
+  return LOCALIZED_LOG_CONTENT.has(content) ? t(content) : content
+}
+
 /**
  * Get localized label for a param override action
  */
