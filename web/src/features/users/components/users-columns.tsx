@@ -295,6 +295,34 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
       meta: { mobileHidden: true },
     },
     {
+      id: 'affiliate',
+      header: t('Affiliate'),
+      cell: ({ row }) => {
+        const summary = row.original.affiliate_summary
+        if (!summary) return '-'
+        let label = 'Affiliate inactive'
+        let variant: 'success' | 'neutral' | 'danger' = 'neutral'
+        if (summary.access === 'deny') {
+          label = 'Affiliate denied'
+          variant = 'danger'
+        } else if (summary.status === 'suspended') {
+          label = 'Affiliate suspended'
+          variant = 'danger'
+        } else if (summary.status === 'active') {
+          label = 'Affiliate active'
+          variant = 'success'
+        } else if (summary.eligible) {
+          label = 'Affiliate eligible'
+        }
+        return (
+          <StatusBadge label={t(label)} variant={variant} copyable={false} />
+        )
+      },
+      size: 150,
+      enableSorting: false,
+      meta: { mobileHidden: true },
+    },
+    {
       accessorKey: 'created_at',
       header: t('Created At'),
       cell: ({ row }) => {

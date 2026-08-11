@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
+import type { AffiliateSettingForm } from './billing/affiliate-settings-section'
 import type {
   ConfirmPaymentComplianceResponse,
   FetchUpstreamRatiosRequest,
@@ -38,6 +39,15 @@ export async function getSystemOptions() {
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  return res.data
+}
+
+export async function updateAffiliateSetting(request: AffiliateSettingForm) {
+  const res = await api.put<{
+    success: boolean
+    message?: string
+    data?: AffiliateSettingForm
+  }>('/api/option/affiliate', request)
   return res.data
 }
 

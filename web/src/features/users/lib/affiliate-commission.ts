@@ -16,10 +16,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-// ============================================================================
-// Wallet Library Exports
-// ============================================================================
+import type { AffiliateCommissionStatus } from '../types'
 
-export * from './format'
-export * from './payment'
-export * from './ui'
+const REVERSIBLE_STATUSES = new Set<AffiliateCommissionStatus>([
+  'pending',
+  'available',
+  'transferred',
+])
+
+export function isAffiliateCommissionReversible(
+  status: AffiliateCommissionStatus
+): boolean {
+  return REVERSIBLE_STATUSES.has(status)
+}
+
+export function normalizeAffiliateCommissionReverseReason(
+  value: string
+): string | null {
+  const normalized = value.trim()
+  const characterCount = [...normalized].length
+  return characterCount >= 1 && characterCount <= 255 ? normalized : null
+}

@@ -57,6 +57,37 @@ export function formatPercent(value: number | null | undefined): string {
   }).format((value as number) / 100)
 }
 
+function parseIntegerString(value: string): bigint | null {
+  if (!/^-?\d+$/.test(value)) return null
+  try {
+    return BigInt(value)
+  } catch {
+    return null
+  }
+}
+
+export function formatIntegerString(value: string): string {
+  const integer = parseIntegerString(value)
+  return integer === null ? '--' : new Intl.NumberFormat().format(integer)
+}
+
+export function formatMinorCurrency(value: string, currency: string): string {
+  const amount = parseIntegerString(value)
+  const normalizedCurrency = currency.trim().toUpperCase()
+  if (amount === null || !/^[A-Z]{3}$/.test(normalizedCurrency)) return '--'
+
+  const sign = amount < 0n ? '-' : ''
+  const absolute = amount < 0n ? -amount : amount
+  const whole = absolute / 100n
+  const fraction = String(absolute % 100n).padStart(2, '0')
+  return `${sign}${normalizedCurrency} ${new Intl.NumberFormat().format(whole)}.${fraction}`
+}
+
+export function isPositiveIntegerString(value: string): boolean {
+  const integer = parseIntegerString(value)
+  return integer !== null && integer > 0n
+}
+
 export function formatCurrencyUSD(value: number | null | undefined): string {
   return formatCurrencyFromUSD(value == null ? null : (value as number))
 }

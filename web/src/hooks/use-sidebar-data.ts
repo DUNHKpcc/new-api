@@ -24,6 +24,7 @@ import {
   Download,
   FileText,
   FlaskConical,
+  Handshake,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -120,6 +121,11 @@ export function useSidebarData(): SidebarData {
             iconBadge: hasPromotion
               ? { icon: BadgePercent, label: t('Discount') }
               : undefined,
+          },
+          {
+            title: t('Affiliate Center'),
+            url: '/affiliate',
+            icon: Handshake,
           },
           {
             title: t('Profile'),

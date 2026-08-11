@@ -27,8 +27,8 @@ import {
 const defaultBillingSettings: BillingSettings = {
   QuotaForNewUser: 0,
   PreConsumedQuota: 0,
-  QuotaForInviter: 0,
-  QuotaForInvitee: 0,
+  AffiliateSetting:
+    '{"registration_reward_enabled":true,"inviter_reward_quota":0,"invitee_reward_quota":0,"commission_enabled":false,"qualification_threshold_minor":10000,"commission_rate_bps":0,"commission_wait_days":7,"version":1}',
   TopUpLink: '',
   'general_setting.docs_link': '',
   'quota_setting.enable_free_model_pre_consume': true,

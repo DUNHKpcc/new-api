@@ -28,8 +28,11 @@ describe('verified payment amount formatting', () => {
     assert.match(formatted, /12\.34/)
   })
 
-  test('returns unavailable marker for unsafe or invalid amounts', () => {
-    assert.equal(formatPaymentMinorAmount('9007199254740992', 'CNY'), '--')
+  test('preserves large integer amounts and rejects invalid currency', () => {
+    assert.equal(
+      formatPaymentMinorAmount('9007199254740992', 'CNY'),
+      'CNY 90,071,992,547,409.92'
+    )
     assert.equal(formatPaymentMinorAmount('1234', 'invalid'), '--')
   })
 })

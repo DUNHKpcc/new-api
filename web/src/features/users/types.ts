@@ -50,6 +50,16 @@ export const pccAgentUserSummarySchema = z.object({
   gift: pccAgentGiftSummarySchema.nullable(),
 })
 
+export const affiliateUserSummarySchema = z.object({
+  access: z.string(),
+  status: z.string(),
+  activated_at: z.number(),
+  eligible: z.boolean(),
+  verified_amount_minor: z.string(),
+  lifetime_commission_quota: z.string(),
+  currency: z.string(),
+})
+
 export const userSchema = z.object({
   id: z.number(),
   username: z.string(),
@@ -81,6 +91,7 @@ export const userSchema = z.object({
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
   pcc_agent_summary: pccAgentUserSummarySchema.optional(),
+  affiliate_summary: affiliateUserSummarySchema.optional(),
 })
 export type User = z.infer<typeof userSchema>
 
@@ -95,6 +106,45 @@ export interface ApiResponse<T = unknown> {
   success: boolean
   message?: string
   data?: T
+}
+
+export type AffiliateCommissionStatus =
+  | 'pending'
+  | 'available'
+  | 'transferred'
+  | 'reversed'
+
+export interface AdminAffiliateCommission {
+  id: string
+  agent_user_id: number
+  referred_user_id: number
+  topup_id: number
+  paid_amount_minor: string
+  paid_currency: string
+  purchased_quota: string
+  unit_price_snapshot: string
+  quota_per_unit_snapshot: string
+  commission_rate_bps: number
+  commission_amount_minor: string
+  gross_reward_quota: string
+  debt_offset_quota: string
+  reward_quota: string
+  status: AffiliateCommissionStatus
+  available_at: number
+  transfer_id: string | null
+  transferred_at: number
+  reversed_at: number
+  reversed_by: number
+  reverse_reason: string
+  config_version: number
+  created_at: number
+}
+
+export interface AdminAffiliateCommissionPage {
+  items: AdminAffiliateCommission[]
+  page: number
+  page_size: number
+  total: number
 }
 
 export type UserSortBy =

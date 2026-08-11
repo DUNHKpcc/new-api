@@ -28,6 +28,7 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
+  AdminAffiliateCommissionPage,
 } from './types'
 
 // ============================================================================
@@ -153,6 +154,44 @@ export async function resetUserPasskey(id: number): Promise<ApiResponse> {
  */
 export async function resetUserTwoFA(id: number): Promise<ApiResponse> {
   const res = await api.delete(`/api/user/${id}/2fa`)
+  return res.data
+}
+
+export async function updateAffiliateAccess(
+  userId: number,
+  access: 'inherit' | 'allow' | 'deny',
+  reason: string
+): Promise<ApiResponse> {
+  const res = await api.put(`/api/user/${userId}/affiliate-access`, {
+    access,
+    reason,
+  })
+  return res.data
+}
+
+export async function getAdminAffiliateCommissions(
+  agentUserId: number,
+  page: number,
+  pageSize = 20
+): Promise<ApiResponse<AdminAffiliateCommissionPage>> {
+  const res = await api.get('/api/admin/affiliate/commissions', {
+    params: {
+      agent_user_id: agentUserId,
+      page,
+      page_size: pageSize,
+    },
+  })
+  return res.data
+}
+
+export async function reverseAdminAffiliateCommission(
+  commissionId: string,
+  reason: string
+): Promise<ApiResponse> {
+  const res = await api.post(
+    `/api/admin/affiliate/commissions/${commissionId}/reverse`,
+    { reason }
+  )
   return res.data
 }
 

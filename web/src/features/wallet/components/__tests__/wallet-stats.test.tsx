@@ -38,9 +38,6 @@ const user: UserWalletData = {
   quota: 500000,
   used_quota: 100000,
   request_count: 20,
-  aff_quota: 0,
-  aff_history_quota: 0,
-  aff_count: 0,
   group: 'default',
 }
 
