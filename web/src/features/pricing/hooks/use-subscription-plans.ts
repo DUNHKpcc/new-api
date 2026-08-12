@@ -19,14 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 
 import { getPublicPlans } from '@/features/subscriptions/api'
-import { useAuthStore } from '@/stores/auth-store'
 
 export function usePricingSubscriptionPlans() {
-  const userId = useAuthStore((state) => state.auth.user?.id)
   const plansQuery = useQuery({
-    queryKey: ['subscription', 'plans', userId],
+    queryKey: ['subscription', 'plans', 'public'],
     queryFn: getPublicPlans,
-    enabled: Boolean(userId),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   })
@@ -35,6 +32,6 @@ export function usePricingSubscriptionPlans() {
 
   return {
     plans,
-    isLoading: Boolean(userId) && plansQuery.isLoading,
+    isLoading: plansQuery.isLoading,
   }
 }

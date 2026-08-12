@@ -73,7 +73,10 @@ const plans: PlanRecord[] = [
   },
 ]
 
-async function renderPricingPageTop(records: PlanRecord[]) {
+async function renderPricingPageTop(
+  records: PlanRecord[],
+  isAuthenticated = false
+) {
   const i18n = createInstance()
   await i18n.use(initReactI18next).init({
     lng: 'en',
@@ -88,6 +91,7 @@ async function renderPricingPageTop(records: PlanRecord[]) {
       { i18n },
       createElement(PricingPageTop, {
         plans: records,
+        isAuthenticated,
         searchInput: '',
         onSearchChange: () => undefined,
         onClearSearch: () => undefined,
@@ -104,6 +108,11 @@ async function renderPricingPageTop(records: PlanRecord[]) {
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/wallet',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/sign-in',
       component: () => null,
     }),
   ]
@@ -142,11 +151,18 @@ describe('pricing page top', () => {
     assert.match(markup, /Professional plan with a deliberately long title/)
     assert.match(markup, /¥9\.90/)
     assert.doesNotMatch(markup, /\$9\.90/)
-    assert.match(markup, /href="\/wallet"/)
+    assert.match(markup, /href="\/sign-in\?redirect=%2Fwallet"/)
     assert.match(markup, />Subscribe Now</)
     assert.match(markup, /data-subscription-plan-carousel="true"/)
     assert.match(markup, /basis-\[88%\].*sm:basis-1\/2.*xl:basis-1\/3/)
     assert.match(markup, /aria-label="Previous slide"/)
     assert.match(markup, /aria-label="Next slide"/)
+  })
+
+  test('links authenticated subscribers directly to the wallet', async () => {
+    const markup = await renderPricingPageTop(plans, true)
+
+    assert.match(markup, /href="\/wallet"/)
+    assert.doesNotMatch(markup, /href="\/sign-in\?redirect=%2Fwallet"/)
   })
 })

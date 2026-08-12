@@ -21,6 +21,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { PublicLayout } from '@/components/layout'
 import { PUBLIC_PAGE_SURFACE_CLASS } from '@/components/layout/public-page-surface'
 import { PageTransition } from '@/components/page-transition'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   LoadingSkeleton,
@@ -38,6 +39,9 @@ import { usePricingData } from './hooks/use-pricing-data'
 import { usePricingSubscriptionPlans } from './hooks/use-subscription-plans'
 
 export function Pricing() {
+  const isAuthenticated = useAuthStore(
+    (state) => Boolean(state.auth.user) && Boolean(state.auth.accessToken)
+  )
   const [selectedModelName, setSelectedModelName] = useState<string | null>(
     null
   )
@@ -157,6 +161,7 @@ export function Pricing() {
             <PricingPageTop
               plans={subscriptionPlans.plans}
               plansLoading={subscriptionPlans.isLoading}
+              isAuthenticated={isAuthenticated}
               searchInput={searchInput}
               onSearchChange={setSearchInput}
               onClearSearch={clearSearch}
@@ -175,6 +180,7 @@ export function Pricing() {
           <PricingPageTop
             plans={subscriptionPlans.plans}
             plansLoading={subscriptionPlans.isLoading}
+            isAuthenticated={isAuthenticated}
             searchInput={searchInput}
             onSearchChange={setSearchInput}
             onClearSearch={clearSearch}

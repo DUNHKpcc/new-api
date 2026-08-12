@@ -41,13 +41,22 @@ import { formatQuota } from '@/lib/format'
 export interface SubscriptionPlanShowcaseProps {
   plans: PlanRecord[]
   isLoading?: boolean
+  isAuthenticated: boolean
 }
 
-function SubscriptionPlanCard(props: { record: PlanRecord }) {
+function SubscriptionPlanCard(props: {
+  record: PlanRecord
+  isAuthenticated: boolean
+}) {
   const { t } = useTranslation()
   const plan = props.record.plan
   const totalAmount = Number(plan.total_amount || 0)
   const quota = totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')
+  const subscribeLink = props.isAuthenticated ? (
+    <Link to='/wallet' />
+  ) : (
+    <Link to='/sign-in' search={{ redirect: '/wallet' }} />
+  )
 
   return (
     <Card
@@ -106,7 +115,7 @@ function SubscriptionPlanCard(props: { record: PlanRecord }) {
         <Button
           variant='outline'
           className='mt-3 w-full justify-between'
-          render={<Link to='/wallet' />}
+          render={subscribeLink}
         >
           <span>{t('Subscribe Now')}</span>
           <ArrowRight data-icon='inline-end' aria-hidden='true' />
@@ -177,7 +186,10 @@ export function SubscriptionPlanShowcase(props: SubscriptionPlanShowcaseProps) {
                   key={record.plan.id}
                   className='basis-[88%] pl-3 sm:basis-1/2 xl:basis-1/3 2xl:basis-1/4'
                 >
-                  <SubscriptionPlanCard record={record} />
+                  <SubscriptionPlanCard
+                    record={record}
+                    isAuthenticated={props.isAuthenticated}
+                  />
                 </CarouselItem>
               ))}
         </CarouselContent>

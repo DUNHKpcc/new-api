@@ -27,6 +27,7 @@ import { SubscriptionPlanShowcase } from './subscription-plan-showcase'
 export interface PricingPageTopProps {
   plans: PlanRecord[]
   plansLoading?: boolean
+  isAuthenticated: boolean
   searchInput: string
   onSearchChange: (value: string) => void
   onClearSearch: () => void
@@ -41,6 +42,7 @@ export function PricingPageTop(props: PricingPageTopProps) {
       <SubscriptionPlanShowcase
         plans={props.plans}
         isLoading={props.plansLoading}
+        isAuthenticated={props.isAuthenticated}
       />
       <header
         className={cn(
