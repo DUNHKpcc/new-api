@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { APP_GLASS_CONTEXT_CLASS_NAME } from '@/components/ui/surface'
+
 import type { TopNavLink } from '../types'
 import { PublicHeader, type PublicHeaderProps } from './public-header'
 
@@ -34,7 +36,9 @@ type PublicLayoutProps = {
 
 export function PublicLayout(props: PublicLayoutProps) {
   return (
-    <div className='bg-background text-foreground relative min-h-svh overflow-x-clip'>
+    <div
+      className={`${APP_GLASS_CONTEXT_CLASS_NAME} bg-background text-foreground relative min-h-svh overflow-x-clip`}
+    >
       <PublicHeader
         navContent={props.navContent}
         navLinks={props.navLinks}

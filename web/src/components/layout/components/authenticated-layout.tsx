@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { APP_GLASS_CONTEXT_CLASS_NAME } from '@/components/ui/surface'
 import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
 import { getCookie } from '@/lib/cookies'
@@ -44,6 +45,7 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
             <AppSidebar />
             <SidebarInset
               className={cn(
+                APP_GLASS_CONTEXT_CLASS_NAME,
                 '@container/content',
                 'h-[calc(100svh-var(--app-header-height,0px))]',
                 'min-h-0 overflow-hidden',

@@ -16,29 +16,5 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
-
-import {
-  DEFAULT_THEME_CUSTOMIZATION,
-  resolveThemeFont,
-} from '../theme-customization'
-
-describe('default UI customization', () => {
-  test('uses the Anthropic preset with automatic typography and system radius', () => {
-    assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'anthropic',
-      font: 'default',
-      radius: 'default',
-      scale: 'default',
-      contentLayout: 'full',
-    })
-    assert.equal(
-      resolveThemeFont(
-        DEFAULT_THEME_CUSTOMIZATION.font,
-        DEFAULT_THEME_CUSTOMIZATION.preset
-      ),
-      'serif'
-    )
-  })
-})
+export const APP_GLASS_CONTEXT_CLASS_NAME = 'app-glass-context'
+export const APP_GLASS_SURFACE_CLASS_NAME = 'app-glass-surface'

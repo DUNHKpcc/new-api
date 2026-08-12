@@ -60,6 +60,7 @@ import {
   useApiInfo,
   useDashboardContentVisibility,
 } from '../../hooks/use-status-data'
+import { DASHBOARD_PANEL_CLASS_NAME } from '../ui/panel-surface'
 import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
@@ -621,7 +622,7 @@ export function OverviewDashboard() {
     <div className='flex flex-col gap-4'>
       {setupGuideExpanded ? (
         <CardStaggerContainer className='grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-          <CardStaggerItem className='overview-glass-panel h-full overflow-hidden rounded-2xl border'>
+          <CardStaggerItem className={cn(DASHBOARD_PANEL_CLASS_NAME, 'h-full')}>
             <div className='relative h-full overflow-hidden p-4 sm:p-5'>
               <SetupGuideBackdrop />
               <div className='relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]'>
@@ -677,7 +678,9 @@ export function OverviewDashboard() {
             </div>
           </CardStaggerItem>
 
-          <CardStaggerItem className='overview-glass-panel h-full rounded-2xl border p-4 sm:p-5'>
+          <CardStaggerItem
+            className={cn(DASHBOARD_PANEL_CLASS_NAME, 'h-full p-4 sm:p-5')}
+          >
             <div className='flex h-full flex-col gap-4'>
               <div className='flex flex-col gap-1'>
                 <div className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
@@ -697,7 +700,7 @@ export function OverviewDashboard() {
         </CardStaggerContainer>
       ) : (
         <CardStaggerContainer>
-          <CardStaggerItem className='overview-glass-panel overflow-hidden rounded-2xl border'>
+          <CardStaggerItem className={DASHBOARD_PANEL_CLASS_NAME}>
             <div className='relative overflow-hidden px-4 py-3 sm:px-5'>
               <SetupGuideBackdrop compact />
               <div className='relative flex flex-wrap items-center justify-between gap-3'>

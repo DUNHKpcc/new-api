@@ -19,26 +19,20 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import {
-  DEFAULT_THEME_CUSTOMIZATION,
-  resolveThemeFont,
-} from '../theme-customization'
+import { getResolvedColumnClassName } from '../column-pinning'
 
-describe('default UI customization', () => {
-  test('uses the Anthropic preset with automatic typography and system radius', () => {
-    assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'anthropic',
-      font: 'default',
-      radius: 'default',
-      scale: 'default',
-      contentLayout: 'full',
-    })
-    assert.equal(
-      resolveThemeFont(
-        DEFAULT_THEME_CUSTOMIZATION.font,
-        DEFAULT_THEME_CUSTOMIZATION.preset
-      ),
-      'serif'
+describe('pinned data table columns', () => {
+  test('keeps action cells on the same surface as the rest of the row', () => {
+    const getClassName = getResolvedColumnClassName(undefined, [
+      { columnId: 'actions', side: 'right' },
+    ])
+    const className = getClassName('actions', 'cell') ?? ''
+
+    assert.match(
+      className,
+      /\[background-color:var\(--data-table-row-bg,var\(--sidebar\)\)\]/
     )
+    assert.equal(className.includes('bg-background'), false)
+    assert.equal(className.includes('group-hover:[background-color:'), false)
   })
 })

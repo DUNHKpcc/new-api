@@ -19,26 +19,16 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import {
-  DEFAULT_THEME_CUSTOMIZATION,
-  resolveThemeFont,
-} from '../theme-customization'
+import { DASHBOARD_PANEL_CLASS_NAME } from '../panel-surface'
 
-describe('default UI customization', () => {
-  test('uses the Anthropic preset with automatic typography and system radius', () => {
-    assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'anthropic',
-      font: 'default',
-      radius: 'default',
-      scale: 'default',
-      contentLayout: 'full',
-    })
-    assert.equal(
-      resolveThemeFont(
-        DEFAULT_THEME_CUSTOMIZATION.font,
-        DEFAULT_THEME_CUSTOMIZATION.preset
-      ),
-      'serif'
-    )
+describe('dashboard panel surface', () => {
+  test('keeps one translucent glass treatment across dashboard panels', () => {
+    const classes = DASHBOARD_PANEL_CLASS_NAME.split(' ')
+
+    assert.ok(classes.includes('app-glass-surface'))
+    assert.ok(classes.includes('overflow-hidden'))
+    assert.ok(classes.includes('rounded-2xl'))
+    assert.ok(classes.includes('border'))
+    assert.equal(classes.includes('rounded-lg'), false)
   })
 })

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { Row, Table as TanstackTable } from '@tanstack/react-table'
 import * as React from 'react'
 
+import { APP_GLASS_SURFACE_CLASS_NAME } from '@/components/ui/surface'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
@@ -62,7 +63,8 @@ export function DataTableView<TData>(props: DataTableViewProps<TData>) {
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border',
+        APP_GLASS_SURFACE_CLASS_NAME,
+        '[--data-table-row-bg:var(--sidebar)] overflow-hidden rounded-lg border',
         props.containerClassName
       )}
       {...props.containerProps}

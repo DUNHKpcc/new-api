@@ -22,6 +22,8 @@ import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
+import { DASHBOARD_PANEL_CLASS_NAME } from './panel-surface'
+
 interface PanelWrapperProps {
   title: ReactNode
   description?: ReactNode
@@ -67,10 +69,7 @@ export function PanelWrapper(props: PanelWrapperProps) {
   const { t } = useTranslation()
   const resolvedEmptyMessage = props.emptyMessage ?? t('No data available')
   const height = props.height ?? 'h-64'
-  const frameClassName = cn(
-    'overview-glass-panel overflow-hidden rounded-2xl border',
-    props.className
-  )
+  const frameClassName = cn(DASHBOARD_PANEL_CLASS_NAME, props.className)
 
   if (props.loading) {
     return (

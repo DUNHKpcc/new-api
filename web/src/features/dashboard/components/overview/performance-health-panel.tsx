@@ -34,6 +34,8 @@ import {
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
+import { DASHBOARD_PANEL_CLASS_NAME } from '../ui/panel-surface'
+
 const PERFORMANCE_WINDOW_HOURS = 24
 const TOP_MODEL_LIMIT = 6
 
@@ -92,7 +94,7 @@ export function PerformanceHealthPanel() {
   const hasData = models.length > 0
 
   return (
-    <section className='overview-glass-panel h-full overflow-hidden rounded-2xl border'>
+    <section className={cn(DASHBOARD_PANEL_CLASS_NAME, 'h-full')}>
       <div className='flex items-center gap-2 border-b px-4 py-3 sm:px-5'>
         <IconBadge tone='success' size='sm'>
           <HeartPulse />

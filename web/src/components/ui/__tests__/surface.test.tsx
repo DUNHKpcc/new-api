@@ -19,26 +19,15 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import {
-  DEFAULT_THEME_CUSTOMIZATION,
-  resolveThemeFont,
-} from '../theme-customization'
+import { renderToStaticMarkup } from 'react-dom/server'
 
-describe('default UI customization', () => {
-  test('uses the Anthropic preset with automatic typography and system radius', () => {
-    assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'anthropic',
-      font: 'default',
-      radius: 'default',
-      scale: 'default',
-      contentLayout: 'full',
-    })
-    assert.equal(
-      resolveThemeFont(
-        DEFAULT_THEME_CUSTOMIZATION.font,
-        DEFAULT_THEME_CUSTOMIZATION.preset
-      ),
-      'serif'
-    )
+import { Card } from '../card'
+
+describe('application panel surface', () => {
+  test('applies the shared glass surface to cards on every page', () => {
+    const markup = renderToStaticMarkup(<Card>Content</Card>)
+
+    assert.match(markup, /app-glass-surface/)
+    assert.match(markup, /data-slot="card"/)
   })
 })

@@ -91,7 +91,7 @@ export type ContentLayout = 'full' | 'centered'
  *   (see `PRESET_DEFAULT_FONT`). The shipped `default` and `anthropic`
  *   presets resolve to serif; other named color presets fall back to
  *   sans unless they list a different choice. Mirrors how
- *   `radius: 'default'` defers to a per-preset hint.
+ *   `radius: 'default'` defers to the system's 0.3rem radius.
  * - `sans` — humanist sans (Public Sans), the project's UI fallback.
  * - `serif` — editorial serif (Lora + CJK fallbacks), the project's
  *   "soul" typography. Inherits across the whole UI; monospace contexts
@@ -118,7 +118,7 @@ export type ThemeCustomization = {
 export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
   preset: 'anthropic',
   font: 'default',
-  radius: 'none',
+  radius: 'default',
   scale: 'default',
   contentLayout: 'full',
 }
