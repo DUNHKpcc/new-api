@@ -17,9 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate, useRouter } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { getBuildRevision } from '@/lib/build-metadata'
+import { attemptStaleAssetRecovery } from '@/lib/stale-asset-recovery'
 import { cn } from '@/lib/utils'
 
 const FEEDBACK_URL = 'https://github.com/QuantumNous/new-api/issues'
@@ -47,6 +50,17 @@ export function GeneralError({
   const { history } = useRouter()
   const status = getHttpStatus(error)
   const isRateLimited = status === 429
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    attemptStaleAssetRecovery(
+      error,
+      getBuildRevision(),
+      window.sessionStorage,
+      () => window.location.reload()
+    )
+  }, [error])
+
   const title = isRateLimited
     ? t('Too many requests')
     : `${t('Oops! Something went wrong')} ${`:')`}`
