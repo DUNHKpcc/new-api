@@ -85,4 +85,13 @@ describe('home hero product showcase', () => {
     assert.ok(desktop?.labelClassName.includes('right-3'))
     assert.ok(miniProgram?.labelClassName.includes('-top-10'))
   })
+
+  test('anchors the desktop subscription offer below its top-right label', () => {
+    const promotionClasses = heroProductShowcaseClasses.promotion.split(' ')
+
+    assert.ok(promotionClasses.includes('top-14'))
+    assert.ok(promotionClasses.includes('right-3'))
+    assert.ok(promotionClasses.includes('max-w-[calc(100%-1.5rem)]'))
+    assert.ok(promotionClasses.includes('pointer-events-none'))
+  })
 })

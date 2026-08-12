@@ -41,6 +41,8 @@ export const heroProductShowcaseClasses = {
   image: 'block h-auto w-full select-none object-contain',
   imageFrame:
     'rounded-[8px] border border-black/10 shadow-[0_28px_80px_-30px_rgba(15,23,42,0.38)]',
+  promotion:
+    'border-primary/25 bg-background/94 text-foreground pointer-events-none absolute top-14 right-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-md border px-2 py-1.5 text-[11px] leading-4 font-medium shadow-sm backdrop-blur-md',
 } as const
 
 export const heroProductShowcaseMedia = [

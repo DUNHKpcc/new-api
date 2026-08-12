@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Download } from 'lucide-react'
+import { Download, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
@@ -118,6 +118,17 @@ export function HeroProductShowcase() {
                   </>
                 ) : null}
               </figcaption>
+              {item.id === 'desktop' ? (
+                <div className={heroProductShowcaseClasses.promotion}>
+                  <span className='bg-primary text-primary-foreground inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-semibold'>
+                    <Sparkles aria-hidden='true' className='size-3' />
+                    {t('Discount')}
+                  </span>
+                  <span>
+                    {t('Use the official Agent to get one month of Lite free')}
+                  </span>
+                </div>
+              ) : null}
               <img
                 src={item.src}
                 alt={labels[item.id]}

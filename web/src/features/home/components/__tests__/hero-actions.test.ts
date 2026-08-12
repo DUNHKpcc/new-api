@@ -36,73 +36,87 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { Hero } from '../sections/hero'
 
-describe('home hero actions', () => {
-  test('renders a resource download link in the public hero', async () => {
-    const i18n = createInstance()
-    await i18n.use(initReactI18next).init({
-      lng: 'en',
-      resources: {
-        en: {
-          translation: {
-            'Resource Downloads': 'Resource Downloads',
-          },
+async function renderHeroActions(isAuthenticated: boolean) {
+  const i18n = createInstance()
+  await i18n.use(initReactI18next).init({
+    lng: 'en',
+    resources: {
+      en: {
+        translation: {
+          'Resource Downloads': 'Resource Downloads',
+          'View Pricing': 'View Pricing',
         },
       },
-    })
+    },
+  })
 
-    const queryClient = new QueryClient()
-    queryClient.setQueryData(['status'], {})
-    useAuthStore.getState().auth.reset('idle')
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(['status'], {})
+  useAuthStore.getState().auth.reset('idle')
 
-    const TestPage = () =>
+  const TestPage = () =>
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
       createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        createElement(
-          I18nextProvider,
-          { i18n },
-          createElement(Hero, { isAuthenticated: false })
-        )
+        I18nextProvider,
+        { i18n },
+        createElement(Hero, { isAuthenticated })
       )
+    )
 
-    const rootRoute = createRootRoute()
-    const indexRoute = createRoute({
+  const rootRoute = createRootRoute()
+  const routes = [
+    createRoute({
       getParentRoute: () => rootRoute,
       path: '/',
       component: TestPage,
-    })
-    const signUpRoute = createRoute({
+    }),
+    createRoute({
       getParentRoute: () => rootRoute,
       path: '/sign-up',
       component: () => null,
-    })
-    const pricingRoute = createRoute({
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/dashboard',
+      component: () => null,
+    }),
+    createRoute({
       getParentRoute: () => rootRoute,
       path: '/pricing',
       component: () => null,
-    })
-    const resourceRoute = createRoute({
+    }),
+    createRoute({
       getParentRoute: () => rootRoute,
       path: '/resource-downloads',
       component: () => null,
-    })
-    const router = createRouter({
-      routeTree: rootRoute.addChildren([
-        indexRoute,
-        signUpRoute,
-        pricingRoute,
-        resourceRoute,
-      ]),
-      history: createMemoryHistory({ initialEntries: ['/'] }),
-    })
+    }),
+  ]
+  const router = createRouter({
+    routeTree: rootRoute.addChildren(routes),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
 
-    await router.load()
-    const markup = renderToStaticMarkup(
-      createElement(RouterProvider, { router })
-    )
+  await router.load()
+  const markup = renderToStaticMarkup(createElement(RouterProvider, { router }))
+  queryClient.clear()
+
+  return markup
+}
+
+describe('home hero actions', () => {
+  test('renders a resource download link in the public hero', async () => {
+    const markup = await renderHeroActions(false)
 
     assert.match(markup, /href="\/resource-downloads"/)
     assert.match(markup, />Resource Downloads<\/span>/)
-    queryClient.clear()
+  })
+
+  test('renders a pricing link for authenticated users', async () => {
+    const markup = await renderHeroActions(true)
+
+    assert.match(markup, /href="\/pricing"/)
+    assert.match(markup, />View Pricing<\/a>/)
   })
 })
