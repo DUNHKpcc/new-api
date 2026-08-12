@@ -16,16 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export {
-  formatDuration,
-  formatResetPeriod,
-  formatSubscriptionPrice,
-  formatTimestamp,
-} from './format'
-export {
-  getPlanFormSchema,
-  PLAN_FORM_DEFAULTS,
-  planToFormValues,
-  formValuesToPlanPayload,
-  type PlanFormValues,
-} from './plan-form'
+import assert from 'node:assert/strict'
+import { describe, test } from 'node:test'
+
+import { PUBLIC_PAGE_SURFACE_CLASS } from '../../public-page-surface'
+
+describe('public catalog page surface', () => {
+  test('uses the same solid background as the home page without gradients', () => {
+    const classes = PUBLIC_PAGE_SURFACE_CLASS.split(' ')
+
+    assert.ok(classes.includes('bg-background'))
+    assert.equal(PUBLIC_PAGE_SURFACE_CLASS.includes('gradient'), false)
+  })
+})

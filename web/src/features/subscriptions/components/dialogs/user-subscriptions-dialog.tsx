@@ -65,7 +65,7 @@ import {
   deleteUserSubscription,
   resetUserSubscriptionsByPlan,
 } from '../../api'
-import { formatTimestamp } from '../../lib'
+import { formatSubscriptionPrice, formatTimestamp } from '../../lib'
 import {
   getUserSubscriptionActionPolicy,
   isPccAgentGiftSubscription,
@@ -254,8 +254,8 @@ export function UserSubscriptionsDialog(props: Props) {
                   value: String(p.plan.id),
                   label: (
                     <>
-                      {p.plan.title}($
-                      {Number(p.plan.price_amount || 0).toFixed(2)})
+                      {p.plan.title} (
+                      {formatSubscriptionPrice(p.plan.price_amount)})
                     </>
                   ),
                 }))}
@@ -269,8 +269,8 @@ export function UserSubscriptionsDialog(props: Props) {
                   <SelectGroup>
                     {plans.map((p) => (
                       <SelectItem key={p.plan.id} value={String(p.plan.id)}>
-                        {p.plan.title} ($
-                        {Number(p.plan.price_amount || 0).toFixed(2)})
+                        {p.plan.title} (
+                        {formatSubscriptionPrice(p.plan.price_amount)})
                       </SelectItem>
                     ))}
                   </SelectGroup>

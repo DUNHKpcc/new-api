@@ -16,16 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export {
-  formatDuration,
-  formatResetPeriod,
-  formatSubscriptionPrice,
-  formatTimestamp,
-} from './format'
-export {
-  getPlanFormSchema,
-  PLAN_FORM_DEFAULTS,
-  planToFormValues,
-  formValuesToPlanPayload,
-  type PlanFormValues,
-} from './plan-form'
+import { useQuery } from '@tanstack/react-query'
+
+import { getPublicPlans } from '@/features/subscriptions/api'
+import { useAuthStore } from '@/stores/auth-store'
+
+export function usePricingSubscriptionPlans() {
+  const userId = useAuthStore((state) => state.auth.user?.id)
+  const plansQuery = useQuery({
+    queryKey: ['subscription', 'plans', userId],
+    queryFn: getPublicPlans,
+    enabled: Boolean(userId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  })
+
+  const plans = plansQuery.data?.success ? plansQuery.data.data || [] : []
+
+  return {
+    plans,
+    isLoading: Boolean(userId) && plansQuery.isLoading,
+  }
+}

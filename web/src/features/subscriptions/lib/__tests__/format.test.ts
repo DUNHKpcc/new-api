@@ -21,11 +21,17 @@ import { describe, test } from 'node:test'
 
 import type { TFunction } from 'i18next'
 
-import { formatPlanSummary } from '../format'
+import { formatPlanSummary, formatSubscriptionPrice } from '../format'
 
 const translate = ((key: string) => key) as TFunction
 
 describe('subscription plan formatting', () => {
+  test('uses a CNY symbol without converting the configured plan amount', () => {
+    assert.equal(formatSubscriptionPrice(299), '¥299.00')
+    assert.equal(formatSubscriptionPrice('16.66'), '¥16.66')
+    assert.equal(formatSubscriptionPrice('invalid'), '¥0.00')
+  })
+
   test('labels unlimited quota and includes reset and validity details', () => {
     const summary = formatPlanSummary(
       {

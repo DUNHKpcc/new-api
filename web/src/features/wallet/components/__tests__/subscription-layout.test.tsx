@@ -262,6 +262,8 @@ describe('wallet subscription layout', () => {
     const limitedPlan = planGrid.querySelector(
       '[data-subscription-plan-id="1"]'
     )
+    assert.match(limitedPlan?.textContent ?? '', /¥10\.00/)
+    assert.doesNotMatch(limitedPlan?.textContent ?? '', /\$10\.00/)
     assert.match(limitedPlan?.textContent ?? '', /Purchase Limit: 2/)
     assert.ok(limitedPlan?.querySelector('.break-words'))
 

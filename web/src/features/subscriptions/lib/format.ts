@@ -23,6 +23,16 @@ import { formatQuota } from '@/lib/format'
 
 import type { SubscriptionPlan } from '../types'
 
+/**
+ * Subscription prices use a fixed CNY symbol in the UI only. Payment gateways
+ * remain authoritative for the currency and amount charged.
+ */
+export function formatSubscriptionPrice(amount: number | string): string {
+  const value = Number(amount)
+  const normalized = Number.isFinite(value) ? value : 0
+  return `¥${normalized.toFixed(2)}`
+}
+
 export function formatDuration(
   plan: Partial<SubscriptionPlan>,
   t: TFunction
