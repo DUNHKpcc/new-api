@@ -219,13 +219,16 @@ export function AffiliateSettingsSection(props: { defaultValue: string }) {
             <Input
               inputMode='numeric'
               value={setting.qualification_threshold_minor}
-              onChange={(event) =>
+              onChange={(event) => {
+                const sanitizedValue = event.currentTarget.value.replaceAll(
+                  /\D/g,
+                  ''
+                )
                 setSetting((current) => ({
                   ...current,
-                  qualification_threshold_minor:
-                    event.currentTarget.value.replaceAll(/\D/g, ''),
+                  qualification_threshold_minor: sanitizedValue,
                 }))
-              }
+              }}
             />
           </label>
           <label className='grid gap-2 text-sm font-medium'>
