@@ -20,31 +20,31 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
 import {
-  DEFAULT_THEME_CUSTOMIZATION,
-  resolveThemeFont,
-  THEME_PRESETS,
-} from '../theme-customization'
+  getUnreadNotificationItems,
+  type NotificationFeedItem,
+} from '../notification-feed'
 
-describe('default UI customization', () => {
-  test('uses the Comic Ops preset with automatic sans typography and system radius', () => {
-    assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'operator',
-      font: 'default',
-      radius: 'default',
-      scale: 'default',
-      contentLayout: 'full',
-    })
-    assert.equal(
-      resolveThemeFont(
-        DEFAULT_THEME_CUSTOMIZATION.font,
-        DEFAULT_THEME_CUSTOMIZATION.preset
-      ),
-      'sans'
-    )
-    assert.ok(THEME_PRESETS.some((preset) => preset.value === 'operator'))
-    assert.equal(
-      THEME_PRESETS.find((preset) => preset.value === 'operator')?.name,
-      'Comic Ops'
+const unreadNotice: NotificationFeedItem = {
+  key: 'notice',
+  source: 'notice',
+  content: 'Scheduled maintenance',
+  unread: true,
+}
+
+describe('notification read state', () => {
+  test('does not expose a floating unread preview while sources are loading', () => {
+    assert.deepEqual(getUnreadNotificationItems([unreadNotice], true), [])
+  })
+
+  test('exposes only unread items after every source finishes loading', () => {
+    const readNotice: NotificationFeedItem = {
+      ...unreadNotice,
+      unread: false,
+    }
+
+    assert.deepEqual(
+      getUnreadNotificationItems([readNotice, unreadNotice], false),
+      [unreadNotice]
     )
   })
 })

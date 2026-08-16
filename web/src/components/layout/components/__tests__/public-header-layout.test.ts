@@ -43,11 +43,30 @@ describe('public header layout', () => {
       )
     )
     assert.ok(
+      tokens(publicHeaderLayoutClasses.header.base).includes(
+        'app-topbar-accent'
+      ),
+      'mounts the gradient accent hairline along the bottom edge'
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.header.base).includes(
+        'bg-(--app-topbar-surface)'
+      ),
+      'surface comes from the --app-topbar-surface token so presets and dark mode re-theme it'
+    )
+    assert.ok(
       tokens(publicHeaderLayoutClasses.shell.base).includes('max-w-7xl')
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.shell.base).includes('app-header-bar'),
+      'uses the same preset-aware bar width and spacing as the console header'
     )
     assert.ok(tokens(publicHeaderLayoutClasses.shell.base).includes('h-full'))
     assert.ok(tokens(publicHeaderLayoutClasses.bar.idle).includes('h-full'))
     assert.ok(tokens(publicHeaderLayoutClasses.bar.scrolled).includes('h-full'))
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.left).includes('app-header-left')
+    )
     assert.equal(
       publicHeaderLayoutClasses.bar.idle,
       publicHeaderLayoutClasses.bar.scrolled
@@ -57,19 +76,66 @@ describe('public header layout', () => {
       false
     )
     assert.ok(tokens(publicHeaderLayoutClasses.brand.mark).includes('size-8'))
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.brand.mark).includes(
+        'app-header-brand-mark'
+      )
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.brand.name).includes(
+        'app-header-brand-name'
+      )
+    )
+    assert.ok(tokens(publicHeaderLayoutClasses.brand.mark).includes('ring-1'))
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.brand.mark).includes('rounded-sm')
+    )
     assert.ok(tokens(publicHeaderLayoutClasses.brand.name).includes('text-xl'))
-    assert.ok(tokens(publicHeaderLayoutClasses.desktopLink).includes('text-sm'))
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.brand.name).includes('tracking-tight')
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.desktopLink).includes('text-[0.8125rem]')
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.desktopLink).includes('after:inset-x-0'),
+      'active indicator spans the full link width instead of a centered dash'
+    )
     assert.ok(
       tokens(publicHeaderLayoutClasses.desktopLinkActive).includes(
-        'after:bg-primary'
+        'after:scale-x-100'
       )
     )
     assert.ok(
       tokens(publicHeaderLayoutClasses.authButton).includes('bg-foreground')
     )
     assert.ok(
+      tokens(publicHeaderLayoutClasses.authButton).includes('rounded-sm')
+    )
+    assert.ok(
       tokens(publicHeaderLayoutClasses.utilityActions).includes(
         '[&_button]:size-10'
+      )
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.utilityActions).includes(
+        '[&_button]:rounded-sm'
+      )
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.desktopNav).includes('app-header-nav')
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.desktopNav).includes('items-center')
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.desktopActions).includes(
+        'app-header-actions'
+      )
+    )
+    assert.ok(
+      tokens(publicHeaderLayoutClasses.utilityActions).includes(
+        'app-header-utilities'
       )
     )
   })

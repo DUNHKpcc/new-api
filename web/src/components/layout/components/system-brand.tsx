@@ -71,7 +71,7 @@ export function SystemBrand(props: SystemBrandProps) {
           <img
             src={logo}
             alt={t('Logo')}
-            className='size-full rounded-lg object-contain'
+            className='size-full rounded-sm object-contain'
           />
         </div>
         <span className={appHeaderLayoutClasses.brand.name}>{name}</span>

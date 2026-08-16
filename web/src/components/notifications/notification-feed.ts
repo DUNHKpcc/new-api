@@ -117,6 +117,14 @@ export function getNotificationPreview(
   return `${plainText.slice(0, maxLength).trimEnd()}...`
 }
 
+export function getUnreadNotificationItems(
+  items: readonly NotificationFeedItem[],
+  loading: boolean
+): NotificationFeedItem[] {
+  if (loading) return []
+  return items.filter((item) => item.unread)
+}
+
 export function buildNotificationFeed(
   options: BuildNotificationFeedOptions
 ): NotificationFeedItem[] {

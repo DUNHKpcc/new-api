@@ -38,6 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { LOTTERY_IMAGE_ASPECT_CLASS } from '@/features/lottery/lib/image-layout'
 import { useNotifications } from '@/hooks/use-notifications'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
@@ -184,7 +185,10 @@ function NotificationItem(props: NotificationItemProps) {
             <img
               src={props.item.image}
               alt={props.item.title || t('Lottery image')}
-              className='mb-3 aspect-video w-full rounded-md border object-cover'
+              className={cn(
+                'mb-3 w-full rounded-md border object-cover',
+                LOTTERY_IMAGE_ASPECT_CLASS
+              )}
             />
           ) : null}
           <div className='break-words'>
@@ -276,13 +280,17 @@ export function GlobalNotificationCenter() {
   const [expanded, setExpanded] = useState(false)
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null)
   const floatingPosition = useFloatingNotificationPosition(expanded)
-  const unreadItems = notifications.items.filter((item) => item.unread)
+  const unreadItems = notifications.unreadItems
 
   const handleItemExpandedChange = (key: string) => {
+    if (expandedItemKey !== key) {
+      notifications.markAsReadByKey(key)
+    }
     setExpandedItemKey((currentKey) => (currentKey === key ? null : key))
   }
 
   const handlePreviewOpen = (key: string) => {
+    notifications.markAsReadByKey(key)
     setExpandedItemKey(key)
     setExpanded(true)
   }
@@ -374,6 +382,7 @@ export function GlobalNotificationCenter() {
                         <Button
                           variant='ghost'
                           size='icon-sm'
+                          disabled={notifications.loading}
                           aria-label={t('Mark all as read')}
                           onClick={notifications.markAllAsRead}
                         />

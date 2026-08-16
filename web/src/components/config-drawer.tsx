@@ -249,7 +249,7 @@ function PresetConfig() {
   return (
     <div>
       <SectionTitle
-        title={t('Color preset')}
+        title={t('Theme preset')}
         showReset={customization.preset !== defaults.preset}
         onReset={() => setPreset(defaults.preset)}
       />
@@ -257,7 +257,7 @@ function PresetConfig() {
         value={customization.preset}
         onValueChange={(v) => setPreset(v as ThemePreset)}
         className='grid w-full grid-cols-4 gap-3'
-        aria-label={t('Select color preset')}
+        aria-label={t('Select theme preset')}
       >
         {THEME_PRESETS.map((preset) => (
           <Item

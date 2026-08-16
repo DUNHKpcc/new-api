@@ -28,8 +28,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { LOTTERY_IMAGE_ASPECT_CLASS } from '@/features/lottery/lib/image-layout'
 import { toDateTimeLocalValue } from '@/features/lottery/lib/lottery-items'
 import type { LotteryItem } from '@/features/lottery/types'
+import { cn } from '@/lib/utils'
 
 type LotteryItemEditorProps = {
   item: LotteryItem
@@ -92,7 +94,12 @@ export function LotteryItemEditor(props: LotteryItemEditorProps) {
       <div className='grid min-w-0 gap-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)]'>
         <div className='min-w-0 space-y-2'>
           <Label htmlFor={`${inputPrefix}-image`}>{t('Lottery image')}</Label>
-          <div className='bg-muted flex aspect-video items-center justify-center overflow-hidden rounded-lg border'>
+          <div
+            className={cn(
+              'bg-muted flex items-center justify-center overflow-hidden rounded-lg border',
+              LOTTERY_IMAGE_ASPECT_CLASS
+            )}
+          >
             {props.item.image ? (
               <img
                 src={props.item.image}

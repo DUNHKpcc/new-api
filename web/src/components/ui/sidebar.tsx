@@ -152,8 +152,8 @@ function SidebarProvider({
         data-slot='sidebar-wrapper'
         style={
           {
-            '--sidebar-width': SIDEBAR_WIDTH,
-            '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
+            '--sidebar-width': `var(--app-sidebar-width, ${SIDEBAR_WIDTH})`,
+            '--sidebar-width-icon': `var(--app-sidebar-width-icon, ${SIDEBAR_WIDTH_ICON})`,
             ...style,
           } as React.CSSProperties
         }
@@ -210,7 +210,7 @@ function Sidebar({
           className='bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden'
           style={
             {
-              '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
+              '--sidebar-width': `var(--app-sidebar-width-mobile, ${SIDEBAR_WIDTH_MOBILE})`,
             } as React.CSSProperties
           }
           side={side}

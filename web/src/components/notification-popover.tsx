@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LOTTERY_IMAGE_ASPECT_CLASS } from '@/features/lottery/lib/image-layout'
 import { useNotifications } from '@/hooks/use-notifications'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
@@ -159,7 +160,10 @@ function NotificationList(props: NotificationListProps) {
                 <img
                   src={item.image}
                   alt={item.title || t('Lottery image')}
-                  className='mb-3 aspect-video w-full rounded-md border object-cover'
+                  className={cn(
+                    'mb-3 w-full rounded-md border object-cover',
+                    LOTTERY_IMAGE_ASPECT_CLASS
+                  )}
                 />
               ) : null}
               <div className='text-sm leading-6 break-words'>
@@ -283,7 +287,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             type='button'
             variant='outline'
             size='sm'
-            disabled={notifications.unreadCount === 0}
+            disabled={notifications.loading || notifications.unreadCount === 0}
             onClick={notifications.markAllAsRead}
           >
             <CheckCheck aria-hidden='true' />

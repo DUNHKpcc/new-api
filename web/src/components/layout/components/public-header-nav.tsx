@@ -128,7 +128,7 @@ export function PublicHeaderOverflowMenu(props: PublicHeaderNavLinksProps) {
             variant='ghost'
             className={cn(
               publicHeaderLayoutClasses.desktopLink,
-              'gap-1 rounded-none bg-transparent hover:bg-transparent',
+              'gap-1 rounded-none bg-transparent',
               hasActiveLink
                 ? publicHeaderLayoutClasses.desktopLinkActive
                 : 'text-muted-foreground'

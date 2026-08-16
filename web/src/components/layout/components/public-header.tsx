@@ -241,11 +241,11 @@ export function PublicHeader(props: PublicHeaderProps) {
       alt=''
       loading={loading}
       logoLoaded={logoLoaded}
-      className='size-full rounded-lg object-contain'
+      className='size-full rounded-sm object-contain'
     />
   )
   if (loading) {
-    logoContent = <Skeleton className='size-full rounded-lg' />
+    logoContent = <Skeleton className='size-full rounded-sm' />
   } else if (customLogo) {
     logoContent = customLogo
   }
@@ -291,7 +291,7 @@ export function PublicHeader(props: PublicHeaderProps) {
             >
               <div
                 ref={navCapacity.brandRef}
-                className='col-start-1 row-start-1 flex min-w-0 items-center gap-3 justify-self-start'
+                className={publicHeaderLayoutClasses.left}
               >
                 <Link
                   to={homeUrl}
@@ -356,7 +356,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               >
                 {props.rightContent}
                 {props.rightContent && hasDesktopUtilities && (
-                  <div className='bg-border/60 mx-2 h-6 w-px' />
+                  <div className='bg-foreground/12 mx-2 h-6 w-px' />
                 )}
                 {hasDesktopUtilities && (
                   <div className={publicHeaderLayoutClasses.utilityActions}>
@@ -368,7 +368,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
                 {showAuthButtons && (
                   <>
-                    <div className='bg-border/60 mx-2 h-6 w-px' />
+                    <div className='bg-foreground/12 mx-2 h-6 w-px' />
                     {desktopAuthControl}
                   </>
                 )}

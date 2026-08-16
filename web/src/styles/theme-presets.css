@@ -31,6 +31,800 @@ For commercial licensing, please contact support@quantumnous.com
  *   blocks so an explicit user choice overrides the system radius.
  */
 
+/* ── Comic Ops ────────────────────────────────────────────────────────── */
+/*
+ * Base layout dimensions for the Comic Ops workspace. The complete print,
+ * typography, and component treatment is layered below this foundation.
+ */
+[data-theme-preset='operator'] {
+  --background: oklch(0.982 0.003 255);
+  --foreground: oklch(0.205 0.018 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.018 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.018 258);
+
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.945 0.008 255);
+  --secondary-foreground: oklch(0.25 0.018 258);
+  --muted: oklch(0.954 0.007 255);
+  --muted-foreground: oklch(0.49 0.02 258);
+  --accent: oklch(0.925 0 0);
+  --accent-foreground: oklch(0.18 0 0);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.56 0.15 150);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.74 0.16 72);
+  --warning-foreground: oklch(0.24 0.03 72);
+  --info: oklch(0.62 0.13 220);
+  --info-foreground: oklch(0.99 0 0);
+  --neutral: oklch(0.52 0.02 258);
+  --neutral-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.89 0.011 255);
+  --input: oklch(0.85 0.015 255);
+  --ring: oklch(0 0 0);
+
+  --chart-1: oklch(0 0 0);
+  --chart-2: oklch(0.58 0.15 150);
+  --chart-3: oklch(0.74 0.16 72);
+  --chart-4: oklch(0.61 0.2 12);
+  --chart-5: oklch(0.64 0.13 220);
+
+  --sidebar: oklch(0.958 0.008 255);
+  --sidebar-foreground: oklch(0.25 0.018 258);
+  --sidebar-primary: oklch(0 0 0);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.91 0 0);
+  --sidebar-accent-foreground: oklch(0.16 0 0);
+  --sidebar-border: oklch(0.87 0.014 255);
+  --sidebar-ring: oklch(0 0 0);
+
+  --skeleton-base: oklch(0.93 0.008 255);
+  --skeleton-highlight: oklch(0.97 0.004 255);
+  --app-topbar-surface: oklch(0.995 0.002 255);
+  --app-header-height: 4rem;
+  --app-sidebar-width: 15rem;
+  --app-sidebar-width-icon: 3rem;
+  --app-sidebar-width-mobile: 17.5rem;
+  --radius: 0.25rem;
+}
+
+.dark [data-theme-preset='operator'] {
+  --background: oklch(0.18 0.016 258);
+  --foreground: oklch(0.94 0.008 255);
+  --card: oklch(0.215 0.017 258);
+  --card-foreground: oklch(0.94 0.008 255);
+  --popover: oklch(0.235 0.018 258);
+  --popover-foreground: oklch(0.95 0.008 255);
+
+  --primary: oklch(0.96 0 0);
+  --primary-foreground: oklch(0.12 0 0);
+  --secondary: oklch(0.275 0.018 258);
+  --secondary-foreground: oklch(0.93 0.008 255);
+  --muted: oklch(0.255 0.017 258);
+  --muted-foreground: oklch(0.72 0.02 255);
+  --accent: oklch(0.3 0 0);
+  --accent-foreground: oklch(0.94 0 0);
+
+  --destructive: oklch(0.69 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.68 0.14 150);
+  --success-foreground: oklch(0.16 0.03 150);
+  --warning: oklch(0.79 0.15 72);
+  --warning-foreground: oklch(0.2 0.03 72);
+  --info: oklch(0.73 0.12 220);
+  --info-foreground: oklch(0.16 0.025 258);
+  --neutral: oklch(0.72 0.02 255);
+  --neutral-foreground: oklch(0.16 0.025 258);
+
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 17%);
+  --ring: oklch(0.96 0 0);
+
+  --chart-1: oklch(0.96 0 0);
+  --chart-2: oklch(0.68 0.14 150);
+  --chart-3: oklch(0.79 0.15 72);
+  --chart-4: oklch(0.72 0.17 12);
+  --chart-5: oklch(0.73 0.12 220);
+
+  --sidebar: oklch(0.16 0.017 258);
+  --sidebar-foreground: oklch(0.9 0.01 255);
+  --sidebar-primary: oklch(0.96 0 0);
+  --sidebar-primary-foreground: oklch(0.12 0 0);
+  --sidebar-accent: oklch(0.29 0 0);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.96 0 0);
+
+  --skeleton-base: oklch(0.25 0.017 258);
+  --skeleton-highlight: oklch(0.34 0.018 258);
+  --app-topbar-surface: oklch(0.145 0.018 258);
+}
+
+/* Operator topbar: a solid command bar with compact controls and no
+ * decorative glass or gradient treatment. */
+[data-theme-preset='operator'] .app-topbar-accent {
+  border-color: var(--border);
+  background: var(--app-topbar-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+[data-theme-preset='operator'] .app-header-bar {
+  max-width: none;
+  padding-inline: 1rem;
+}
+
+[data-theme-preset='operator'] .app-header-left {
+  gap: 0.5rem;
+}
+
+[data-theme-preset='operator'] .app-header-brand {
+  height: 2.25rem;
+  gap: 0.625rem;
+}
+
+[data-theme-preset='operator'] .app-header-brand-mark {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.25rem;
+}
+
+[data-theme-preset='operator'] .app-header-brand-name {
+  max-width: 10rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] .app-header-nav a {
+  padding-inline: 0.875rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] .app-header-utilities {
+  gap: 0.125rem;
+}
+
+[data-theme-preset='operator']
+  .app-header-utilities
+  > button:not(.app-header-search-icon) {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+/* Operator sidebar: a 240px workspace rail with denser grouping, a 64px
+ * collapsed state, and a precise active marker instead of a large pill. */
+[data-theme-preset='operator'] [data-slot='sidebar-inner'] {
+  border-radius: 0;
+  background: var(--sidebar);
+  box-shadow: none;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-content'] {
+  padding-block: 0.5rem;
+  scrollbar-gutter: stable;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-group'] {
+  padding: 0.25rem 0.5rem 0.75rem;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-group-label'] {
+  height: 2rem;
+  padding-inline: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu'] {
+  gap: 0.125rem;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-button'] {
+  position: relative;
+  height: 2.5rem;
+  gap: 0.625rem;
+  border-radius: 0.25rem;
+  padding-inline: 0.75rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  transition-property: background-color, color;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-button'][data-active] {
+  color: var(--sidebar-accent-foreground);
+  background: var(--sidebar-accent);
+}
+
+[data-theme-preset='operator']
+  [data-slot='sidebar-menu-button'][data-active]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.5rem;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: 0 1px 1px 0;
+  background: var(--sidebar-primary);
+}
+
+[data-theme-preset='operator']
+  [data-slot='sidebar-menu-button'][data-active]
+  svg {
+  color: var(--sidebar-primary);
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-sub'] {
+  margin-inline: 1.25rem 0.5rem;
+  gap: 0.125rem;
+  padding-inline: 0.75rem 0;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-sub-button'] {
+  height: 2.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator']
+  [data-slot='sidebar-menu-sub-button'][data-active] {
+  color: var(--sidebar-accent-foreground);
+  background: var(--sidebar-accent);
+}
+
+[data-theme-preset='operator']
+  [data-collapsible='icon']
+  [data-slot='sidebar-group'] {
+  padding-inline: 0.75rem;
+}
+
+[data-theme-preset='operator']
+  [data-collapsible='icon']
+  [data-slot='sidebar-menu-button'] {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  margin-inline: auto;
+  justify-content: center;
+  padding: 0 !important;
+}
+
+[data-theme-preset='operator']
+  [data-collapsible='icon']
+  [data-slot='sidebar-menu-button'][data-active]::before {
+  inset-block: 0.625rem;
+}
+
+/* Operator surfaces stay flat. Existing presets keep the shared glass
+ * treatment unchanged. */
+[data-theme-preset='operator'] .app-glass-surface,
+[data-theme-preset='operator']
+  .app-glass-context
+  :where(div, section, article, aside):is(
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-2xl
+  ):is(.border, .ring-1) {
+  background-image: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* ── Comic Ops visual system ──────────────────────────────────────────── */
+/* Warm printed paper, black ink, two highlighter colors, and hard offset
+ * shadows recreate the technical-comic cover language without sacrificing
+ * dense dashboard readability. */
+[data-theme-preset='operator'] {
+  --operator-ink: oklch(0 0 0);
+  --operator-paper: oklch(0.988 0.01 96);
+  --operator-yellow: oklch(0.84 0.17 88);
+  --operator-green: oklch(0.82 0.16 135);
+  --operator-grid: oklch(0.2 0 0 / 8%);
+  --operator-hard-shadow: oklch(0.12 0 0);
+
+  --font-sans: var(--font-comic-display);
+  --font-mono: var(--font-comic-mono);
+
+  --background: oklch(0.965 0.007 96);
+  --foreground: var(--operator-ink);
+  --card: var(--operator-paper);
+  --card-foreground: var(--operator-ink);
+  --popover: var(--operator-paper);
+  --popover-foreground: var(--operator-ink);
+
+  --primary: var(--operator-ink);
+  --primary-foreground: oklch(0.99 0.005 96);
+  --secondary: oklch(0.94 0.018 94);
+  --secondary-foreground: var(--operator-ink);
+  --muted: oklch(0.93 0.014 94);
+  --muted-foreground: oklch(0.43 0.012 80);
+  --accent: var(--operator-yellow);
+  --accent-foreground: var(--operator-ink);
+
+  --destructive: oklch(0.59 0.22 28);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: var(--operator-green);
+  --success-foreground: var(--operator-ink);
+  --warning: var(--operator-yellow);
+  --warning-foreground: var(--operator-ink);
+  --info: oklch(0.72 0.12 218);
+  --info-foreground: var(--operator-ink);
+  --neutral: oklch(0.5 0.012 80);
+  --neutral-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.24 0 0);
+  --input: oklch(0.24 0 0);
+  --ring: var(--operator-ink);
+
+  --chart-1: var(--operator-ink);
+  --chart-2: var(--operator-green);
+  --chart-3: var(--operator-yellow);
+  --chart-4: oklch(0.63 0.22 28);
+  --chart-5: oklch(0.7 0.13 218);
+
+  --sidebar: oklch(0.98 0.012 96);
+  --sidebar-foreground: var(--operator-ink);
+  --sidebar-primary: var(--operator-ink);
+  --sidebar-primary-foreground: oklch(0.99 0.005 96);
+  --sidebar-accent: var(--operator-green);
+  --sidebar-accent-foreground: var(--operator-ink);
+  --sidebar-border: var(--operator-ink);
+  --sidebar-ring: var(--operator-ink);
+
+  --skeleton-base: oklch(0.9 0.014 94);
+  --skeleton-highlight: oklch(0.97 0.01 96);
+  --app-topbar-surface: var(--operator-paper);
+  --table-row: var(--operator-paper);
+  --table-header: var(--operator-ink);
+  --table-header-hover: oklch(0.22 0 0);
+  --table-disabled: oklch(0.91 0.012 94);
+  --table-disabled-hover: oklch(0.88 0.015 92);
+  --table-disabled-border: var(--operator-ink);
+  --radius: 0.125rem;
+}
+
+.dark [data-theme-preset='operator'] {
+  --operator-ink: oklch(0.95 0.008 96);
+  --operator-paper: oklch(0.19 0.008 80);
+  --operator-yellow: oklch(0.84 0.17 88);
+  --operator-green: oklch(0.8 0.16 135);
+  --operator-grid: oklch(0.95 0 0 / 8%);
+  --operator-hard-shadow: oklch(0.03 0 0);
+
+  --background: oklch(0.135 0.006 80);
+  --foreground: var(--operator-ink);
+  --card: var(--operator-paper);
+  --card-foreground: var(--operator-ink);
+  --popover: oklch(0.21 0.008 80);
+  --popover-foreground: var(--operator-ink);
+
+  --primary: var(--operator-ink);
+  --primary-foreground: oklch(0.1 0 0);
+  --secondary: oklch(0.25 0.008 80);
+  --secondary-foreground: var(--operator-ink);
+  --muted: oklch(0.24 0.008 80);
+  --muted-foreground: oklch(0.72 0.01 90);
+  --accent: var(--operator-yellow);
+  --accent-foreground: oklch(0.1 0 0);
+
+  --destructive: oklch(0.7 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: var(--operator-green);
+  --success-foreground: oklch(0.1 0 0);
+  --warning: var(--operator-yellow);
+  --warning-foreground: oklch(0.1 0 0);
+  --info: oklch(0.75 0.12 218);
+  --info-foreground: oklch(0.1 0 0);
+  --neutral: oklch(0.7 0.01 90);
+  --neutral-foreground: oklch(0.1 0 0);
+
+  --border: oklch(0.64 0.008 96);
+  --input: oklch(0.72 0.008 96);
+  --ring: var(--operator-yellow);
+
+  --chart-1: var(--operator-ink);
+  --chart-2: var(--operator-green);
+  --chart-3: var(--operator-yellow);
+  --chart-4: oklch(0.72 0.19 25);
+  --chart-5: oklch(0.75 0.12 218);
+
+  --sidebar: oklch(0.16 0.006 80);
+  --sidebar-foreground: var(--operator-ink);
+  --sidebar-primary: var(--operator-ink);
+  --sidebar-primary-foreground: oklch(0.1 0 0);
+  --sidebar-accent: var(--operator-green);
+  --sidebar-accent-foreground: oklch(0.1 0 0);
+  --sidebar-border: var(--operator-ink);
+  --sidebar-ring: var(--operator-yellow);
+
+  --skeleton-base: oklch(0.25 0.008 80);
+  --skeleton-highlight: oklch(0.34 0.008 80);
+  --app-topbar-surface: oklch(0.16 0.006 80);
+  --table-row: var(--operator-paper);
+  --table-header: var(--operator-ink);
+  --table-header-hover: oklch(0.86 0.008 96);
+  --table-disabled: oklch(0.23 0.008 80);
+  --table-disabled-hover: oklch(0.27 0.008 80);
+  --table-disabled-border: var(--operator-ink);
+}
+
+[data-theme-preset='operator'],
+[data-theme-preset='operator'] [data-slot='sidebar-inset'] {
+  background-color: var(--background);
+  background-image: radial-gradient(
+    circle,
+    var(--operator-grid) 1px,
+    transparent 1.15px
+  );
+  background-size: 14px 14px;
+}
+
+[data-theme-preset='operator'] :is(h1, h2, h3, h4, [data-slot='card-title']) {
+  font-family: var(--font-comic-display);
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator']
+  :is(code, kbd, pre, samp, [data-slot='sidebar-group-label']) {
+  font-family: var(--font-comic-mono);
+  letter-spacing: 0;
+}
+
+/* Comic-strip topbar. The shared glow pseudo-element remains active. */
+[data-theme-preset='operator'] .app-topbar-accent {
+  border-bottom: 2px solid var(--operator-ink);
+  background-color: var(--app-topbar-surface);
+  background-image: radial-gradient(
+    circle,
+    var(--operator-grid) 1px,
+    transparent 1.15px
+  );
+  background-size: 14px 14px;
+  box-shadow: 0 3px 0 color-mix(in oklch, var(--operator-ink) 18%, transparent);
+}
+
+[data-theme-preset='operator'] .app-header-brand-mark {
+  border: 2px solid var(--operator-ink);
+  background: var(--operator-paper);
+  box-shadow: 3px 3px 0 var(--operator-yellow);
+}
+
+[data-theme-preset='operator'] .app-header-brand-name {
+  font-family: var(--font-comic-display);
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] .app-header-nav a {
+  height: 2rem;
+  margin-inline: 0.125rem;
+  border: 2px solid transparent;
+  border-radius: 0.125rem;
+  font-family: var(--font-comic-display);
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] .app-header-nav a::after {
+  display: none;
+}
+
+[data-theme-preset='operator'] .app-header-nav a[aria-current='page'] {
+  border-color: var(--operator-ink);
+  color: oklch(0.1 0 0);
+  background: var(--operator-yellow);
+  box-shadow: 3px 3px 0 var(--operator-hard-shadow);
+  transform: translate(-1px, -1px);
+}
+
+[data-theme-preset='operator'] .app-header-nav a:hover {
+  border-color: var(--operator-ink);
+  color: oklch(0.1 0 0);
+  background: var(--operator-yellow);
+}
+
+/* The search command keeps its existing icon-only sizing and interaction. */
+[data-theme-preset='operator'] .app-header-search-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Comic index sidebar. */
+[data-theme-preset='operator'] [data-slot='sidebar-container'] {
+  border-color: var(--operator-ink);
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-inner'] {
+  border-inline-end: 2px solid var(--operator-ink);
+  background-color: var(--sidebar);
+  background-image: radial-gradient(
+    circle,
+    var(--operator-grid) 1px,
+    transparent 1.15px
+  );
+  background-size: 14px 14px;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-group-label'] {
+  height: 2.125rem;
+  margin-inline: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding-inline: 0.25rem;
+  border-bottom: 1px dashed var(--operator-ink);
+  color: var(--sidebar-foreground);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu'] {
+  gap: 0.25rem;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-button'] {
+  border: 2px solid transparent;
+  border-radius: 0.125rem;
+  color: var(--sidebar-foreground);
+  font-family: var(--font-comic-display);
+  font-weight: 650;
+  letter-spacing: 0;
+  transition:
+    transform 100ms ease,
+    box-shadow 100ms ease,
+    background-color 100ms ease;
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-button']:hover {
+  border-color: var(--operator-ink);
+  color: oklch(0.1 0 0);
+  background: var(--operator-yellow);
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-button'][data-active] {
+  border-color: var(--operator-ink);
+  color: oklch(0.1 0 0);
+  background: var(--operator-green);
+  box-shadow: 3px 3px 0 var(--operator-hard-shadow);
+  transform: translate(-1px, -1px);
+}
+
+[data-theme-preset='operator']
+  [data-slot='sidebar-menu-button'][data-active]::before {
+  display: none;
+}
+
+[data-theme-preset='operator']
+  [data-slot='sidebar-menu-button'][data-active]
+  svg {
+  color: oklch(0.1 0 0);
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-sub'] {
+  border-color: var(--operator-ink);
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-menu-sub-button'] {
+  border: 1px solid transparent;
+  border-radius: 0.125rem;
+  font-family: var(--font-comic-display);
+  font-weight: 650;
+}
+
+[data-theme-preset='operator']
+  [data-slot='sidebar-menu-sub-button'][data-active] {
+  border-color: var(--operator-ink);
+  color: oklch(0.1 0 0);
+  background: var(--operator-green);
+}
+
+[data-theme-preset='operator'] [data-slot='sidebar-rail']::after {
+  background: var(--operator-ink);
+}
+
+/* Printed panels and cards. */
+[data-theme-preset='operator'] [data-slot='card'],
+[data-theme-preset='operator'] .app-glass-surface,
+[data-theme-preset='operator']
+  .app-glass-context
+  :where(div, section, article, aside):is(
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-2xl
+  ):is(.border, .ring-1) {
+  border: 2px solid var(--operator-ink);
+  border-radius: 0.25rem;
+  background-color: var(--card);
+  background-image: none;
+  box-shadow: 4px 4px 0 var(--operator-hard-shadow);
+  backdrop-filter: none;
+}
+
+[data-theme-preset='operator'] [data-slot='card'] [data-slot='card'] {
+  border-width: 1px;
+  box-shadow: none;
+}
+
+[data-theme-preset='operator'] [data-slot='card-title'] {
+  font-weight: 850;
+}
+
+[data-theme-preset='operator'] [data-slot='card-footer'] {
+  border-color: var(--operator-ink);
+  border-radius: 0;
+  background: var(--secondary);
+}
+
+/* Buttons press like physical comic labels. Ghost icon actions stay quiet. */
+[data-theme-preset='operator'] [data-slot='button'] {
+  border-radius: 0.125rem;
+  font-family: var(--font-comic-display);
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] [data-slot='button'].bg-primary {
+  border: 2px solid var(--operator-ink);
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: 3px 3px 0 var(--operator-yellow);
+}
+
+[data-theme-preset='operator'] [data-slot='button'].border-border,
+[data-theme-preset='operator'] [data-slot='button'].bg-secondary {
+  border: 2px solid var(--operator-ink);
+  color: var(--operator-ink);
+  background: var(--operator-paper);
+  box-shadow: 2px 2px 0 var(--operator-hard-shadow);
+}
+
+[data-theme-preset='operator']
+  [data-slot='button']:active:not([aria-haspopup]) {
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+/* Form controls use inked frames and a yellow focus plate. */
+[data-theme-preset='operator']
+  :is(
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='select-trigger'],
+    [data-slot='combobox']
+  ) {
+  border: 2px solid var(--operator-ink);
+  border-radius: 0.125rem;
+  color: var(--foreground);
+  background: var(--operator-paper);
+  box-shadow: none;
+}
+
+[data-theme-preset='operator']
+  :is(
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='select-trigger'],
+    [data-slot='combobox']
+  ):focus-visible {
+  border-color: var(--operator-ink);
+  box-shadow: 3px 3px 0 var(--operator-yellow);
+}
+
+[data-theme-preset='operator'] [data-slot='checkbox'] {
+  border: 2px solid var(--operator-ink);
+  border-radius: 0.125rem;
+}
+
+/* Tags, tabs, and data grids borrow the cover's numbered label system. */
+[data-theme-preset='operator'] [data-slot='badge'] {
+  height: 1.375rem;
+  border: 1.5px solid var(--operator-ink);
+  border-radius: 0.125rem;
+  font-family: var(--font-comic-mono);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] [data-slot='badge'][data-variant='warning'] {
+  color: oklch(0.1 0 0);
+  background: var(--operator-yellow);
+}
+
+[data-theme-preset='operator'] [data-slot='tabs-list'] {
+  gap: 0.25rem;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-theme-preset='operator'] [data-slot='tabs-trigger'] {
+  border: 2px solid transparent;
+  border-radius: 0.125rem;
+  font-family: var(--font-comic-display);
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] [data-slot='tabs-trigger'][data-active] {
+  border-color: var(--operator-ink);
+  color: oklch(0.1 0 0);
+  background: var(--operator-yellow);
+  box-shadow: 2px 2px 0 var(--operator-hard-shadow);
+}
+
+[data-theme-preset='operator'] [data-slot='table-container'] {
+  border: 2px solid var(--operator-ink);
+  border-radius: 0.125rem;
+  background: var(--operator-paper);
+  box-shadow: 4px 4px 0 var(--operator-hard-shadow);
+}
+
+[data-theme-preset='operator'] [data-slot='table-header'] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+[data-theme-preset='operator'] [data-slot='table-head'] {
+  color: var(--primary-foreground);
+  font-family: var(--font-comic-mono);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+[data-theme-preset='operator'] [data-slot='table-row'] {
+  border-color: var(--operator-ink);
+}
+
+[data-theme-preset='operator'] [data-slot='table-row'][data-state='selected'] {
+  color: oklch(0.1 0 0);
+  background: var(--operator-green);
+}
+
+/* Floating surfaces are framed like detached comic captions. */
+[data-theme-preset='operator']
+  :is(
+    [data-slot='dialog-content'],
+    [data-slot='sheet-content'],
+    [data-slot='popover-content'],
+    [data-slot='dropdown-menu-content'],
+    [data-slot='select-content'],
+    [data-slot='context-menu-content']
+  ) {
+  border: 2px solid var(--operator-ink);
+  border-radius: 0.25rem;
+  background: var(--popover);
+  box-shadow: 6px 6px 0 var(--operator-hard-shadow);
+}
+
+[data-theme-preset='operator'] [data-slot='tooltip-content'] {
+  border: 2px solid var(--operator-ink);
+  border-radius: 0.125rem;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: 2px 2px 0 var(--operator-yellow);
+  font-family: var(--font-comic-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme-preset='operator']
+    :is(
+      [data-slot='sidebar-menu-button'],
+      [data-slot='button'],
+      .app-header-nav a
+    ) {
+    transition: none;
+  }
+}
+
 /* ── Underground ──────────────────────────────────────────────────────── */
 [data-theme-preset='underground'] {
   --primary: oklch(0.5315 0.0694 156.19);
@@ -428,7 +1222,7 @@ For commercial licensing, please contact support@quantumnous.com
  *   - `simple-large`: keeps intentionally neutral, high-contrast surfaces. */
 [data-theme-preset]:not([data-theme-preset='default']):not(
   [data-theme-preset='anthropic']
-):not([data-theme-preset='simple-large']) {
+):not([data-theme-preset='simple-large']):not([data-theme-preset='operator']) {
   --card: color-mix(in oklch, var(--primary) 3%, var(--background));
   --popover: color-mix(in oklch, var(--primary) 5%, var(--background));
   --muted: color-mix(in oklch, var(--primary) 7%, var(--background));
@@ -453,7 +1247,9 @@ For commercial licensing, please contact support@quantumnous.com
 .dark
   [data-theme-preset]:not([data-theme-preset='default']):not(
     [data-theme-preset='anthropic']
-  ):not([data-theme-preset='simple-large']) {
+  ):not([data-theme-preset='simple-large']):not(
+    [data-theme-preset='operator']
+  ) {
   --card: color-mix(in oklch, var(--primary) 8%, var(--background));
   --popover: color-mix(in oklch, var(--primary) 12%, var(--background));
   --muted: color-mix(in oklch, var(--primary) 12%, var(--background));

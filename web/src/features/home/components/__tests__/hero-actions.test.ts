@@ -106,6 +106,13 @@ async function renderHeroActions(isAuthenticated: boolean) {
 }
 
 describe('home hero actions', () => {
+  test('renders the model icon snowfall as a decorative hero background', async () => {
+    const markup = await renderHeroActions(false)
+
+    assert.match(markup, /data-hero-model-snowfall="true"/)
+    assert.match(markup, /aria-hidden="true"/)
+  })
+
   test('renders a resource download link in the public hero', async () => {
     const markup = await renderHeroActions(false)
 

@@ -19,32 +19,22 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import {
-  DEFAULT_THEME_CUSTOMIZATION,
-  resolveThemeFont,
-  THEME_PRESETS,
-} from '../theme-customization'
+import { renderToStaticMarkup } from 'react-dom/server'
 
-describe('default UI customization', () => {
-  test('uses the Comic Ops preset with automatic sans typography and system radius', () => {
-    assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'operator',
-      font: 'default',
-      radius: 'default',
-      scale: 'default',
-      contentLayout: 'full',
-    })
-    assert.equal(
-      resolveThemeFont(
-        DEFAULT_THEME_CUSTOMIZATION.font,
-        DEFAULT_THEME_CUSTOMIZATION.preset
-      ),
-      'sans'
+import { SidebarProvider } from '../sidebar'
+
+describe('sidebar layout variables', () => {
+  test('allows a theme preset to resize expanded and collapsed navigation', () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProvider>
+        <div>Content</div>
+      </SidebarProvider>
     )
-    assert.ok(THEME_PRESETS.some((preset) => preset.value === 'operator'))
-    assert.equal(
-      THEME_PRESETS.find((preset) => preset.value === 'operator')?.name,
-      'Comic Ops'
+
+    assert.match(markup, /--sidebar-width:var\(--app-sidebar-width, 13rem\)/)
+    assert.match(
+      markup,
+      /--sidebar-width-icon:var\(--app-sidebar-width-icon, 2\.75rem\)/
     )
   })
 })

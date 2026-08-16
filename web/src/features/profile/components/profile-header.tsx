@@ -118,7 +118,7 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
     <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
       <CardContent className='p-3 sm:p-5'>
         <div className='flex items-center gap-3 text-left sm:gap-4'>
-          <Avatar className='ring-background h-12 w-12 rounded-xl text-sm ring-2 sm:h-16 sm:w-16 sm:rounded-2xl sm:text-lg sm:ring-4'>
+          <Avatar className='ring-background h-12 w-12 rounded-xl text-sm ring-2 after:hidden sm:h-16 sm:w-16 sm:rounded-2xl sm:text-lg sm:ring-4'>
             <AvatarFallback
               className='rounded-xl font-semibold text-white sm:rounded-2xl'
               style={avatarFallbackStyle}

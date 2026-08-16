@@ -25,6 +25,7 @@ import { useIsSidebarModuleVisible } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
+import { HeroModelSnowfall } from '../hero-model-snowfall'
 import { HeroProductShowcase } from '../hero-product-showcase'
 
 interface HeroProps {
@@ -74,7 +75,9 @@ export function Hero(props: HeroProps) {
         props.className
       )}
     >
-      <div className='mx-auto flex max-w-4xl flex-col items-center text-center'>
+      <HeroModelSnowfall />
+
+      <div className='relative z-10 mx-auto flex max-w-4xl flex-col items-center text-center'>
         <h1
           className='landing-animate-fade-up text-3xl leading-[1.08] font-bold opacity-0 sm:text-5xl lg:text-6xl'
           style={{ animationDelay: '0ms' }}
@@ -140,7 +143,9 @@ export function Hero(props: HeroProps) {
         </div>
       </div>
 
-      <HeroProductShowcase />
+      <div className='relative z-10'>
+        <HeroProductShowcase />
+      </div>
     </section>
   )
 }

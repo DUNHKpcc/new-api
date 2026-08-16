@@ -20,20 +20,30 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
 import { appHeaderLayoutClasses } from '../app-header-layout'
+import { publicHeaderLayoutClasses } from '../public-header-layout'
 
 function tokens(classes: string) {
   return classes.split(' ')
 }
 
 describe('authenticated app header layout', () => {
-  test('matches the enlarged public topbar hierarchy in the console', () => {
+  test('uses the shared header height with the topbar surface and accent line', () => {
+    const root = tokens(appHeaderLayoutClasses.root)
+
     assert.ok(
-      tokens(appHeaderLayoutClasses.root).includes(
-        'h-[var(--app-header-height,3.75rem)]'
-      )
+      root.includes('h-[var(--app-header-height,3.75rem)]'),
+      'keeps the shared app header height token'
     )
-    assert.ok(tokens(appHeaderLayoutClasses.root).includes('border-b'))
-    assert.ok(tokens(appHeaderLayoutClasses.root).includes('bg-background/90'))
+    assert.ok(root.includes('border-b'))
+    assert.ok(
+      root.includes('bg-(--app-topbar-surface)'),
+      'surface comes from the --app-topbar-surface token so presets and dark mode re-theme it'
+    )
+    assert.ok(
+      root.includes('app-topbar-accent'),
+      'mounts the gradient accent hairline along the bottom edge'
+    )
+    assert.ok(root.includes('backdrop-blur-xl'))
     assert.ok(tokens(appHeaderLayoutClasses.bar).includes('mx-auto'))
     assert.ok(tokens(appHeaderLayoutClasses.bar).includes('max-w-7xl'))
     assert.ok(tokens(appHeaderLayoutClasses.bar).includes('px-4'))
@@ -49,6 +59,16 @@ describe('authenticated app header layout', () => {
     )
   })
 
+  test('frames the brand mark as a sharp wireframe tile', () => {
+    const mark = tokens(appHeaderLayoutClasses.brand.mark)
+    const name = tokens(appHeaderLayoutClasses.brand.name)
+
+    assert.ok(mark.includes('ring-1'))
+    assert.ok(mark.includes('rounded-sm'))
+    assert.ok(name.includes('tracking-tight'))
+    assert.ok(name.includes('[font-family:var(--font-serif)]'))
+  })
+
   test('keeps enlarged utilities stable without forcing the search width', () => {
     const actions = tokens(appHeaderLayoutClasses.actions)
     const utilities = tokens(appHeaderLayoutClasses.utilities)
@@ -57,6 +77,7 @@ describe('authenticated app header layout', () => {
     assert.ok(!actions.includes('ms-auto'))
     assert.ok(utilities.includes('shrink-0'))
     assert.ok(utilities.includes('[&>button]:size-10'))
+    assert.ok(utilities.includes('[&>button]:rounded-sm'))
     assert.ok(utilities.includes('[&_[data-slot=avatar]]:size-7'))
     assert.equal(
       appHeaderLayoutClasses.search.includes('[&_button]:size-10'),
@@ -85,18 +106,47 @@ describe('authenticated app header layout', () => {
     assert.ok(nav.includes('lg:flex'))
   })
 
-  test('matches public navigation sizing and active indicator', () => {
+  test('renders the active nav item with a full-bleed bottom bar', () => {
+    const link = tokens(appHeaderLayoutClasses.topNav.link)
+    const active = tokens(appHeaderLayoutClasses.topNav.linkActive)
+
     assert.ok(tokens(appHeaderLayoutClasses.topNav.desktop).includes('h-full'))
+    assert.ok(
+      tokens(appHeaderLayoutClasses.topNav.desktop).includes('items-center'),
+      'centers the compact Comic Ops navigation inside the shared header height'
+    )
     assert.ok(tokens(appHeaderLayoutClasses.topNav.desktop).includes('lg:flex'))
     assert.ok(
       tokens(appHeaderLayoutClasses.topNav.compact).includes('lg:hidden')
     )
-    assert.ok(tokens(appHeaderLayoutClasses.topNav.link).includes('h-full'))
-    assert.ok(tokens(appHeaderLayoutClasses.topNav.link).includes('px-2.5'))
+    assert.ok(link.includes('h-full'))
+    assert.ok(link.includes('px-3.5'))
+    assert.ok(link.includes('text-[0.8125rem]'))
     assert.ok(
-      tokens(appHeaderLayoutClasses.topNav.linkActive).includes(
-        'after:bg-primary'
-      )
+      link.includes('after:inset-x-0'),
+      'indicator spans the full link width instead of a centered dash'
+    )
+    assert.ok(link.includes('after:scale-x-0'))
+    assert.ok(link.includes('after:bg-primary'))
+    assert.ok(active.includes('after:scale-x-100'))
+    assert.ok(
+      active.includes('dark:after:shadow-[0_0_8px_var(--primary)]'),
+      'active bar glows primary in dark mode'
+    )
+    assert.ok(
+      link.includes('motion-reduce:after:transition-none'),
+      'respects reduced motion for the indicator animation'
+    )
+  })
+
+  test('keeps console nav links visually identical to the public header', () => {
+    assert.equal(
+      appHeaderLayoutClasses.topNav.link,
+      publicHeaderLayoutClasses.desktopLink
+    )
+    assert.equal(
+      appHeaderLayoutClasses.topNav.linkActive,
+      publicHeaderLayoutClasses.desktopLinkActive
     )
   })
 })

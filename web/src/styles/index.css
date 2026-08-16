@@ -20,6 +20,10 @@ For commercial licensing, please contact support@quantumnous.com
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/public-sans';
+@import '@fontsource-variable/archivo';
+@import '@fontsource-variable/noto-sans-sc';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/700.css';
 /* Editorial serif (Lora) backing the `serif` font axis and the Anthropic
  * preset's default typography. See `--font-serif` in theme.css for the
  * full Latin + CJK fallback stack and `theme-presets.css` for the cascade
@@ -83,6 +87,37 @@ For commercial licensing, please contact support@quantumnous.com
       inset 0 1px 0 rgb(255 255 255 / 16%),
       inset 0 0 0 1px rgb(255 255 255 / 4%),
       0 20px 48px -28px rgb(0 0 0 / 62%);
+  }
+
+  /* Topbar signature hairline: a primary-tinted gradient line along the
+   * bottom edge of the app header. Subtle editorial accent in light mode;
+   * in dark mode it brightens and emits a soft glow for the high-contrast
+   * tech look. Color derives from `--primary`, so presets re-theme it.
+   * Applied by the header layout class maps on the sticky/fixed header
+   * root (which is already a positioned element). */
+  .app-topbar-accent::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 1px;
+    pointer-events: none;
+    background-image: linear-gradient(
+      to right,
+      transparent 8%,
+      color-mix(in oklch, var(--primary) 55%, transparent) 50%,
+      transparent 92%
+    );
+  }
+
+  .dark .app-topbar-accent::after {
+    background-image: linear-gradient(
+      to right,
+      transparent 6%,
+      color-mix(in oklch, var(--primary) 85%, transparent) 50%,
+      transparent 94%
+    );
+    box-shadow: 0 0 10px 0 color-mix(in oklch, var(--primary) 50%, transparent);
   }
 }
 
@@ -559,6 +594,69 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
+@keyframes hero-model-logo-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -6rem, 0) rotate(0deg);
+  }
+  10% {
+    opacity: var(--hero-model-opacity);
+  }
+  55% {
+    opacity: var(--hero-model-opacity);
+    transform: translate3d(var(--hero-model-drift-mid), calc(50svh + 18rem), 0)
+      rotate(var(--hero-model-rotate-mid));
+  }
+  90% {
+    opacity: var(--hero-model-opacity);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--hero-model-drift), calc(100svh + 38rem), 0)
+      rotate(var(--hero-model-rotate));
+  }
+}
+
+.hero-model-snowfall {
+  isolation: isolate;
+}
+
+.hero-model-flake {
+  --hero-model-active-delay: var(--hero-model-delay);
+  --hero-model-active-left: var(--hero-model-left);
+  --hero-model-active-static-top: var(--hero-model-static-top);
+  top: -5rem;
+  left: var(--hero-model-active-left);
+  width: var(--hero-model-size);
+  height: var(--hero-model-size);
+  color: var(--foreground);
+  opacity: 0;
+  filter: saturate(1.05);
+  animation: hero-model-logo-fall var(--hero-model-duration) linear
+    var(--hero-model-active-delay) infinite;
+  will-change: transform, opacity;
+}
+
+@media (max-width: 1023px) {
+  .hero-model-flake {
+    --hero-model-active-delay: var(--hero-model-delay-tablet);
+    --hero-model-active-left: var(--hero-model-left-tablet);
+    --hero-model-active-static-top: var(--hero-model-static-top-tablet);
+  }
+}
+
+@media (max-width: 699px) {
+  .hero-model-flake {
+    --hero-model-active-delay: var(--hero-model-delay-mobile);
+    --hero-model-active-left: var(--hero-model-left-mobile);
+    --hero-model-active-static-top: var(--hero-model-static-top-mobile);
+  }
+
+  .hero-model-flake:nth-child(n + 37) {
+    display: none;
+  }
+}
+
 .landing-animate-fade-up {
   animation: landing-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -584,10 +682,16 @@ For commercial licensing, please contact support@quantumnous.com
   .landing-animate-scale-in,
   .landing-animate-fade-left,
   .landing-animate-fade-right,
-  .hero-device-rise {
+  .hero-device-rise,
+  .hero-model-flake {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .hero-model-flake {
+    top: var(--hero-model-active-static-top);
+    opacity: 0.12 !important;
   }
 }
 

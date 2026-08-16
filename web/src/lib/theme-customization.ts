@@ -25,6 +25,11 @@ For commercial licensing, please contact support@quantumnous.com
 
 export const THEME_PRESETS = [
   {
+    value: 'operator',
+    name: 'Comic Ops',
+    swatches: ['oklch(0.82 0.17 86)', 'oklch(0.82 0.16 135)'],
+  },
+  {
     value: 'default',
     name: 'Default',
     swatches: ['oklch(0.72 0.18 250)', 'oklch(0.7 0.12 280)'],
@@ -116,7 +121,7 @@ export type ThemeCustomization = {
 }
 
 export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
-  preset: 'anthropic',
+  preset: 'operator',
   font: 'default',
   radius: 'default',
   scale: 'default',
@@ -177,6 +182,7 @@ export const PRESET_DEFAULT_FONT: Partial<
   Record<ThemePreset, ResolvedThemeFont>
 > = {
   default: 'sans',
+  operator: 'sans',
   anthropic: 'serif',
 }
 

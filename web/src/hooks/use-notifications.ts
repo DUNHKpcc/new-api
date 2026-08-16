@@ -23,6 +23,7 @@ import {
   buildNotificationFeed,
   getAnnouncementNotificationKey,
   getLotteryNotificationKey,
+  getUnreadNotificationItems,
   type AnnouncementNotification,
   type NotificationFeedItem,
 } from '@/components/notifications/notification-feed'
@@ -104,6 +105,11 @@ export function useNotifications() {
       lotteries,
     ]
   )
+  const loading = noticeLoading || lotteryLoading || statusLoading
+  const unreadItems = useMemo(
+    () => getUnreadNotificationItems(items, loading),
+    [items, loading]
+  )
 
   const markAsRead = useCallback(
     (item: NotificationFeedItem) => {
@@ -134,7 +140,17 @@ export function useNotifications() {
     ]
   )
 
+  const markAsReadByKey = useCallback(
+    (key: string) => {
+      const item = items.find((candidate) => candidate.key === key)
+      if (item) markAsRead(item)
+    },
+    [items, markAsRead]
+  )
+
   const markAllAsRead = useCallback(() => {
+    if (loading) return
+
     if (discountNoticeContent) {
       markDiscountNoticeRead(discountNoticeContent)
     }
@@ -162,13 +178,16 @@ export function useNotifications() {
     markLotteriesRead,
     markNoticeRead,
     noticeContent,
+    loading,
   ])
 
   return {
     items,
-    loading: noticeLoading || lotteryLoading || statusLoading,
-    unreadCount: items.filter((item) => item.unread).length,
+    loading,
+    unreadItems,
+    unreadCount: unreadItems.length,
     markAsRead,
+    markAsReadByKey,
     markAllAsRead,
   }
 }

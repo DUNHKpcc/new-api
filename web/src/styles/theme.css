@@ -20,6 +20,12 @@ For commercial licensing, please contact support@quantumnous.com
 
 @theme inline {
   --font-sans: 'Public Sans', sans-serif;
+  --font-comic-display:
+    'Archivo Variable', 'Noto Sans SC Variable', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --font-comic-mono:
+    'IBM Plex Mono', 'Noto Sans SC Variable', ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, monospace;
   /* Editorial serif token — the body face used by the `serif` font axis
    * and by presets that opt in (currently Anthropic). Lora carries only
    * Latin glyphs, so the stack walks through CJK serifs (Noto / Source Han
@@ -148,6 +154,16 @@ For commercial licensing, please contact support@quantumnous.com
   --sidebar-ring: oklch(0.58 0.2 250);
   --skeleton-base: oklch(0.97 0 0);
   --skeleton-highlight: oklch(0.985 0 0);
+  /* Topbar surface — editorial tinted paper: the page background washed
+   * with a visible veil of the preset's primary color (warm cream under
+   * Anthropic, cool blue under Default), so the header reads as its own
+   * band instead of blending into the page. Derived from `--background`
+   * and `--primary` so every color preset re-themes it. */
+  --app-topbar-surface: color-mix(
+    in oklch,
+    var(--primary) 5%,
+    var(--background) 91%
+  );
   --table-row: var(--background);
   --table-header: color-mix(
     in oklch,
@@ -222,6 +238,10 @@ For commercial licensing, please contact support@quantumnous.com
   --sidebar-ring: oklch(0.7 0.17 250);
   --skeleton-base: oklch(0.335 0 0);
   --skeleton-highlight: oklch(0.44 0 0);
+  /* Topbar surface — dark-tech ink: mixed below the page canvas so the
+   * header sits visibly darker than the content for high-contrast
+   * separation, while still inheriting a tint of the preset background. */
+  --app-topbar-surface: color-mix(in oklch, black 62%, var(--background) 24%);
   --table-row: var(--background);
   --table-header: color-mix(in oklch, var(--foreground) 6%, var(--background));
   --table-header-hover: color-mix(
