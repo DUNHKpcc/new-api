@@ -42,6 +42,7 @@ import {
   type ThemeRadius,
   type ThemeScale,
 } from '@/lib/theme-customization'
+import { migrateThemeCustomizationCookies } from '@/lib/theme-migration'
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365 // 1 year
 
@@ -97,13 +98,14 @@ const ThemeCustomizationContext =
 export function ThemeCustomizationProvider(props: {
   children: React.ReactNode
 }) {
-  const [preset, _setPreset] = useState<ThemePreset>(() =>
-    readCookie<ThemePreset>(
+  const [preset, _setPreset] = useState<ThemePreset>(() => {
+    migrateThemeCustomizationCookies()
+    return readCookie<ThemePreset>(
       THEME_COOKIE_KEYS.preset,
       THEME_PRESET_VALUES,
       DEFAULT_THEME_CUSTOMIZATION.preset
     )
-  )
+  })
   const [font, _setFont] = useState<ThemeFont>(() =>
     readCookie<ThemeFont>(
       THEME_COOKIE_KEYS.font,

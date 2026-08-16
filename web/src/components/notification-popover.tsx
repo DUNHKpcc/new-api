@@ -76,7 +76,7 @@ function NotificationList(props: NotificationListProps) {
   }
 
   return (
-    <ScrollArea className='h-[min(52vh,28rem)]'>
+    <ScrollArea className='notification-scroll-area h-[min(52vh,28rem)]'>
       <div className='divide-y'>
         {props.items.map((item) => {
           let sourceLabel = t('Timeline')
@@ -198,22 +198,63 @@ export function NotificationPopover(props: NotificationPopoverProps) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('notice')
   const sections = partitionNotificationItems(notifications.items)
+  const hasLottery = !notifications.loading && sections.lottery.length > 0
+  const unreadLotteryCount = hasLottery
+    ? sections.lottery.filter((item) => item.unread).length
+    : 0
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (nextOpen && hasLottery) setActiveTab('lottery')
+      }}
+    >
       <PopoverTrigger
         render={
           <Button
             type='button'
             variant='ghost'
             size='icon'
-            className={cn('relative size-9', props.className)}
+            className={cn(
+              'relative size-9 overflow-visible',
+              hasLottery &&
+                'app-header-lottery-alert border-foreground/25 bg-warning text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground aria-expanded:bg-warning/85 h-9 w-auto min-w-9 gap-1.5 px-2.5 shadow-sm focus-visible:ring-warning/50',
+              unreadLotteryCount > 0 && 'app-header-lottery-alert-unread',
+              props.className
+            )}
             aria-label={t('System Announcements')}
             data-notification-entry='header'
+            data-lottery-active={hasLottery ? 'true' : undefined}
+            data-lottery-unread={unreadLotteryCount > 0 ? 'true' : undefined}
           />
         }
       >
-        <Bell className='size-[1.2rem]' aria-hidden='true' />
+        <Bell
+          data-notification-icon='true'
+          className='size-[1.2rem]'
+          aria-hidden='true'
+        />
+        {hasLottery ? (
+          <>
+            <span
+              className='bg-foreground/30 h-4 w-px shrink-0'
+              aria-hidden='true'
+            />
+            <Gift
+              data-lottery-icon='true'
+              className={cn(
+                'size-[1.2rem]',
+                unreadLotteryCount > 0 && 'motion-safe:animate-pulse'
+              )}
+              aria-hidden='true'
+            />
+            <span className='hidden text-xs font-semibold xl:inline'>
+              {t('Lottery')}
+            </span>
+          </>
+        ) : null}
         {notifications.unreadCount > 0 ? (
           <Badge
             variant='destructive'

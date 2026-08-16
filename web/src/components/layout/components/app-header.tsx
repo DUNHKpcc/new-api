@@ -133,16 +133,16 @@ export function AppHeader({
           rightContent
         ) : (
           <div className={appHeaderLayoutClasses.utilities}>
+            {showNotifications && <NotificationPopover />}
+            <VersionUpdatePopover />
+            <LanguageSwitcher />
+            {showConfigDrawer && <ConfigDrawer />}
             {showSearch && (
               <Search
                 variant='icon'
                 className={appHeaderLayoutClasses.search}
               />
             )}
-            {showNotifications && <NotificationPopover />}
-            <VersionUpdatePopover />
-            <LanguageSwitcher />
-            {showConfigDrawer && <ConfigDrawer />}
             {showProfileDropdown && <ProfileDropdown />}
           </div>
         )}
