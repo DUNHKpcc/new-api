@@ -30,7 +30,6 @@ import { useTranslation } from 'react-i18next'
 import type { NotificationFeedItem } from '@/components/notifications/notification-feed'
 import { partitionNotificationItems } from '@/components/notifications/notification-sections'
 import { RichContent } from '@/components/rich-content'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -202,6 +201,9 @@ export function NotificationPopover(props: NotificationPopoverProps) {
   const unreadLotteryCount = hasLottery
     ? sections.lottery.filter((item) => item.unread).length
     : 0
+  const hasUnreadNotifications = notifications.unreadItems.some(
+    (item) => item.source !== 'lottery'
+  )
 
   return (
     <Popover
@@ -219,13 +221,14 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             size='icon'
             className={cn(
               'relative size-9 overflow-visible',
-              hasLottery &&
-                'app-header-lottery-alert border-foreground/25 bg-warning text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground aria-expanded:bg-warning/85 h-9 w-auto min-w-9 gap-1.5 px-2.5 shadow-sm focus-visible:ring-warning/50',
-              unreadLotteryCount > 0 && 'app-header-lottery-alert-unread',
+              hasLottery && 'h-9 w-auto min-w-9 gap-1.5 px-2.5',
               props.className
             )}
             aria-label={t('System Announcements')}
             data-notification-entry='header'
+            data-notification-unread={
+              hasUnreadNotifications ? 'true' : undefined
+            }
             data-lottery-active={hasLottery ? 'true' : undefined}
             data-lottery-unread={unreadLotteryCount > 0 ? 'true' : undefined}
           />
@@ -233,7 +236,10 @@ export function NotificationPopover(props: NotificationPopoverProps) {
       >
         <Bell
           data-notification-icon='true'
-          className='size-[1.2rem]'
+          className={cn(
+            'size-[1.2rem]',
+            hasUnreadNotifications && 'text-destructive topbar-alert-icon'
+          )}
           aria-hidden='true'
         />
         {hasLottery ? (
@@ -246,7 +252,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
               data-lottery-icon='true'
               className={cn(
                 'size-[1.2rem]',
-                unreadLotteryCount > 0 && 'motion-safe:animate-pulse'
+                unreadLotteryCount > 0 && 'text-destructive topbar-alert-icon'
               )}
               aria-hidden='true'
             />
@@ -254,15 +260,6 @@ export function NotificationPopover(props: NotificationPopoverProps) {
               {t('Lottery')}
             </span>
           </>
-        ) : null}
-        {notifications.unreadCount > 0 ? (
-          <Badge
-            variant='destructive'
-            className='absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center px-1 text-[10px] font-semibold tabular-nums'
-            aria-hidden='true'
-          >
-            {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
-          </Badge>
         ) : null}
       </PopoverTrigger>
 

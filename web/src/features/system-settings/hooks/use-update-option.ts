@@ -27,7 +27,6 @@ import type { UpdateOptionRequest } from '../types'
 const STATUS_RELATED_KEYS = new Set([
   'HeaderNavModules',
   'SidebarModulesAdmin',
-  'Notice',
   'DiscountNotice',
   'VersionUpdateDetails',
   'LogConsumeEnabled',
@@ -40,7 +39,22 @@ const STATUS_RELATED_KEYS = new Set([
   'general_setting.custom_currency_symbol',
   'general_setting.custom_currency_exchange_rate',
   'oidc.display_name',
+  'console_setting.announcements',
+  'console_setting.announcements_enabled',
 ])
+
+export function getOptionInvalidationQueryKeys(optionKey: string): string[] {
+  const queryKeys = ['system-options']
+
+  if (STATUS_RELATED_KEYS.has(optionKey)) queryKeys.push('status')
+  if (optionKey === 'Notice') queryKeys.push('notice')
+  if (optionKey === 'ResourceDownloadItems') {
+    queryKeys.push('resource-downloads')
+  }
+  if (optionKey === 'LotteryItems') queryKeys.push('lottery-items')
+
+  return queryKeys
+}
 
 export function useUpdateOption() {
   const queryClient = useQueryClient()
@@ -49,23 +63,17 @@ export function useUpdateOption() {
     mutationFn: (request: UpdateOptionRequest) => updateSystemOption(request),
     onSuccess: (data, variables) => {
       if (data.success) {
-        // Always refresh system-options
-        queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        const queryKeys = getOptionInvalidationQueryKeys(variables.key)
+        for (const queryKey of queryKeys) {
+          queryClient.invalidateQueries({ queryKey: [queryKey] })
+        }
 
-        // If updating frontend-display-related config, also refresh status
-        if (STATUS_RELATED_KEYS.has(variables.key)) {
-          queryClient.invalidateQueries({ queryKey: ['status'] })
+        if (queryKeys.includes('status')) {
           try {
             window.localStorage.removeItem('status')
           } catch {
             /* empty */
           }
-        }
-        if (variables.key === 'ResourceDownloadItems') {
-          queryClient.invalidateQueries({ queryKey: ['resource-downloads'] })
-        }
-        if (variables.key === 'LotteryItems') {
-          queryClient.invalidateQueries({ queryKey: ['lottery-items'] })
         }
 
         toast.success(i18next.t('Setting updated successfully'))

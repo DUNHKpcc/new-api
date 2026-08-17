@@ -19,7 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { buildNotificationFeed } from '../notification-feed'
+import {
+  buildNotificationFeed,
+  getAnnouncementNotificationKey,
+  migrateLegacyAnnouncementReadKeys,
+} from '../notification-feed'
 
 describe('notification feed ordering', () => {
   test('keeps every unread notification above read content', () => {
@@ -28,7 +32,13 @@ describe('notification feed ordering', () => {
       notice: 'Scheduled maintenance',
       lastReadDiscountNotice: '',
       lastReadNotice: 'Scheduled maintenance',
-      readAnnouncementKeys: ['id:1'],
+      readAnnouncementKeys: [
+        getAnnouncementNotificationKey({
+          id: 1,
+          content: 'Resolved incident',
+          publishDate: '2026-07-30T12:00:00.000Z',
+        }),
+      ],
       announcements: [
         {
           id: 1,
@@ -53,8 +63,8 @@ describe('notification feed ordering', () => {
       [true, true, false, false]
     )
     assert.deepEqual(
-      feed.slice(0, 2).map((item) => item.key),
-      ['id:3', 'id:2']
+      feed.slice(0, 2).map((item) => item.content),
+      ['Newest unread update', 'Older unread update']
     )
     assert.equal(feed[2]?.source, 'notice')
   })
@@ -84,6 +94,58 @@ describe('notification feed ordering', () => {
     assert.equal(updatedFeed[0]?.unread, true)
     assert.equal(updatedFeed[1]?.unread, true)
     assert.notEqual(initialAnnouncement?.key, updatedFeed[1]?.key)
+  })
+
+  test('treats an edited identified announcement as unread', () => {
+    const initialFeed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [],
+      announcements: [{ id: 1, content: 'Initial timeline item' }],
+    })
+    const updatedFeed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [initialFeed[0]?.key ?? ''],
+      announcements: [{ id: 1, content: 'Updated timeline item' }],
+    })
+
+    assert.notEqual(initialFeed[0]?.key, updatedFeed[0]?.key)
+    assert.equal(updatedFeed[0]?.unread, true)
+  })
+
+  test('migrates legacy identified announcement reads without replaying them', () => {
+    const announcement = { id: 1, content: 'Existing timeline item' }
+    const legacyFeed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: ['id:1'],
+      announcements: [announcement],
+    })
+    const migratedKeys = migrateLegacyAnnouncementReadKeys(
+      ['id:1'],
+      [announcement]
+    )
+    const updatedFeed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: migratedKeys,
+      announcements: [{ ...announcement, content: 'Updated timeline item' }],
+    })
+
+    assert.equal(legacyFeed[0]?.unread, false)
+    assert.deepEqual(migratedKeys, [
+      getAnnouncementNotificationKey(announcement),
+    ])
+    assert.equal(updatedFeed[0]?.unread, true)
   })
 
   test('keeps an unread discount notice above other unread notifications', () => {

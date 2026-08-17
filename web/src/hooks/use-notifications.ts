@@ -17,13 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
 import {
   buildNotificationFeed,
   getAnnouncementNotificationKey,
   getLotteryNotificationKey,
   getUnreadNotificationItems,
+  migrateLegacyAnnouncementReadKeys,
   type AnnouncementNotification,
   type NotificationFeedItem,
 } from '@/components/notifications/notification-feed'
@@ -31,6 +32,8 @@ import { getLotteryItems } from '@/features/lottery/api'
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
 import { useNotificationStore } from '@/stores/notification-store'
+
+const NOTIFICATION_REFRESH_INTERVAL_MS = 60 * 1000
 
 /**
  * Hook to manage all notification center sources.
@@ -42,15 +45,19 @@ export function useNotifications() {
     queryKey: ['notice'],
     queryFn: getNotice,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
   })
   const { data: lotteryResponse, isLoading: lotteryLoading } = useQuery({
     queryKey: ['lottery-items'],
     queryFn: getLotteryItems,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
   })
 
   // Fetch Announcements from status
-  const { status, loading: statusLoading } = useStatus()
+  const { status, loading: statusLoading } = useStatus({
+    refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
+  })
   const announcementsEnabled = status?.announcements_enabled ?? false
   const announcements = useMemo(() => {
     if (!announcementsEnabled) return []
@@ -73,6 +80,7 @@ export function useNotifications() {
     markDiscountNoticeRead,
     markNoticeRead,
     markAnnouncementsRead,
+    replaceAnnouncementReadKeys,
     markLotteriesRead,
   } = useNotificationStore()
 
@@ -81,6 +89,24 @@ export function useNotifications() {
     ? (noticeResponse.data || '').trim()
     : ''
   const discountNoticeContent = status?.discount_notice?.trim() ?? ''
+
+  useEffect(() => {
+    if (statusLoading || !announcementsEnabled) return
+
+    const migratedKeys = migrateLegacyAnnouncementReadKeys(
+      readAnnouncementKeys,
+      announcements
+    )
+    if (migratedKeys !== readAnnouncementKeys) {
+      replaceAnnouncementReadKeys(migratedKeys)
+    }
+  }, [
+    announcements,
+    announcementsEnabled,
+    readAnnouncementKeys,
+    replaceAnnouncementReadKeys,
+    statusLoading,
+  ])
 
   const items = useMemo(
     () =>

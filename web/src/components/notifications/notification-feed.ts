@@ -90,17 +90,44 @@ function hashString(input: string): string {
 export function getAnnouncementNotificationKey(
   announcement: AnnouncementNotification
 ): string {
-  if (announcement.id !== undefined && announcement.id !== null) {
-    return `id:${announcement.id}`
-  }
-
   const fingerprint = JSON.stringify({
     publishDate: announcement.publishDate ?? '',
     content: announcement.content?.trim() ?? '',
     extra: announcement.extra?.trim() ?? '',
     type: announcement.type ?? '',
   })
-  return `hash:${hashString(fingerprint)}`
+  const revision = hashString(fingerprint)
+
+  if (announcement.id !== undefined && announcement.id !== null) {
+    return `id:${announcement.id}:${revision}`
+  }
+
+  return `hash:${revision}`
+}
+
+function getLegacyAnnouncementNotificationKey(
+  announcement: AnnouncementNotification
+): string | null {
+  if (announcement.id === undefined || announcement.id === null) return null
+  return `id:${announcement.id}`
+}
+
+export function migrateLegacyAnnouncementReadKeys(
+  readKeys: string[],
+  announcements: AnnouncementNotification[]
+): string[] {
+  const legacyKeys = new Set(readKeys.filter((key) => /^id:[^:]+$/.test(key)))
+  if (legacyKeys.size === 0) return readKeys
+
+  const migratedKeys = new Set(readKeys.filter((key) => !legacyKeys.has(key)))
+  for (const announcement of announcements) {
+    const legacyKey = getLegacyAnnouncementNotificationKey(announcement)
+    if (legacyKey && legacyKeys.has(legacyKey)) {
+      migratedKeys.add(getAnnouncementNotificationKey(announcement))
+    }
+  }
+
+  return [...migratedKeys]
 }
 
 export function getNotificationPreview(
@@ -155,6 +182,7 @@ export function buildNotificationFeed(
   const readAnnouncementKeys = new Set(options.readAnnouncementKeys)
   for (const announcement of options.announcements) {
     const key = getAnnouncementNotificationKey(announcement)
+    const legacyKey = getLegacyAnnouncementNotificationKey(announcement)
     items.push({
       key,
       source: 'announcement',
@@ -162,7 +190,9 @@ export function buildNotificationFeed(
       content: announcement.content?.trim() ?? '',
       extra: announcement.extra?.trim() || undefined,
       publishDate: announcement.publishDate,
-      unread: !readAnnouncementKeys.has(key),
+      unread:
+        !readAnnouncementKeys.has(key) &&
+        (!legacyKey || !readAnnouncementKeys.has(legacyKey)),
       originalIndex: items.length,
     })
   }

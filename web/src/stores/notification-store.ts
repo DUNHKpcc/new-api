@@ -35,6 +35,7 @@ interface NotificationState {
   markDiscountNoticeRead: (noticeContent: string) => void
   markNoticeRead: (noticeContent: string) => void
   markAnnouncementsRead: (keys: string[]) => void
+  replaceAnnouncementReadKeys: (keys: string[]) => void
   markLotteriesRead: (keys: string[]) => void
   setClosedUntilDate: (date: string | null) => void
   isAnnouncementRead: (key: string) => boolean
@@ -70,6 +71,10 @@ export const useNotificationStore = create<NotificationState>()(
             ...new Set([...state.readAnnouncementKeys, ...keys]),
           ],
         }))
+      },
+
+      replaceAnnouncementReadKeys: (keys: string[]) => {
+        set({ readAnnouncementKeys: [...new Set(keys)] })
       },
 
       markLotteriesRead: (keys: string[]) => {

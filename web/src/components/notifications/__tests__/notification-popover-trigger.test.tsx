@@ -61,7 +61,7 @@ function renderNotificationPopover() {
 describe('notification popover topbar trigger', () => {
   after(() => mock.restore())
 
-  test('keeps notification and lottery icons visible at the same time', () => {
+  test('highlights and shakes only the unread lottery icon', () => {
     notificationItems = [
       {
         key: 'lottery',
@@ -80,8 +80,82 @@ describe('notification popover topbar trigger', () => {
     assert.match(markup, /data-lottery-unread="true"/)
     assert.match(markup, /data-notification-icon="true"/)
     assert.match(markup, /data-lottery-icon="true"/)
-    assert.match(markup, /app-header-lottery-alert/)
+    assert.doesNotMatch(
+      markup,
+      /topbar-alert-icon[^>]*data-notification-icon="true"/
+    )
+    assert.match(
+      markup,
+      /text-destructive topbar-alert-icon[^>]*data-lottery-icon="true"/
+    )
+    assert.doesNotMatch(markup, /app-header-lottery-alert/)
+    assert.doesNotMatch(markup, /data-slot="badge"/)
     assert.match(markup, />Lottery</)
+  })
+
+  test('highlights and shakes the bell for unread non-lottery content', () => {
+    notificationItems = [
+      {
+        key: 'notice',
+        source: 'notice',
+        content: 'Scheduled maintenance',
+        unread: true,
+      },
+    ]
+
+    const markup = renderNotificationPopover()
+
+    assert.match(
+      markup,
+      /text-destructive topbar-alert-icon[^>]*data-notification-icon="true"/
+    )
+    assert.match(markup, /data-notification-unread="true"/)
+    assert.doesNotMatch(markup, /data-lottery-icon/)
+    assert.doesNotMatch(markup, /data-slot="badge"/)
+  })
+
+  test('keeps a read lottery icon still and neutral', () => {
+    notificationItems = [
+      {
+        key: 'lottery',
+        source: 'lottery',
+        title: 'Completed draw',
+        content: 'Winner announced',
+        unread: false,
+      },
+    ]
+
+    const markup = renderNotificationPopover()
+
+    assert.match(markup, /data-lottery-active="true"/)
+    assert.doesNotMatch(markup, /data-lottery-unread/)
+    assert.doesNotMatch(markup, /topbar-alert-icon/)
+    assert.doesNotMatch(markup, /data-slot="badge"/)
+  })
+
+  test('alerts both icons when notifications and lottery content are unread', () => {
+    notificationItems = [
+      {
+        key: 'notice',
+        source: 'notice',
+        content: 'Scheduled maintenance',
+        unread: true,
+      },
+      {
+        key: 'lottery',
+        source: 'lottery',
+        title: 'Summer draw',
+        content: 'Join now',
+        unread: true,
+      },
+    ]
+
+    const markup = renderNotificationPopover()
+
+    assert.equal(markup.match(/topbar-alert-icon/g)?.length, 2)
+    assert.match(markup, /data-notification-unread="true"/)
+    assert.match(markup, /data-lottery-unread="true"/)
+    assert.doesNotMatch(markup, /data-slot="badge"/)
   })
 
   test('keeps the quiet notification action without lottery content', () => {
@@ -93,7 +167,8 @@ describe('notification popover topbar trigger', () => {
     assert.match(markup, /data-notification-icon="true"/)
     assert.doesNotMatch(markup, /data-lottery-icon/)
     assert.doesNotMatch(markup, /data-lottery-active/)
-    assert.doesNotMatch(markup, /app-header-lottery-alert/)
+    assert.doesNotMatch(markup, /topbar-alert-icon/)
+    assert.doesNotMatch(markup, /data-slot="badge"/)
     assert.match(markup, /aria-label="System Announcements"/)
   })
 })

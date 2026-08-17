@@ -189,28 +189,17 @@ For commercial licensing, please contact support@quantumnous.com
 
 [data-theme-preset='operator']
   .app-header-utilities
-  > button:not(.app-header-search-icon) {
+  > button:not(.app-header-search-icon):not([data-lottery-active='true']) {
   width: 2.25rem;
   height: 2.25rem;
 }
 
 [data-theme-preset='operator']
   .app-header-utilities
-  > button.app-header-lottery-alert {
+  > button[data-lottery-active='true'] {
   width: auto;
   min-width: 2.25rem;
   padding-inline: 0.625rem;
-  border: 2px solid var(--operator-ink);
-  color: oklch(0.1 0 0);
-  background: var(--operator-yellow);
-  box-shadow: 2px 2px 0 var(--operator-hard-shadow);
-}
-
-[data-theme-preset='operator']
-  .app-header-utilities
-  > button.app-header-lottery-alert:hover {
-  color: oklch(0.1 0 0);
-  background: var(--operator-green);
 }
 
 /* Operator sidebar: a 240px workspace rail with denser grouping, a 64px

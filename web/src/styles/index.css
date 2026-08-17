@@ -34,6 +34,29 @@ For commercial licensing, please contact support@quantumnous.com
 @import './theme.css';
 @import './theme-presets.css';
 
+@keyframes topbar-alert-shake {
+  0%,
+  42%,
+  100% {
+    transform: rotate(0deg);
+  }
+  8%,
+  24% {
+    transform: rotate(-14deg);
+  }
+  16%,
+  32% {
+    transform: rotate(14deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .topbar-alert-icon {
+    transform-origin: 50% 12%;
+    animation: topbar-alert-shake 1.6s ease-in-out infinite;
+  }
+}
+
 @layer utilities {
   .app-glass-surface,
   .app-glass-context
