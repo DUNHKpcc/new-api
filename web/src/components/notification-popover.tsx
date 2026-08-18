@@ -220,7 +220,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             variant='ghost'
             size='icon'
             className={cn(
-              'relative size-9 overflow-visible',
+              'relative size-9 overflow-visible data-[lottery-active=true]:w-auto',
               hasLottery && 'h-9 w-auto min-w-9 gap-1.5 px-2.5',
               props.className
             )}

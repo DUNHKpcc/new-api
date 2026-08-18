@@ -134,6 +134,8 @@ describe('pricing page top', () => {
     assert.doesNotMatch(markup, /This site currently has/)
     assert.match(markup, /aria-label="Search models"/)
     assert.doesNotMatch(markup, /data-subscription-plan-showcase/)
+    assert.match(markup, /data-account-recharge-link="true"/)
+    assert.match(markup, /href="https:\/\/dpccgaming\.xyz\/payment"/)
   })
 
   test('shows every configured plan above the model search field', async () => {
@@ -141,9 +143,15 @@ describe('pricing page top', () => {
     const showcasePosition = markup.indexOf(
       'data-subscription-plan-showcase="true"'
     )
+    const titlePosition = markup.indexOf('pricing-subscription-plans-title')
+    const accountRechargePosition = markup.indexOf(
+      'data-account-recharge-link="true"'
+    )
     const searchPosition = markup.indexOf('aria-label="Search models"')
 
     assert.ok(showcasePosition >= 0)
+    assert.ok(accountRechargePosition > titlePosition)
+    assert.ok(accountRechargePosition < searchPosition)
     assert.ok(searchPosition > showcasePosition)
     assert.match(markup, /data-subscription-plan-id="1"/)
     assert.match(markup, /data-subscription-plan-id="2"/)

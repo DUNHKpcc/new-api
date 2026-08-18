@@ -155,6 +155,7 @@ describe('public header layout', () => {
     assert.equal(publicHeaderDesktopMediaQuery, '(min-width: 1024px)')
     assert.equal(publicHeaderCompactLinkCount, 4)
     assert.ok(mobileTokens.includes('lg:hidden'))
+    assert.ok(mobileTokens.includes('gap-2'))
     assert.ok(mobileTokens.includes('[&_[data-slot=avatar]]:size-7'))
     assert.ok(panelTokens.includes('lg:hidden'))
     assert.ok(panelTokens.includes('w-full'))

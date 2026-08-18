@@ -71,7 +71,7 @@ export function Hero(props: HeroProps) {
   return (
     <section
       className={cn(
-        'bg-background relative z-10 overflow-hidden px-6 pt-24 pb-16 min-[700px]:pb-0',
+        'bg-background relative z-10 flex flex-col overflow-hidden px-6 pt-24 pb-16 min-[700px]:pb-0',
         props.className
       )}
     >
@@ -87,7 +87,7 @@ export function Hero(props: HeroProps) {
           <span className='text-primary'>{t('Vast Range of AI Models')}</span>
         </h1>
         <div
-          className='landing-animate-fade-up mt-8 flex w-full flex-col items-stretch justify-center gap-3 opacity-0 min-[700px]:relative min-[700px]:top-[9px] min-[700px]:z-40 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center'
+          className='landing-animate-fade-up mt-[78px] flex w-full flex-col items-stretch justify-center gap-3 opacity-0 min-[700px]:relative min-[700px]:top-[9px] min-[700px]:z-40 min-[700px]:mt-8 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center'
           style={{ animationDelay: '60ms' }}
         >
           {props.isAuthenticated ? (
@@ -143,7 +143,7 @@ export function Hero(props: HeroProps) {
         </div>
       </div>
 
-      <div className='relative z-10'>
+      <div className='relative z-10 mt-auto'>
         <HeroProductShowcase />
       </div>
     </section>

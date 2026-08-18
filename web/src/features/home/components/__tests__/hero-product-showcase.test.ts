@@ -70,7 +70,7 @@ describe('home hero product showcase', () => {
     assert.equal(web?.labelIconSrc, '/landing/dpcc-api-favicon.png')
   })
 
-  test('keeps the web title visible and the mini-program label above its image', () => {
+  test('anchors the web preview to the stage bottom at compact widths', () => {
     const web = heroProductShowcaseMedia.find((item) => item.id === 'web')
     const desktop = heroProductShowcaseMedia.find(
       (item) => item.id === 'desktop'
@@ -79,7 +79,9 @@ describe('home hero product showcase', () => {
       (item) => item.id === 'wechat-mini-program'
     )
 
-    assert.ok(web?.positionClassName.includes('-top-[35px]'))
+    assert.ok(web?.positionClassName.includes('bottom-0'))
+    assert.ok(web?.positionClassName.includes('min-[1100px]:bottom-auto'))
+    assert.ok(web?.positionClassName.includes('min-[1100px]:-top-[35px]'))
     assert.ok(web?.positionClassName.includes('left-1/2'))
     assert.ok(web?.positionClassName.includes('w-[66%]'))
     assert.ok(desktop?.labelClassName.includes('right-3'))

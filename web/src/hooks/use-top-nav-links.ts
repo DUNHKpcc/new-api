@@ -95,9 +95,9 @@ export function useTopNavLinks(): TopNavLink[] {
     }
   }
 
-  // About
+  // Customer service
   if (modules?.about !== false) {
-    links.push({ title: t('Customer Service'), href: '/about' })
+    links.push({ title: t('Customer Service'), href: '/support' })
   }
 
   return links

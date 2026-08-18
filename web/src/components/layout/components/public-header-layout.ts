@@ -100,7 +100,7 @@ export const publicHeaderLayoutClasses = {
     'dark:ring-foreground/25 h-10 rounded-sm bg-foreground px-5 text-[0.8125rem] font-semibold tracking-[0.02em] text-background transition-[opacity,box-shadow] hover:opacity-90 dark:ring-1',
   authSkeleton: 'h-10 w-20 rounded-sm',
   mobileActions:
-    'col-start-3 row-start-1 flex shrink-0 items-center gap-1 justify-self-end lg:hidden [&_button]:size-10 [&_button]:rounded-sm [&_button_svg]:size-5 [&_[data-slot=avatar]]:size-7',
+    'col-start-3 row-start-1 flex shrink-0 items-center gap-2 justify-self-end lg:hidden [&_button]:size-10 [&_button]:rounded-sm [&_button_svg]:size-5 [&_[data-slot=avatar]]:size-7',
   mobilePanel: 'w-full gap-0 border-l-0 sm:max-w-[26rem] sm:border-l lg:hidden',
   mobilePanelHeader:
     'flex-row items-center justify-between gap-4 border-b px-5 py-4 sm:px-6',

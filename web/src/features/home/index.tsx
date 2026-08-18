@@ -122,8 +122,10 @@ export function Home() {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <Hero isAuthenticated={isAuthenticated} />
-      <Stats />
+      <div className='flex min-h-svh flex-col'>
+        <Hero isAuthenticated={isAuthenticated} className='flex-1' />
+        <Stats className='shrink-0' />
+      </div>
       <PccAgent />
       <Features />
       <HowItWorks />

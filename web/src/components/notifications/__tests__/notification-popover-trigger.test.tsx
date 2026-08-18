@@ -78,6 +78,7 @@ describe('notification popover topbar trigger', () => {
     assert.match(markup, /aria-label="System Announcements"/)
     assert.match(markup, /data-lottery-active="true"/)
     assert.match(markup, /data-lottery-unread="true"/)
+    assert.match(markup, /data-\[lottery-active=true\]:w-auto/)
     assert.match(markup, /data-notification-icon="true"/)
     assert.match(markup, /data-lottery-icon="true"/)
     assert.doesNotMatch(

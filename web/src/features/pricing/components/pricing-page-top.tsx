@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { AccountRechargeLink } from '@/components/account-recharge-link'
 import type { PlanRecord } from '@/features/subscriptions/types'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +40,11 @@ export function PricingPageTop(props: PricingPageTopProps) {
 
   return (
     <>
+      {!hasPlanSection && (
+        <div className='mx-auto mb-3 flex w-full max-w-3xl justify-center sm:mb-4 sm:justify-end'>
+          <AccountRechargeLink />
+        </div>
+      )}
       <SubscriptionPlanShowcase
         plans={props.plans}
         isLoading={props.plansLoading}

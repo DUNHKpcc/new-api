@@ -111,6 +111,10 @@ describe('home hero actions', () => {
 
     assert.match(markup, /data-hero-model-snowfall="true"/)
     assert.match(markup, /aria-hidden="true"/)
+    assert.match(markup, /bg-background relative z-10 flex flex-col/)
+    assert.match(markup, /relative z-10 mt-auto/)
+    assert.match(markup, /landing-animate-fade-up mt-\[78px\]/)
+    assert.match(markup, /min-\[700px\]:mt-8/)
   })
 
   test('renders a resource download link in the public hero', async () => {

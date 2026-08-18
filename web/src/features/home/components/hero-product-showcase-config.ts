@@ -52,7 +52,8 @@ export const heroProductShowcaseMedia = [
     width: 1800,
     height: 1178,
     icon: Globe2,
-    positionClassName: '-top-[35px] left-1/2 z-10 w-[66%] min-[1100px]:w-[66%]',
+    positionClassName:
+      'bottom-0 left-1/2 z-10 w-[66%] min-[1100px]:bottom-auto min-[1100px]:-top-[35px]',
     surfaceClassName: '-translate-x-1/2 group-hover:-translate-y-2',
     labelClassName: 'top-3 left-3',
     animationDelay: '280ms',

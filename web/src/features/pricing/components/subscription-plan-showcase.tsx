@@ -20,6 +20,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight, Crown, Gauge, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { AccountRechargeLink } from '@/components/account-recharge-link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -145,16 +146,19 @@ export function SubscriptionPlanShowcase(props: SubscriptionPlanShowcaseProps) {
       >
         <div className='mb-3 flex min-w-0 items-end justify-between gap-4'>
           <div className='min-w-0'>
-            <h2
-              id='pricing-subscription-plans-title'
-              className='flex items-center gap-2 text-base font-semibold sm:text-lg'
-            >
-              <Crown
-                className='text-warning size-4 shrink-0'
-                aria-hidden='true'
-              />
-              {t('Subscription Plans')}
-            </h2>
+            <div className='flex min-w-0 flex-wrap items-center gap-3'>
+              <h2
+                id='pricing-subscription-plans-title'
+                className='flex items-center gap-2 text-base font-semibold sm:text-lg'
+              >
+                <Crown
+                  className='text-warning size-4 shrink-0'
+                  aria-hidden='true'
+                />
+                {t('Subscription Plans')}
+              </h2>
+              <AccountRechargeLink />
+            </div>
             <p className='text-muted-foreground mt-1 text-xs sm:text-sm'>
               {t('Subscribe to a plan for model access')}
             </p>
