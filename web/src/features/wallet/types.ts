@@ -245,7 +245,7 @@ export interface TopupSummary {
 /**
  * Topup record status
  */
-export type TopupStatus = 'success' | 'pending' | 'expired'
+export type TopupStatus = 'success' | 'pending' | 'expired' | 'failed'
 
 /**
  * Topup billing record
@@ -263,6 +263,8 @@ export interface TopupRecord {
   trade_no: string
   /** Payment method type */
   payment_method: string
+  /** Payment provider identifier */
+  payment_provider: string
   /** Creation timestamp */
   create_time: number
   /** Completion timestamp */

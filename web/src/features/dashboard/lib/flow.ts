@@ -51,6 +51,8 @@ type FlowSankeyLabels = {
   share: string
 }
 
+type FlowSankeyTooltipMetrics = Partial<Record<keyof FlowSankeyLabels, boolean>>
+
 type FlowPathNode = {
   id: string
   label: string
@@ -97,6 +99,8 @@ const DEFAULT_FLOW_SANKEY_LABELS: FlowSankeyLabels = {
   requests: 'Requests',
   share: 'Share',
 }
+
+const DEFAULT_FLOW_SANKEY_TOOLTIP_METRICS: FlowSankeyTooltipMetrics = {}
 
 const DEFAULT_FLOW_CHART_COLOR = '#1664FF'
 
@@ -1081,7 +1085,8 @@ export function flowNodeFilterFromSankeyDatum(
 
 function tooltipMetricLines(
   valueFormatter: (value: number) => string,
-  labels: FlowSankeyLabels
+  labels: FlowSankeyLabels,
+  tooltipMetrics: FlowSankeyTooltipMetrics
 ) {
   const metricValue = (datum: Record<string, unknown>, key: string) =>
     numberValue(sankeyDatumValue(datum, key))
@@ -1095,22 +1100,26 @@ function tooltipMetricLines(
       key: labels.quota,
       value: (datum: Record<string, unknown>) =>
         valueFormatter(metricValue(datum, 'quota')),
+      visible: () => tooltipMetrics.quota !== false,
     },
     {
       key: labels.tokens,
       value: (datum: Record<string, unknown>) =>
         formattedNumber(datum, 'tokens'),
+      visible: () => tooltipMetrics.tokens !== false,
     },
     {
       key: labels.requests,
       value: (datum: Record<string, unknown>) =>
         formattedNumber(datum, 'requests'),
+      visible: () => tooltipMetrics.requests !== false,
     },
     {
       key: labels.share,
       value: (datum: Record<string, unknown>) =>
         `${(metricValue(datum, 'share') * 100).toFixed(1)}%`,
-      visible: (datum: Record<string, unknown>) => hasMetric(datum, 'share'),
+      visible: (datum: Record<string, unknown>) =>
+        tooltipMetrics.share !== false && hasMetric(datum, 'share'),
     },
   ]
 }
@@ -1119,7 +1128,8 @@ export function buildFlowSankeySpec(
   flow: DashboardFlowGraph,
   title: string,
   valueFormatter: (value: number) => string = formatNumber,
-  labels: FlowSankeyLabels = DEFAULT_FLOW_SANKEY_LABELS
+  labels: FlowSankeyLabels = DEFAULT_FLOW_SANKEY_LABELS,
+  tooltipMetrics: FlowSankeyTooltipMetrics = DEFAULT_FLOW_SANKEY_TOOLTIP_METRICS
 ): VChartSpec {
   return {
     type: 'sankey',
@@ -1326,7 +1336,7 @@ export function buildFlowSankeySpec(
             return `${sankeyDatumValue(datum, 'name') ?? sankeyDatumValue(datum, 'rawLabel') ?? ''}`
           },
         },
-        content: tooltipMetricLines(valueFormatter, labels),
+        content: tooltipMetricLines(valueFormatter, labels, tooltipMetrics),
       },
     },
     background: { fill: 'transparent' },

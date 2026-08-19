@@ -20,6 +20,7 @@ import {
   Activity,
   BadgePercent,
   Box,
+  ChartNoAxesCombined,
   CreditCard,
   Download,
   FileText,
@@ -162,6 +163,12 @@ export function useSidebarData(): SidebarData {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('Revenue management'),
+            url: '/revenue/overview',
+            icon: ChartNoAxesCombined,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('System Info'),

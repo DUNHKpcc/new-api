@@ -48,6 +48,8 @@ import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedResourceDownloadsIndexRouteImport } from './routes/_authenticated/resource-downloads/index'
+import { Route as AuthenticatedRevenueIndexRouteImport } from './routes/_authenticated/revenue/index'
+import { Route as AuthenticatedRevenueSectionRouteImport } from './routes/_authenticated/revenue/$section'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
@@ -277,6 +279,18 @@ const AuthenticatedResourceDownloadsIndexRoute =
     path: '/resource-downloads/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedRevenueIndexRoute =
+  AuthenticatedRevenueIndexRouteImport.update({
+    id: '/revenue/',
+    path: '/revenue/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRevenueSectionRoute =
+  AuthenticatedRevenueSectionRouteImport.update({
+    id: '/revenue/$section',
+    path: '/revenue/$section',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSubscriptionsIndexRoute =
   AuthenticatedSubscriptionsIndexRouteImport.update({
     id: '/subscriptions/',
@@ -437,6 +451,7 @@ export interface FileRoutesByFullPath {
   '/desktop/authorize': typeof AuthenticatedDesktopAuthorizeRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/revenue/$section': typeof AuthenticatedRevenueSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/affiliate/': typeof AuthenticatedAffiliateIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -447,6 +462,7 @@ export interface FileRoutesByFullPath {
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/resource-downloads/': typeof AuthenticatedResourceDownloadsIndexRoute
+  '/revenue/': typeof AuthenticatedRevenueIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -497,6 +513,7 @@ export interface FileRoutesByTo {
   '/desktop/authorize': typeof AuthenticatedDesktopAuthorizeRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/revenue/$section': typeof AuthenticatedRevenueSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/affiliate': typeof AuthenticatedAffiliateIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
@@ -507,6 +524,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/resource-downloads': typeof AuthenticatedResourceDownloadsIndexRoute
+  '/revenue': typeof AuthenticatedRevenueIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
@@ -561,6 +579,7 @@ export interface FileRoutesById {
   '/_authenticated/desktop/authorize': typeof AuthenticatedDesktopAuthorizeRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/_authenticated/revenue/$section': typeof AuthenticatedRevenueSectionRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/affiliate/': typeof AuthenticatedAffiliateIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -571,6 +590,7 @@ export interface FileRoutesById {
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/resource-downloads/': typeof AuthenticatedResourceDownloadsIndexRoute
+  '/_authenticated/revenue/': typeof AuthenticatedRevenueIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -624,6 +644,7 @@ export interface FileRouteTypes {
     | '/desktop/authorize'
     | '/errors/$error'
     | '/models/$section'
+    | '/revenue/$section'
     | '/usage-logs/$section'
     | '/affiliate/'
     | '/channels/'
@@ -634,6 +655,7 @@ export interface FileRouteTypes {
     | '/profile/'
     | '/redemption-codes/'
     | '/resource-downloads/'
+    | '/revenue/'
     | '/subscriptions/'
     | '/system-info/'
     | '/system-settings/'
@@ -684,6 +706,7 @@ export interface FileRouteTypes {
     | '/desktop/authorize'
     | '/errors/$error'
     | '/models/$section'
+    | '/revenue/$section'
     | '/usage-logs/$section'
     | '/affiliate'
     | '/channels'
@@ -694,6 +717,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/redemption-codes'
     | '/resource-downloads'
+    | '/revenue'
     | '/subscriptions'
     | '/system-info'
     | '/system-settings'
@@ -747,6 +771,7 @@ export interface FileRouteTypes {
     | '/_authenticated/desktop/authorize'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
+    | '/_authenticated/revenue/$section'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/affiliate/'
     | '/_authenticated/channels/'
@@ -757,6 +782,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/resource-downloads/'
+    | '/_authenticated/revenue/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
@@ -1075,6 +1101,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedResourceDownloadsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/revenue/': {
+      id: '/_authenticated/revenue/'
+      path: '/revenue'
+      fullPath: '/revenue/'
+      preLoaderRoute: typeof AuthenticatedRevenueIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/revenue/$section': {
+      id: '/_authenticated/revenue/$section'
+      path: '/revenue/$section'
+      fullPath: '/revenue/$section'
+      preLoaderRoute: typeof AuthenticatedRevenueSectionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/subscriptions/': {
       id: '/_authenticated/subscriptions/'
       path: '/subscriptions'
@@ -1321,6 +1361,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDesktopAuthorizeRoute: typeof AuthenticatedDesktopAuthorizeRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
+  AuthenticatedRevenueSectionRoute: typeof AuthenticatedRevenueSectionRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedAffiliateIndexRoute: typeof AuthenticatedAffiliateIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
@@ -1331,6 +1372,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedResourceDownloadsIndexRoute: typeof AuthenticatedResourceDownloadsIndexRoute
+  AuthenticatedRevenueIndexRoute: typeof AuthenticatedRevenueIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
@@ -1347,6 +1389,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDesktopAuthorizeRoute: AuthenticatedDesktopAuthorizeRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
+  AuthenticatedRevenueSectionRoute: AuthenticatedRevenueSectionRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedAffiliateIndexRoute: AuthenticatedAffiliateIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
@@ -1359,6 +1402,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedRedemptionCodesIndexRoute,
   AuthenticatedResourceDownloadsIndexRoute:
     AuthenticatedResourceDownloadsIndexRoute,
+  AuthenticatedRevenueIndexRoute: AuthenticatedRevenueIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,

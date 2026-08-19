@@ -49,6 +49,10 @@ var auditContentTemplates = map[string]string{
 
 	"subscription.plan_reset":      "Reset active subscriptions for plan ${plan_id}",
 	"subscription.user_plan_reset": "Reset active plan ${plan_id} subscriptions for user ${target_user_id}",
+
+	"external_revenue.create": "Created external revenue ${id} from ${source} (${amount_minor} ${currency} minor units)",
+	"external_revenue.update": "Updated external revenue ${id} from ${source} (${amount_minor} ${currency} minor units)",
+	"external_revenue.void":   "Voided external revenue ${id}",
 }
 
 // auditContentEN 按 action 模板渲染英文兜底文本；未登记的 action 退回 action 本身。

@@ -1,0 +1,148 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import assert from 'node:assert/strict'
+import { describe, test } from 'node:test'
+
+import {
+  buildRevenueFlowGraph,
+  combineRevenueTotals,
+  decimalAmountToMinor,
+  minorAmountToDecimal,
+} from '../lib/analytics'
+import type { ExternalRevenueSummary, PlatformRevenueSummary } from '../types'
+
+const platform: PlatformRevenueSummary = {
+  totals: [
+    { currency: 'CNY', amount_minor: '12000', count: 2, verified_count: 1 },
+  ],
+  by_payment_method: [
+    {
+      payment_method: 'wxpay',
+      currency: 'CNY',
+      amount_minor: '12000',
+      count: 2,
+    },
+  ],
+  timeline: [],
+  default_currency: 'CNY',
+  start_time: 1,
+  end_time: 2,
+  timezone_offset: 480,
+  normalization_basis: 'verified_settlement_or_recorded_order_amount',
+}
+
+const external: ExternalRevenueSummary = {
+  totals: [{ currency: 'CNY', amount_minor: '3450', count: 1 }],
+  by_source: [
+    {
+      source: 'xianyu',
+      source_label: '',
+      currency: 'CNY',
+      amount_minor: '3450',
+      count: 1,
+    },
+  ],
+  timeline: [],
+  start_time: 1,
+  end_time: 2,
+  timezone_offset: 480,
+}
+
+describe('revenue analytics', () => {
+  test('combines platform and external amounts only within the same currency', () => {
+    const totals = combineRevenueTotals(platform, {
+      ...external,
+      totals: [
+        ...(external.totals ?? []),
+        { currency: 'USD', amount_minor: '500', count: 1 },
+      ],
+    })
+
+    assert.deepEqual(totals, [
+      {
+        currency: 'CNY',
+        platformAmountMinor: '12000',
+        externalAmountMinor: '3450',
+        totalAmountMinor: '15450',
+        platformCount: 2,
+        externalCount: 1,
+      },
+      {
+        currency: 'USD',
+        platformAmountMinor: '0',
+        externalAmountMinor: '500',
+        totalAmountMinor: '500',
+        platformCount: 0,
+        externalCount: 1,
+      },
+    ])
+  })
+
+  test('treats null summary arrays as empty data instead of throwing', () => {
+    const emptyPlatform: PlatformRevenueSummary = {
+      ...platform,
+      totals: null,
+      by_payment_method: null,
+      timeline: null,
+    }
+    const emptyExternal: ExternalRevenueSummary = {
+      ...external,
+      totals: null,
+      by_source: null,
+      timeline: null,
+    }
+
+    assert.deepEqual(combineRevenueTotals(emptyPlatform, emptyExternal), [])
+    assert.deepEqual(
+      buildRevenueFlowGraph(
+        emptyPlatform,
+        emptyExternal,
+        'CNY',
+        { platform: 'Platform', external: 'External' },
+        'amount'
+      ),
+      { nodes: [], links: [] }
+    )
+  })
+
+  test('builds the reused flow graph from both revenue sources', () => {
+    const graph = buildRevenueFlowGraph(
+      platform,
+      external,
+      'CNY',
+      { platform: 'Platform', external: 'External' },
+      'amount'
+    )
+
+    const nodeIds = new Set(graph.nodes.map((node) => node.id))
+    assert.ok(nodeIds.has('root:platform'))
+    assert.ok(nodeIds.has('root:external'))
+    assert.ok(nodeIds.has('platform:wxpay'))
+    assert.ok(nodeIds.has('external:xianyu:xianyu'))
+    assert.ok(nodeIds.has('currency:CNY'))
+    assert.equal(graph.links.length, 4)
+  })
+
+  test('converts decimal form amounts without floating-point rounding', () => {
+    assert.equal(decimalAmountToMinor('10.05'), '1005')
+    assert.equal(decimalAmountToMinor('0'), null)
+    assert.equal(decimalAmountToMinor('2.345'), null)
+    assert.equal(minorAmountToDecimal('1005'), '10.05')
+  })
+})

@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
+import {
+  ChartNoAxesCombined,
+  Gift,
+  ExternalLink,
+  Loader2,
+  Receipt,
+  WalletCards,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -74,6 +81,8 @@ interface RechargeFormCardProps {
   priceRatio?: number
   usdExchangeRate?: number
   onOpenBilling?: () => void
+  billingActionLabel?: string
+  billingActionKind?: 'history' | 'revenue'
   creemProducts?: CreemProduct[]
   enableCreemTopup?: boolean
   onCreemProductSelect?: (product: CreemProduct) => void
@@ -105,6 +114,8 @@ export function RechargeFormCard({
   priceRatio = 1,
   usdExchangeRate = 1,
   onOpenBilling,
+  billingActionLabel,
+  billingActionKind = 'history',
   creemProducts,
   enableCreemTopup,
   onCreemProductSelect,
@@ -212,8 +223,12 @@ export function RechargeFormCard({
             onClick={onOpenBilling}
             className='w-full gap-2 sm:w-auto'
           >
-            <Receipt className='h-4 w-4' />
-            {t('Order History')}
+            {billingActionKind === 'revenue' ? (
+              <ChartNoAxesCombined className='h-4 w-4' />
+            ) : (
+              <Receipt className='h-4 w-4' />
+            )}
+            {billingActionLabel ?? t('Order History')}
           </Button>
         ) : null
       }

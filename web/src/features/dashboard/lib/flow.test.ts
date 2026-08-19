@@ -777,6 +777,39 @@ describe('dashboard flow data', () => {
     )
   })
 
+  test('hides unused Sankey tooltip metrics when a reused chart opts out', () => {
+    const result = buildDashboardFlowData(rows.slice(0, 1), 'quota', {
+      role: 'root',
+    })
+    const flowSpec = buildFlowSankeySpec(
+      result.flow,
+      'Revenue flow',
+      (value) => `${value}`,
+      {
+        quota: 'Revenue',
+        tokens: 'Orders',
+        requests: 'Orders',
+        share: 'Share',
+      },
+      { tokens: false }
+    )
+    const values = flowSpec.data[0].values[0]
+    const userNodeLink = values.links.find(
+      (link: Record<string, unknown>) =>
+        link.source === 'user:1' && link.target === 'node:node-a'
+    )
+
+    const visibleTooltipKeys = flowSpec.tooltip.mark.content
+      .filter((row: Record<string, unknown>) =>
+        typeof row.visible === 'function'
+          ? row.visible({ datum: userNodeLink })
+          : true
+      )
+      .map((row: Record<string, unknown>) => row.key)
+
+    assert.deepEqual(visibleTooltipKeys, ['Revenue', 'Orders', 'Share'])
+  })
+
   test('maps active flow highlight states into the Sankey spec', () => {
     const result = buildDashboardFlowData(rows, 'quota', {
       role: 'root',

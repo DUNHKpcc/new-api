@@ -17,9 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Calendar as CalendarIcon } from 'lucide-react'
-import { enUS, fr, ja, ru, vi, zhCN } from 'react-day-picker/locale'
 import { useTranslation } from 'react-i18next'
 
+import { getDatePickerLocale } from '@/components/date-picker-locale'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import {
@@ -28,60 +28,74 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import dayjs from '@/lib/dayjs'
-
-const calendarLocales = {
-  en: enUS,
-  zh: zhCN,
-  fr,
-  ru,
-  ja,
-  vi,
-} as const
+import { cn } from '@/lib/utils'
 
 type DatePickerProps = {
   selected: Date | undefined
   onSelect: (date: Date | undefined) => void
   placeholder?: string
+  ariaLabel?: string
+  className?: string
+  formatSelected?: (date: Date) => string
+  granularity?: 'day' | 'month'
 }
 
-export function DatePicker({
-  selected,
-  onSelect,
-  placeholder,
-}: DatePickerProps) {
+export function DatePicker(props: DatePickerProps) {
   const { t, i18n } = useTranslation()
-  const placeholderText = placeholder ?? t('Pick a date')
-  const calendarLocale =
-    calendarLocales[i18n.language as keyof typeof calendarLocales] ?? enUS
+  const placeholderText = props.placeholder ?? t('Pick a date')
+  const calendarLocale = getDatePickerLocale(
+    i18n.resolvedLanguage ?? i18n.language
+  )
+  const monthGranularity = props.granularity === 'month'
+  const selectedText = props.selected
+    ? (props.formatSelected?.(props.selected) ??
+      dayjs(props.selected).format('YYYY-MM-DD'))
+    : null
+
   return (
     <Popover>
       <PopoverTrigger
         render={
           <Button
             variant='outline'
-            data-empty={!selected}
-            className='data-[empty=true]:text-muted-foreground w-[240px] justify-start text-start font-normal'
+            data-empty={!props.selected}
+            data-granularity={props.granularity ?? 'day'}
+            aria-label={props.ariaLabel}
+            className={cn(
+              'data-[empty=true]:text-muted-foreground w-[240px] justify-start text-start font-normal',
+              props.className
+            )}
           />
         }
       >
-        {selected ? (
-          dayjs(selected).format('YYYY-MM-DD')
-        ) : (
-          <span>{placeholderText}</span>
-        )}
+        {selectedText ?? <span>{placeholderText}</span>}
         <CalendarIcon className='ms-auto h-4 w-4 opacity-50' />
       </PopoverTrigger>
       <PopoverContent className='w-auto p-0'>
-        <Calendar
-          mode='single'
-          captionLayout='dropdown'
-          selected={selected}
-          onSelect={onSelect}
-          locale={calendarLocale}
-          disabled={(date: Date) =>
-            date > new Date() || date < new Date('1900-01-01')
-          }
-        />
+        {monthGranularity ? (
+          <Calendar
+            captionLayout='dropdown'
+            month={props.selected}
+            onMonthChange={(date) =>
+              props.onSelect(new Date(date.getFullYear(), date.getMonth(), 1))
+            }
+            startMonth={new Date(1900, 0, 1)}
+            endMonth={new Date()}
+            locale={calendarLocale}
+            classNames={{ month_grid: 'hidden' }}
+          />
+        ) : (
+          <Calendar
+            mode='single'
+            captionLayout='dropdown'
+            selected={props.selected}
+            onSelect={props.onSelect}
+            locale={calendarLocale}
+            disabled={(date: Date) =>
+              date > new Date() || date < new Date('1900-01-01')
+            }
+          />
+        )}
       </PopoverContent>
     </Popover>
   )

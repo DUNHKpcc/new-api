@@ -192,6 +192,20 @@ func SetApiRouter(router *gin.Engine) {
 			affiliateAdminRoute.GET("/commissions", middleware.DisableCache(), controller.AdminListAffiliateCommissions)
 			affiliateAdminRoute.POST("/commissions/:id/reverse", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.AdminReverseAffiliateCommission)
 		}
+		externalRevenueRoute := apiRouter.Group("/admin/external-revenue")
+		externalRevenueRoute.Use(middleware.AdminAuth(), middleware.DisableCache())
+		{
+			externalRevenueRoute.GET("", controller.ListExternalRevenue)
+			externalRevenueRoute.GET("/summary", controller.GetExternalRevenueSummary)
+			externalRevenueRoute.POST("", middleware.CriticalRateLimit(), controller.CreateExternalRevenue)
+			externalRevenueRoute.PUT("/:id", middleware.CriticalRateLimit(), controller.UpdateExternalRevenue)
+			externalRevenueRoute.POST("/:id/void", middleware.CriticalRateLimit(), controller.VoidExternalRevenue)
+		}
+		adminRevenueRoute := apiRouter.Group("/admin/revenue")
+		adminRevenueRoute.Use(middleware.AdminAuth(), middleware.DisableCache())
+		{
+			adminRevenueRoute.GET("/platform-summary", controller.GetPlatformRevenueSummary)
+		}
 
 		// Subscription billing (plans, purchase, admin management)
 		subscriptionRoute := apiRouter.Group("/subscription")

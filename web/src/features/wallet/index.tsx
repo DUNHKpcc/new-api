@@ -16,11 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AccountRechargeLink } from '@/components/account-recharge-link'
 import { SectionPageLayout } from '@/components/layout'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -60,6 +62,8 @@ interface WalletProps {
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const isAdmin = useIsAdmin()
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
@@ -124,10 +128,17 @@ export function Wallet(props: WalletProps) {
 
   useEffect(() => {
     if (props.initialShowHistory) {
-      setBillingDialogOpen(true)
+      if (isAdmin) {
+        void navigate({
+          to: '/revenue/$section',
+          params: { section: 'overview' },
+        })
+      } else {
+        setBillingDialogOpen(true)
+      }
       window.history.replaceState({}, '', window.location.pathname)
     }
-  }, [props.initialShowHistory])
+  }, [isAdmin, navigate, props.initialShowHistory])
 
   // Initialize topup amount when topup info is loaded
   const topupAmountInitializedRef = useRef(false)
@@ -310,7 +321,20 @@ export function Wallet(props: WalletProps) {
                   loading={topupLoading}
                   priceRatio={(status?.price as number) || 1}
                   usdExchangeRate={effectiveUsdExchangeRate}
-                  onOpenBilling={() => setBillingDialogOpen(true)}
+                  onOpenBilling={() => {
+                    if (isAdmin) {
+                      void navigate({
+                        to: '/revenue/$section',
+                        params: { section: 'overview' },
+                      })
+                    } else {
+                      setBillingDialogOpen(true)
+                    }
+                  }}
+                  billingActionLabel={
+                    isAdmin ? t('Revenue management') : t('Order History')
+                  }
+                  billingActionKind={isAdmin ? 'revenue' : 'history'}
                   creemProducts={topupInfo?.creem_products}
                   enableCreemTopup={topupInfo?.enable_creem_topup}
                   onCreemProductSelect={handleCreemProductSelect}

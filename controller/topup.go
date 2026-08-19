@@ -542,6 +542,21 @@ func GetUserTopUpSummary(c *gin.Context) {
 func GetAllTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	keyword := c.Query("keyword")
+	var startTime int64
+	var endTime int64
+	hasStartTime := c.Query("start_time") != ""
+	hasEndTime := c.Query("end_time") != ""
+	if hasStartTime != hasEndTime {
+		common.ApiErrorMsg(c, "订单时间范围无效")
+		return
+	}
+	if hasStartTime {
+		var ok bool
+		startTime, endTime, _, ok = revenueSummaryRange(c)
+		if !ok {
+			return
+		}
+	}
 
 	var (
 		topups []*model.TopUp
@@ -549,9 +564,9 @@ func GetAllTopUps(c *gin.Context) {
 		err    error
 	)
 	if keyword != "" {
-		topups, total, err = model.SearchAllTopUps(keyword, pageInfo)
+		topups, total, err = model.SearchAllTopUps(keyword, pageInfo, startTime, endTime)
 	} else {
-		topups, total, err = model.GetAllTopUps(pageInfo)
+		topups, total, err = model.GetAllTopUps(pageInfo, startTime, endTime)
 	}
 	if err != nil {
 		common.ApiError(c, err)
