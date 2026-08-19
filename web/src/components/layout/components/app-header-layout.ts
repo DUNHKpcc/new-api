@@ -17,6 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
+import type { TopNavLink } from '../types'
+
+export function getAuthenticatedTopNavLinks(
+  links: readonly TopNavLink[]
+): TopNavLink[] {
+  return links.map((link) =>
+    link.href === '/dashboard' && !link.external
+      ? { ...link, isActive: true }
+      : link
+  )
+}
+
 export const appHeaderLayoutClasses = {
   // Editorial wireframe × dark-tech topbar: near-solid paper surface in
   // light mode, deeper-than-page ink surface in dark mode (both via the

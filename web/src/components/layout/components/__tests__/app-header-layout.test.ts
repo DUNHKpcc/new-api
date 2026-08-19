@@ -19,8 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { appHeaderLayoutClasses } from '../app-header-layout'
-import { publicHeaderLayoutClasses } from '../public-header-layout'
+import {
+  appHeaderLayoutClasses,
+  getAuthenticatedTopNavLinks,
+} from '../app-header-layout'
+import {
+  isPublicNavLinkActive,
+  publicHeaderLayoutClasses,
+} from '../public-header-layout'
 
 function tokens(classes: string) {
   return classes.split(' ')
@@ -137,6 +143,23 @@ describe('authenticated app header layout', () => {
       link.includes('motion-reduce:after:transition-none'),
       'respects reduced motion for the indicator animation'
     )
+  })
+
+  test('keeps Console active across authenticated sidebar routes', () => {
+    const links = getAuthenticatedTopNavLinks([
+      { title: 'Home', href: '/' },
+      { title: 'Console', href: '/dashboard' },
+      { title: 'Pricing', href: '/pricing' },
+    ])
+    const consoleLink = links.find((link) => link.href === '/dashboard')
+    const homeLink = links.find((link) => link.href === '/')
+
+    assert.ok(consoleLink)
+    assert.ok(homeLink)
+    assert.equal(isPublicNavLinkActive('/keys', consoleLink), true)
+    assert.equal(isPublicNavLinkActive('/wallet', consoleLink), true)
+    assert.equal(isPublicNavLinkActive('/channels', consoleLink), true)
+    assert.equal(isPublicNavLinkActive('/keys', homeLink), false)
   })
 
   test('keeps console nav links visually identical to the public header', () => {

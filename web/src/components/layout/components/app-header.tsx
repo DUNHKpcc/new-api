@@ -27,7 +27,10 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
-import { appHeaderLayoutClasses } from './app-header-layout'
+import {
+  appHeaderLayoutClasses,
+  getAuthenticatedTopNavLinks,
+} from './app-header-layout'
 import { Header } from './header'
 import { SystemBrand } from './system-brand'
 import { TopNav } from './top-nav'
@@ -107,7 +110,9 @@ export function AppHeader({
 }: AppHeaderProps) {
   // Prioritize dynamically generated links from backend
   const dynamicLinks = useTopNavLinks()
-  const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+  const links = getAuthenticatedTopNavLinks(
+    dynamicLinks.length > 0 ? dynamicLinks : navLinks
+  )
 
   return (
     <Header showSidebarTrigger={false}>
