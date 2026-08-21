@@ -37,6 +37,7 @@ const defaultSiteSettings: SiteSettings = {
   HeaderNavModules: '',
   SidebarModulesAdmin: '',
   ResourceDownloadItems: '[]',
+  RankingDisplayConfig: '',
 }
 
 export function SiteSettings() {

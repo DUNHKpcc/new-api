@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 )
 
 type RankingsResponse struct {
+	DataMode           string             `json:"data_mode"`
 	Models             []RankedModel      `json:"models"`
 	Vendors            []RankedVendor     `json:"vendors"`
 	TopMovers          []RankingMover     `json:"top_movers"`
@@ -29,27 +32,34 @@ type RankingsResponse struct {
 	VendorShareHistory VendorShareSeries  `json:"vendor_share_history"`
 }
 
+const (
+	RankingDataModeLive     = "live"
+	RankingDataModeAdjusted = "adjusted"
+)
+
 type RankedModel struct {
-	Rank         int     `json:"rank"`
-	PreviousRank *int    `json:"previous_rank,omitempty"`
-	ModelName    string  `json:"model_name"`
-	Vendor       string  `json:"vendor"`
-	VendorIcon   string  `json:"vendor_icon,omitempty"`
-	Category     string  `json:"category"`
-	TotalTokens  int64   `json:"total_tokens"`
-	Share        float64 `json:"share"`
-	GrowthPct    float64 `json:"growth_pct"`
+	Rank           int     `json:"rank"`
+	PreviousRank   *int    `json:"previous_rank,omitempty"`
+	ModelName      string  `json:"model_name"`
+	Vendor         string  `json:"vendor"`
+	VendorIcon     string  `json:"vendor_icon,omitempty"`
+	Category       string  `json:"category"`
+	TotalTokens    int64   `json:"total_tokens"`
+	Share          float64 `json:"share"`
+	GrowthPct      float64 `json:"growth_pct"`
+	previousTokens int64
 }
 
 type RankedVendor struct {
-	Rank        int     `json:"rank"`
-	Vendor      string  `json:"vendor"`
-	VendorIcon  string  `json:"vendor_icon,omitempty"`
-	TotalTokens int64   `json:"total_tokens"`
-	Share       float64 `json:"share"`
-	GrowthPct   float64 `json:"growth_pct"`
-	ModelsCount int     `json:"models_count"`
-	TopModel    string  `json:"top_model"`
+	Rank           int     `json:"rank"`
+	Vendor         string  `json:"vendor"`
+	VendorIcon     string  `json:"vendor_icon,omitempty"`
+	TotalTokens    int64   `json:"total_tokens"`
+	Share          float64 `json:"share"`
+	GrowthPct      float64 `json:"growth_pct"`
+	ModelsCount    int     `json:"models_count"`
+	TopModel       string  `json:"top_model"`
+	previousTokens int64
 }
 
 type RankingMover struct {
@@ -163,6 +173,34 @@ func GetRankingsSnapshot(period string) (*RankingsResponse, error) {
 	return data, nil
 }
 
+func GetDisplayRankingsSnapshot(period string) (*RankingsResponse, error) {
+	data, err := GetRankingsSnapshot(period)
+	if err != nil {
+		return nil, err
+	}
+
+	rawConfig, ok, err := model.GetOptionValueFromDatabase(operation_setting.RankingDisplayOptionKey)
+	if err != nil {
+		common.SysError("failed to load ranking display configuration: " + err.Error())
+		return data, nil
+	}
+	if !ok {
+		return data, nil
+	}
+
+	config, err := operation_setting.ParseRankingDisplayConfig(rawConfig)
+	if err != nil {
+		common.SysError("failed to parse ranking display configuration: " + err.Error())
+		return data, nil
+	}
+	adjusted, err := applyRankingDisplayConfig(data, config, period)
+	if err != nil {
+		common.SysError("failed to apply ranking display configuration: " + err.Error())
+		return data, nil
+	}
+	return adjusted, nil
+}
+
 func rankingConfig(period string) (rankingPeriodConfig, error) {
 	switch period {
 	case "", "week":
@@ -210,6 +248,7 @@ func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*Rankings
 	movers, droppers := buildRankingMovers(rankedModels)
 
 	return &RankingsResponse{
+		DataMode:           RankingDataModeLive,
 		Models:             limitRankedModels(rankedModels, rankingLeaderboardLimit),
 		Vendors:            vendors,
 		TopMovers:          movers,
@@ -217,6 +256,293 @@ func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*Rankings
 		ModelsHistory:      modelHistory,
 		VendorShareHistory: vendorHistory,
 	}, nil
+}
+
+func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.RankingDisplayConfig, period string) (*RankingsResponse, error) {
+	if data == nil || !config.Enabled {
+		return data, nil
+	}
+	periodConfig, ok := config.Periods[period]
+	if !ok || len(periodConfig.Adjustments) == 0 {
+		return data, nil
+	}
+
+	result := *data
+	result.Models = append([]RankedModel(nil), data.Models...)
+	result.Vendors = append([]RankedVendor(nil), data.Vendors...)
+	result.ModelsHistory.Models = append([]ModelHistoryModel(nil), data.ModelsHistory.Models...)
+	result.ModelsHistory.Points = append([]ModelHistoryPoint(nil), data.ModelsHistory.Points...)
+	result.VendorShareHistory.Vendors = append([]VendorShareVendor(nil), data.VendorShareHistory.Vendors...)
+	result.VendorShareHistory.Points = append([]VendorSharePoint(nil), data.VendorShareHistory.Points...)
+
+	adjustmentByModel := make(map[string]int64)
+	adjustmentByVendor := make(map[string]int64)
+	displayedTokensByModel := make(map[string]int64, len(result.Models))
+	adjusted := false
+	for idx := range result.Models {
+		row := &result.Models[idx]
+		addedTokens := periodConfig.Adjustments[row.ModelName]
+		if addedTokens > 0 {
+			if row.TotalTokens > operation_setting.MaxRankingDisplayAddedTokens-addedTokens {
+				return nil, fmt.Errorf("ranking display total exceeds the supported range for model %s", row.ModelName)
+			}
+			var err error
+			adjustmentByVendor[row.Vendor], err = addRankingTokens(adjustmentByVendor[row.Vendor], addedTokens)
+			if err != nil {
+				return nil, err
+			}
+			row.TotalTokens += addedTokens
+			adjustmentByModel[row.ModelName] = addedTokens
+			adjusted = true
+		}
+		displayedTokensByModel[row.ModelName] = row.TotalTokens
+	}
+	if !adjusted {
+		return data, nil
+	}
+
+	totalTokens := int64(0)
+	for _, vendor := range result.Vendors {
+		var err error
+		totalTokens, err = addRankingTokens(totalTokens, vendor.TotalTokens)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(result.Vendors) == 0 {
+		for _, row := range data.Models {
+			var err error
+			totalTokens, err = addRankingTokens(totalTokens, row.TotalTokens)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, delta := range adjustmentByVendor {
+		var err error
+		totalTokens, err = addRankingTokens(totalTokens, delta)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sort.Slice(result.Models, func(i, j int) bool {
+		if result.Models[i].TotalTokens == result.Models[j].TotalTokens {
+			return result.Models[i].ModelName < result.Models[j].ModelName
+		}
+		return result.Models[i].TotalTokens > result.Models[j].TotalTokens
+	})
+	for idx := range result.Models {
+		result.Models[idx].Rank = idx + 1
+		result.Models[idx].Share = rankingShare(result.Models[idx].TotalTokens, totalTokens)
+		result.Models[idx].GrowthPct = rankingGrowthPct(result.Models[idx].TotalTokens, result.Models[idx].previousTokens)
+	}
+
+	for idx := range result.Vendors {
+		vendor := &result.Vendors[idx]
+		delta := adjustmentByVendor[vendor.Vendor]
+		if delta > 0 {
+			var err error
+			vendor.TotalTokens, err = addRankingTokens(vendor.TotalTokens, delta)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if topModelTokens, exists := displayedTokensByModel[vendor.TopModel]; exists {
+			for _, modelRow := range result.Models {
+				if modelRow.Vendor == vendor.Vendor && modelRow.TotalTokens > topModelTokens {
+					vendor.TopModel = modelRow.ModelName
+					topModelTokens = modelRow.TotalTokens
+				}
+			}
+		}
+		vendor.Share = rankingShare(vendor.TotalTokens, totalTokens)
+		vendor.GrowthPct = rankingGrowthPct(vendor.TotalTokens, vendor.previousTokens)
+	}
+	sort.Slice(result.Vendors, func(i, j int) bool {
+		if result.Vendors[i].TotalTokens == result.Vendors[j].TotalTokens {
+			return result.Vendors[i].Vendor < result.Vendors[j].Vendor
+		}
+		return result.Vendors[i].TotalTokens > result.Vendors[j].TotalTokens
+	})
+	for idx := range result.Vendors {
+		result.Vendors[idx].Rank = idx + 1
+	}
+	if err := applyModelHistoryAdjustments(&result.ModelsHistory, adjustmentByModel); err != nil {
+		return nil, err
+	}
+	if err := applyVendorHistoryAdjustments(&result.VendorShareHistory, adjustmentByVendor, totalTokens); err != nil {
+		return nil, err
+	}
+
+	result.TopMovers, result.TopDroppers = buildRankingMovers(result.Models)
+	result.DataMode = RankingDataModeAdjusted
+	return &result, nil
+}
+
+func applyModelHistoryAdjustments(history *ModelHistorySeries, adjustments map[string]int64) error {
+	if history == nil || len(adjustments) == 0 || len(history.Points) == 0 {
+		return nil
+	}
+
+	historyModels := make(map[string]struct{}, len(history.Models))
+	for _, item := range history.Models {
+		historyModels[item.Name] = struct{}{}
+	}
+	adjustmentBySeries := make(map[string]int64)
+	for modelName, addedTokens := range adjustments {
+		seriesName := modelName
+		if _, ok := historyModels[modelName]; !ok {
+			seriesName = rankingOthersLabel
+		}
+		var err error
+		adjustmentBySeries[seriesName], err = addRankingTokens(adjustmentBySeries[seriesName], addedTokens)
+		if err != nil {
+			return err
+		}
+	}
+
+	latestTs := history.Points[0].Ts
+	for _, point := range history.Points[1:] {
+		if point.Ts > latestTs {
+			latestTs = point.Ts
+		}
+	}
+	for idx := range history.Models {
+		addedTokens := adjustmentBySeries[history.Models[idx].Name]
+		if addedTokens == 0 {
+			continue
+		}
+		var err error
+		history.Models[idx].Total, err = addRankingTokens(history.Models[idx].Total, addedTokens)
+		if err != nil {
+			return err
+		}
+	}
+	for idx := range history.Points {
+		point := &history.Points[idx]
+		if point.Ts != latestTs {
+			continue
+		}
+		addedTokens := adjustmentBySeries[point.Model]
+		if addedTokens == 0 {
+			continue
+		}
+		var err error
+		point.Tokens, err = addRankingTokens(point.Tokens, addedTokens)
+		if err != nil {
+			return err
+		}
+		delete(adjustmentBySeries, point.Model)
+	}
+	for seriesName, addedTokens := range adjustmentBySeries {
+		if addedTokens == 0 {
+			continue
+		}
+		latestPoint := history.Points[len(history.Points)-1]
+		vendor := rankingOthersLabel
+		for _, item := range history.Models {
+			if item.Name == seriesName {
+				vendor = item.Vendor
+				break
+			}
+		}
+		history.Points = append(history.Points, ModelHistoryPoint{
+			Ts: latestTs, Label: latestPoint.Label, Model: seriesName,
+			Vendor: vendor, Tokens: addedTokens,
+		})
+	}
+	return nil
+}
+
+func applyVendorHistoryAdjustments(history *VendorShareSeries, adjustments map[string]int64, totalTokens int64) error {
+	if history == nil || len(adjustments) == 0 || len(history.Points) == 0 {
+		return nil
+	}
+
+	historyVendors := make(map[string]struct{}, len(history.Vendors))
+	for _, item := range history.Vendors {
+		historyVendors[item.Name] = struct{}{}
+	}
+	adjustmentBySeries := make(map[string]int64)
+	for vendor, addedTokens := range adjustments {
+		seriesName := vendor
+		if _, ok := historyVendors[vendor]; !ok {
+			seriesName = rankingOthersLabel
+		}
+		var err error
+		adjustmentBySeries[seriesName], err = addRankingTokens(adjustmentBySeries[seriesName], addedTokens)
+		if err != nil {
+			return err
+		}
+	}
+
+	latestTs := history.Points[0].Ts
+	for _, point := range history.Points[1:] {
+		if point.Ts > latestTs {
+			latestTs = point.Ts
+		}
+	}
+	for idx := range history.Vendors {
+		addedTokens := adjustmentBySeries[history.Vendors[idx].Name]
+		if addedTokens > 0 {
+			var err error
+			history.Vendors[idx].Total, err = addRankingTokens(history.Vendors[idx].Total, addedTokens)
+			if err != nil {
+				return err
+			}
+		}
+		history.Vendors[idx].Share = rankingShare(history.Vendors[idx].Total, totalTokens)
+	}
+
+	latestBucketTotal := int64(0)
+	for idx := range history.Points {
+		point := &history.Points[idx]
+		if point.Ts != latestTs {
+			continue
+		}
+		addedTokens := adjustmentBySeries[point.Vendor]
+		if addedTokens > 0 {
+			var err error
+			point.Tokens, err = addRankingTokens(point.Tokens, addedTokens)
+			if err != nil {
+				return err
+			}
+			delete(adjustmentBySeries, point.Vendor)
+		}
+		var err error
+		latestBucketTotal, err = addRankingTokens(latestBucketTotal, point.Tokens)
+		if err != nil {
+			return err
+		}
+	}
+	for seriesName, addedTokens := range adjustmentBySeries {
+		if addedTokens == 0 {
+			continue
+		}
+		latestPoint := history.Points[len(history.Points)-1]
+		history.Points = append(history.Points, VendorSharePoint{
+			Ts: latestTs, Label: latestPoint.Label, Vendor: seriesName, Tokens: addedTokens,
+		})
+		var err error
+		latestBucketTotal, err = addRankingTokens(latestBucketTotal, addedTokens)
+		if err != nil {
+			return err
+		}
+	}
+	for idx := range history.Points {
+		if history.Points[idx].Ts == latestTs {
+			history.Points[idx].Share = rankingShare(history.Points[idx].Tokens, latestBucketTotal)
+		}
+	}
+	return nil
+}
+
+func addRankingTokens(current int64, addition int64) (int64, error) {
+	if addition < 0 || current > math.MaxInt64-addition {
+		return 0, fmt.Errorf("ranking token total overflow")
+	}
+	return current + addition, nil
 }
 
 func rankingTimeRange(config rankingPeriodConfig, now time.Time) (int64, int64) {
@@ -274,15 +600,16 @@ func buildRankedModels(totals []model.RankingQuotaTotal, totalTokens int64, prev
 			growth = rankingGrowthPct(item.TotalTokens, previousTokens[item.ModelName])
 		}
 		rows = append(rows, RankedModel{
-			Rank:         idx + 1,
-			PreviousRank: previousRank,
-			ModelName:    item.ModelName,
-			Vendor:       modelMeta.vendor,
-			VendorIcon:   modelMeta.vendorIcon,
-			Category:     "all",
-			TotalTokens:  item.TotalTokens,
-			Share:        rankingShare(item.TotalTokens, totalTokens),
-			GrowthPct:    growth,
+			Rank:           idx + 1,
+			PreviousRank:   previousRank,
+			ModelName:      item.ModelName,
+			Vendor:         modelMeta.vendor,
+			VendorIcon:     modelMeta.vendorIcon,
+			Category:       "all",
+			TotalTokens:    item.TotalTokens,
+			Share:          rankingShare(item.TotalTokens, totalTokens),
+			GrowthPct:      growth,
+			previousTokens: previousTokens[item.ModelName],
 		})
 	}
 	return rows
@@ -316,13 +643,14 @@ func buildRankedVendors(currentTotals []model.RankingQuotaTotal, previousTotals 
 			growth = rankingGrowthPct(agg.totalTokens, agg.previousTokens)
 		}
 		rows = append(rows, RankedVendor{
-			Vendor:      agg.name,
-			VendorIcon:  agg.icon,
-			TotalTokens: agg.totalTokens,
-			Share:       rankingShare(agg.totalTokens, totalTokens),
-			GrowthPct:   growth,
-			ModelsCount: len(agg.models),
-			TopModel:    agg.topModel,
+			Vendor:         agg.name,
+			VendorIcon:     agg.icon,
+			TotalTokens:    agg.totalTokens,
+			Share:          rankingShare(agg.totalTokens, totalTokens),
+			GrowthPct:      growth,
+			ModelsCount:    len(agg.models),
+			TopModel:       agg.topModel,
+			previousTokens: agg.previousTokens,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {

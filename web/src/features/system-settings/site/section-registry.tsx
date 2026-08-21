@@ -28,6 +28,7 @@ import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { RankingsDisplaySection } from './rankings-display-section'
 import { ResourceDownloadsSection } from './resource-downloads-section'
 
 const SITE_SECTIONS = [
@@ -87,6 +88,13 @@ const SITE_SECTIONS = [
         />
       )
     },
+  },
+  {
+    id: 'rankings-display',
+    titleKey: 'Rankings display',
+    build: (settings: SiteSettings) => (
+      <RankingsDisplaySection value={settings.RankingDisplayConfig} />
+    ),
   },
   {
     id: 'resource-downloads',

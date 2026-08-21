@@ -52,6 +52,9 @@ export function getOptionInvalidationQueryKeys(optionKey: string): string[] {
     queryKeys.push('resource-downloads')
   }
   if (optionKey === 'LotteryItems') queryKeys.push('lottery-items')
+  if (optionKey === 'RankingDisplayConfig') {
+    queryKeys.push('rankings', 'rankings-live')
+  }
 
   return queryKeys
 }

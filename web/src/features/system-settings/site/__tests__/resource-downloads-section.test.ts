@@ -35,6 +35,14 @@ describe('resource download settings', () => {
     )
   })
 
+  test('exposes a dedicated ranking display settings entry', () => {
+    assert.equal(SITE_SECTION_IDS.includes('rankings-display'), true)
+    assert.equal(
+      getSiteSectionMeta('rankings-display').titleKey,
+      'Rankings display'
+    )
+  })
+
   test('keeps only complete resource records when reading stored settings', () => {
     const parsed = parseResourceDownloadItems(
       JSON.stringify([

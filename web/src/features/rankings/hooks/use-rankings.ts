@@ -18,13 +18,22 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
-import { getRankings } from '../api'
+import { getLiveRankings, getRankings } from '../api'
 import type { RankingPeriod } from '../types'
 
 export function useRankings(period: RankingPeriod) {
   return useQuery({
     queryKey: ['rankings', period],
     queryFn: () => getRankings(period),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 1000,
+  })
+}
+
+export function useLiveRankings(period: RankingPeriod) {
+  return useQuery({
+    queryKey: ['rankings-live', period],
+    queryFn: () => getLiveRankings(period),
     staleTime: 5 * 60 * 1000,
   })
 }

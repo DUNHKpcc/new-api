@@ -55,6 +55,18 @@ func AllOption() ([]*Option, error) {
 	return options, err
 }
 
+func GetOptionValueFromDatabase(key string) (string, bool, error) {
+	var option Option
+	err := DB.Where(commonKeyCol+" = ?", key).First(&option).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return option.Value, true, nil
+}
+
 func InitOptionMap() error {
 	common.OptionMapRWMutex.Lock()
 	common.OptionMap = make(map[string]string)
@@ -299,6 +311,10 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == operation_setting.RankingDisplayOptionKey {
+		_, err := operation_setting.ParseRankingDisplayConfig(value)
+		return err
+	}
 	if key == operation_setting.AffiliateSettingOptionKey {
 		return operation_setting.ValidateAffiliateSettingJSON(value)
 	}

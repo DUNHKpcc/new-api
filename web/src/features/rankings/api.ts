@@ -32,3 +32,10 @@ export async function getRankings(
   const res = await api.get('/api/rankings', { params: { period } })
   return res.data
 }
+
+export async function getLiveRankings(
+  period: RankingPeriod
+): Promise<RankingsResponse> {
+  const res = await api.get('/api/rankings/live', { params: { period } })
+  return res.data
+}

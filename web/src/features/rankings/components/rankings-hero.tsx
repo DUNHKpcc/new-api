@@ -34,10 +34,6 @@ type RankingsHeroProps = {
   onPeriodChange: (period: RankingPeriod) => void
 }
 
-/**
- * Hero strip for the rankings page. Intentionally minimal — title +
- * subtitle + period tabs only.
- */
 export function RankingsHero(props: RankingsHeroProps) {
   const { t } = useTranslation()
 
@@ -54,7 +50,6 @@ export function RankingsHero(props: RankingsHeroProps) {
         </p>
       </div>
 
-      {/* Underline tabs for period — clean and unobtrusive. */}
       <div
         role='tablist'
         aria-label={t('Period')}

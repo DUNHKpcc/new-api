@@ -119,6 +119,7 @@ export type SiteSettings = {
   HeaderNavModules: string
   SidebarModulesAdmin: string
   ResourceDownloadItems: string
+  RankingDisplayConfig: string
 }
 
 export type AuthSettings = {
