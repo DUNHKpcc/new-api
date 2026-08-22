@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
@@ -58,10 +59,21 @@ func TestApplyRankingDisplayConfigAddsTokensWithoutMutatingLiveSnapshot(t *testi
 	assert.Equal(t, "Vendor B", result.Vendors[0].Vendor)
 	assert.Equal(t, float64(150), result.Vendors[0].GrowthPct)
 	assert.Equal(t, int64(200), result.ModelsHistory.Models[1].Total)
-	assert.Equal(t, int64(180), result.ModelsHistory.Points[2].Tokens)
 	assert.Equal(t, int64(250), result.VendorShareHistory.Vendors[1].Total)
-	assert.Equal(t, int64(250), result.VendorShareHistory.Points[1].Tokens)
-	assert.InDelta(t, 0.625, result.VendorShareHistory.Points[1].Share, 0.0001)
+	modelBHistoryTotal := int64(0)
+	for _, point := range result.ModelsHistory.Points {
+		if point.Model == "model-b" {
+			modelBHistoryTotal += point.Tokens
+		}
+	}
+	assert.Equal(t, int64(200), modelBHistoryTotal)
+	vendorBHistoryTotal := int64(0)
+	for _, point := range result.VendorShareHistory.Points {
+		if point.Vendor == "Vendor B" {
+			vendorBHistoryTotal += point.Tokens
+		}
+	}
+	assert.Equal(t, int64(250), vendorBHistoryTotal)
 	assert.Equal(t, int64(50), live.Models[1].TotalTokens)
 	assert.Equal(t, int64(30), live.ModelsHistory.Points[2].Tokens)
 	assert.Equal(t, int64(100), live.VendorShareHistory.Points[1].Tokens)
@@ -151,6 +163,72 @@ func TestApplyRankingDisplayConfigAggregatesDailyRecordsIntoHistoryBuckets(t *te
 	assert.Equal(t, int64(130), result.VendorShareHistory.Points[1].Tokens)
 	assert.Equal(t, 2, result.ModelsHistory.Buckets)
 	assert.Equal(t, 2, result.VendorShareHistory.Buckets)
+}
+
+func TestApplyRankingDisplayConfigDistributesTodayAdjustmentsAcrossTimeline(t *testing.T) {
+	todayConfig, err := rankingConfig("today")
+	require.NoError(t, err)
+	currentStart, _, err := rankingDateRange("2026-08-22")
+	require.NoError(t, err)
+	currentEnd := currentStart + 4*60*60 - 1
+	live := &RankingsResponse{
+		DataMode: RankingDataModeLive,
+		Models:   []RankedModel{{Rank: 1, ModelName: "model-a", Vendor: "Vendor A", TotalTokens: 1}},
+		Vendors:  []RankedVendor{{Rank: 1, Vendor: "Vendor A", TotalTokens: 1, TopModel: "model-a"}},
+		ModelsHistory: ModelHistorySeries{
+			Models: []ModelHistoryModel{{Name: "model-a", Vendor: "Vendor A", Total: 1}},
+			Points: []ModelHistoryPoint{{
+				Ts: "2026-08-22T01:00:00Z", Label: "01:00", Model: "model-a", Vendor: "Vendor A", Tokens: 1,
+			}},
+		},
+		VendorShareHistory: VendorShareSeries{
+			Vendors: []VendorShareVendor{{Name: "Vendor A", Total: 1, Share: 1}},
+			Points: []VendorSharePoint{{
+				Ts: "2026-08-22T01:00:00Z", Label: "01:00", Vendor: "Vendor A", Tokens: 1, Share: 1,
+			}},
+		},
+		rankingMeta: &rankingSnapshotMeta{
+			config:       todayConfig,
+			currentStart: currentStart,
+			currentEnd:   currentEnd,
+		},
+	}
+	config := operation_setting.RankingDisplayConfig{
+		Version: operation_setting.RankingDisplayConfigVersion,
+		Enabled: true,
+		Periods: map[string]operation_setting.RankingDisplayPeriod{
+			"today": {Adjustments: map[string]int64{"model-a": 100}},
+		},
+		DailyRecords: map[string]operation_setting.RankingDisplayDay{
+			"2026-08-22": {Adjustments: map[string]int64{"model-a": 20}},
+		},
+	}
+
+	result, err := applyRankingDisplayConfig(live, config, "today")
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(121), result.Models[0].TotalTokens)
+	assert.Equal(t, int64(121), result.ModelsHistory.Models[0].Total)
+	assert.Equal(t, 4, result.ModelsHistory.Buckets)
+	assert.Equal(t, 4, result.VendorShareHistory.Buckets)
+	modelPoints := make(map[string]int64)
+	for _, point := range result.ModelsHistory.Points {
+		if point.Model == "model-a" {
+			modelPoints[point.Ts] += point.Tokens
+		}
+	}
+	assert.Len(t, modelPoints, 4)
+	modelHistoryTotal := int64(0)
+	for _, tokens := range modelPoints {
+		modelHistoryTotal += tokens
+	}
+	assert.Equal(t, int64(121), modelHistoryTotal)
+	vendorHistoryTotal := int64(0)
+	for _, point := range result.VendorShareHistory.Points {
+		vendorHistoryTotal += point.Tokens
+	}
+	assert.Equal(t, int64(121), vendorHistoryTotal)
+	assert.Equal(t, time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC).Format(time.RFC3339), result.ModelsHistory.Points[0].Ts)
 }
 
 func TestApplyRankingDisplayConfigRejectsTotalsAboveSafeIntegerRange(t *testing.T) {

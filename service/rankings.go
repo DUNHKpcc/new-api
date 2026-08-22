@@ -510,7 +510,7 @@ func buildRankingAdjustmentSet(data *RankingsResponse, config operation_setting.
 		meta = fallbackRankingSnapshotMeta(data, period)
 	}
 	if periodConfig, ok := config.Periods[period]; ok {
-		bucket := latestRankingAdjustmentBucket(data, meta)
+		buckets := rankingTimelineBuckets(meta)
 		for modelName, addedTokens := range periodConfig.Adjustments {
 			if addedTokens <= 0 {
 				continue
@@ -518,10 +518,7 @@ func buildRankingAdjustmentSet(data *RankingsResponse, config operation_setting.
 			if err := addRankingAdjustment(set.currentByModel, modelName, addedTokens); err != nil {
 				return rankingAdjustmentSet{}, err
 			}
-			set.points = append(set.points, rankingAdjustmentPoint{
-				model: modelName, bucket: bucket, tokens: addedTokens,
-				label: time.Unix(bucket, 0).Format(meta.config.labelLayout),
-			})
+			set.points = append(set.points, rankingAdjustmentPoints(modelName, addedTokens, buckets, meta.config)...)
 		}
 	}
 	for date, day := range config.DailyRecords {
@@ -530,7 +527,7 @@ func buildRankingAdjustmentSet(data *RankingsResponse, config operation_setting.
 			return rankingAdjustmentSet{}, err
 		}
 		if rangesOverlap(dateStart, dateEnd, meta.currentStart, meta.currentEnd) {
-			bucket := rankingAdjustmentBucket(dateStart, meta.currentStart, meta.currentEnd, meta.config.bucketSize)
+			buckets := rankingAdjustmentBucketsForDate(dateStart, meta)
 			for modelName, addedTokens := range day.Adjustments {
 				if addedTokens <= 0 {
 					continue
@@ -538,10 +535,7 @@ func buildRankingAdjustmentSet(data *RankingsResponse, config operation_setting.
 				if err := addRankingAdjustment(set.currentByModel, modelName, addedTokens); err != nil {
 					return rankingAdjustmentSet{}, err
 				}
-				set.points = append(set.points, rankingAdjustmentPoint{
-					model: modelName, bucket: bucket, tokens: addedTokens,
-					label: time.Unix(bucket, 0).Format(meta.config.labelLayout),
-				})
+				set.points = append(set.points, rankingAdjustmentPoints(modelName, addedTokens, buckets, meta.config)...)
 			}
 		}
 		if meta.previousStart > 0 && rangesOverlap(dateStart, dateEnd, meta.previousStart, meta.previousEnd) {
@@ -596,18 +590,55 @@ func rankingAdjustmentBucket(timestamp int64, startTime int64, endTime int64, bu
 	return bucket
 }
 
-func latestRankingAdjustmentBucket(data *RankingsResponse, meta *rankingSnapshotMeta) int64 {
-	latest := int64(0)
-	for _, point := range data.ModelsHistory.Points {
-		parsed, err := time.Parse(time.RFC3339, point.Ts)
-		if err == nil && parsed.Unix() > latest {
-			latest = parsed.Unix() - parsed.Unix()%meta.config.bucketSize
+func rankingTimelineBuckets(meta *rankingSnapshotMeta) []int64 {
+	if meta == nil {
+		return nil
+	}
+	bucketSize := meta.config.bucketSize
+	if bucketSize <= 0 {
+		bucketSize = 3600
+	}
+	firstBucket := meta.currentStart - meta.currentStart%bucketSize
+	lastBucket := meta.currentEnd - meta.currentEnd%bucketSize
+	if lastBucket < firstBucket {
+		return []int64{firstBucket}
+	}
+	buckets := make([]int64, 0, int((lastBucket-firstBucket)/bucketSize)+1)
+	for bucket := firstBucket; bucket <= lastBucket; {
+		buckets = append(buckets, bucket)
+		if bucket > math.MaxInt64-bucketSize {
+			break
 		}
+		bucket += bucketSize
 	}
-	if latest == 0 {
-		latest = meta.currentEnd - meta.currentEnd%meta.config.bucketSize
+	return buckets
+}
+
+func rankingAdjustmentBucketsForDate(dateStart int64, meta *rankingSnapshotMeta) []int64 {
+	if meta.config.id == "today" {
+		return rankingTimelineBuckets(meta)
 	}
-	return latest
+	return []int64{rankingAdjustmentBucket(dateStart, meta.currentStart, meta.currentEnd, meta.config.bucketSize)}
+}
+
+func rankingAdjustmentPoints(modelName string, tokens int64, buckets []int64, config rankingPeriodConfig) []rankingAdjustmentPoint {
+	if tokens <= 0 || len(buckets) == 0 {
+		return nil
+	}
+	base := tokens / int64(len(buckets))
+	remainder := int(tokens % int64(len(buckets)))
+	points := make([]rankingAdjustmentPoint, 0, len(buckets))
+	for idx, bucket := range buckets {
+		bucketTokens := base
+		if idx < remainder {
+			bucketTokens++
+		}
+		points = append(points, rankingAdjustmentPoint{
+			model: modelName, bucket: bucket, tokens: bucketTokens,
+			label: time.Unix(bucket, 0).Format(config.labelLayout),
+		})
+	}
+	return points
 }
 
 func fallbackRankingSnapshotMeta(data *RankingsResponse, period string) *rankingSnapshotMeta {
