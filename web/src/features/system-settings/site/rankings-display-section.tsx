@@ -21,14 +21,12 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   MAX_RANKING_ADDED_TOKENS,
   parseRankingDisplayConfig,
   serializeRankingDisplayConfig,
 } from '@/features/rankings/display-config'
 import { useLiveRankings } from '@/features/rankings/hooks/use-rankings'
-import type { RankingPeriod } from '@/features/rankings/types'
 
 import {
   SettingsSwitchField,
@@ -39,15 +37,12 @@ import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { RankingAdjustmentRow } from './ranking-adjustment-row'
 
-const PERIODS: Array<{ value: RankingPeriod; labelKey: string }> = [
-  { value: 'today', labelKey: 'Today' },
-  { value: 'week', labelKey: 'Week' },
-  { value: 'month', labelKey: 'Month' },
-  { value: 'year', labelKey: 'Year' },
-]
-
 type RankingsDisplaySectionProps = {
   value: string
+}
+
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10)
 }
 
 export function RankingsDisplaySection(props: RankingsDisplaySectionProps) {
@@ -62,8 +57,8 @@ export function RankingsDisplaySection(props: RankingsDisplaySectionProps) {
     [initialConfig]
   )
   const [config, setConfig] = useState(initialConfig)
-  const [period, setPeriod] = useState<RankingPeriod>('week')
-  const rankingsQuery = useLiveRankings(period)
+  const [date, setDate] = useState(getTodayDate)
+  const rankingsQuery = useLiveRankings('today', date)
   const serialized = serializeRankingDisplayConfig(config)
 
   useEffect(() => {
@@ -87,14 +82,14 @@ export function RankingsDisplaySection(props: RankingsDisplaySectionProps) {
 
     setConfig((current) => {
       const adjustments = {
-        ...current.periods[period]?.adjustments,
+        ...current.daily_records[date]?.adjustments,
         [modelName]: addedTokens,
       }
       return {
         ...current,
-        periods: {
-          ...current.periods,
-          [period]: { adjustments },
+        daily_records: {
+          ...current.daily_records,
+          [date]: { adjustments },
         },
       }
     })
@@ -107,7 +102,19 @@ export function RankingsDisplaySection(props: RankingsDisplaySectionProps) {
     })
   }
 
-  const rows = rankingsQuery.data?.data.models ?? []
+  const liveRows = rankingsQuery.data?.data.models ?? []
+  const savedModels = Object.keys(
+    config.daily_records[date]?.adjustments ?? {}
+  ).map((modelName) => ({
+    model_name: modelName,
+    total_tokens: 0,
+    vendor: 'Unknown',
+  }))
+  const liveModelNames = new Set(liveRows.map((row) => row.model_name))
+  const rows = [
+    ...liveRows,
+    ...savedModels.filter((row) => !liveModelNames.has(row.model_name)),
+  ]
   let rowsContent: ReactNode
 
   if (rankingsQuery.isLoading) {
@@ -144,7 +151,7 @@ export function RankingsDisplaySection(props: RankingsDisplaySectionProps) {
         <div className='divide-y'>
           {rows.map((row) => {
             const addedTokens =
-              config.periods[period]?.adjustments[row.model_name] ?? 0
+              config.daily_records[date]?.adjustments[row.model_name] ?? 0
 
             return (
               <RankingAdjustmentRow
@@ -190,23 +197,20 @@ export function RankingsDisplaySection(props: RankingsDisplaySectionProps) {
           <p className='text-sm font-medium'>{t('Displayed data policy')}</p>
           <p className='text-muted-foreground text-xs leading-5'>
             {t(
-              'Visitors are explicitly told when rankings include administrator-managed calibration. Totals, shares, ranks, growth metrics, and trend charts all use the same calibrated totals.'
+              'Daily calibration records are stored by date and automatically included in today, week, month, and year totals, trends, and charts.'
             )}
           </p>
         </div>
 
-        <Tabs
-          value={period}
-          onValueChange={(value) => setPeriod(value as RankingPeriod)}
-        >
-          <TabsList className='grid w-full max-w-md grid-cols-4'>
-            {PERIODS.map((item) => (
-              <TabsTrigger key={item.value} value={item.value}>
-                {t(item.labelKey)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <label className='flex max-w-sm flex-col gap-2 text-sm font-medium'>
+          {t('Calibration date')}
+          <input
+            type='date'
+            value={date}
+            onChange={(event) => setDate(event.currentTarget.value)}
+            className='border-input bg-background h-9 rounded-md border px-3 font-mono text-sm'
+          />
+        </label>
 
         {rowsContent}
       </SettingsControlGroup>

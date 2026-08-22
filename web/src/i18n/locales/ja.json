@@ -5600,6 +5600,21 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Calibration date": "校正日",
+    "Daily calibration records are stored by date and automatically included in today, week, month, and year totals, trends, and charts.": "校正記録は日付ごとに保存され、今日、今週、今月、今年の合計、傾向、チャートに自動的に反映されます。",
+    "Affiliate onboarding": "アフィリエイト案内",
+    "Become an affiliate to earn commissions. Invite users and receive quota rewards.": "アフィリエイトになって報酬を獲得しましょう。ユーザーを招待するとクォータ報酬を受け取れます。",
+    "Dismiss affiliate guide": "アフィリエイト案内を閉じる",
+    "Earn rewards with referrals": "紹介で報酬を獲得",
+    "Open Affiliate Center": "アフィリエイトセンターを開く",
+    "Download clients, examples, and other helpful resources from here.": "クライアント、サンプル、その他の便利なリソースをここからダウンロードできます。",
+    "Open Resource Downloads": "リソースダウンロードを開く",
+    "Resource downloads onboarding": "リソースダウンロード案内",
+    "Dismiss resource downloads guide": "リソースダウンロード案内を閉じる",
+    "Open the lottery panel to view current rewards and winners.": "抽選パネルを開いて、現在の報酬と当選者を確認できます。",
+    "View Lottery": "抽選を見る",
+    "Lottery onboarding": "抽選案内",
+    "Dismiss lottery guide": "抽選案内を閉じる"
   }
 }

@@ -56,7 +56,7 @@ describe('authenticated app header layout', () => {
     assert.ok(tokens(appHeaderLayoutClasses.bar).includes('md:px-6'))
     assert.ok(tokens(appHeaderLayoutClasses.bar).includes('h-full'))
     assert.ok(tokens(appHeaderLayoutClasses.sidebarTrigger).includes('size-10'))
-    assert.ok(tokens(appHeaderLayoutClasses.brand.mark).includes('size-8'))
+    assert.ok(tokens(appHeaderLayoutClasses.brand.mark).includes('size-9'))
     assert.ok(tokens(appHeaderLayoutClasses.brand.name).includes('text-xl'))
     assert.ok(tokens(appHeaderLayoutClasses.search).includes('size-10'))
     assert.equal(

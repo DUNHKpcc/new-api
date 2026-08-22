@@ -79,7 +79,7 @@ export const publicHeaderLayoutClasses = {
   left: 'app-header-left col-start-1 row-start-1 flex min-w-0 items-center gap-3 justify-self-start',
   brand: {
     link: 'app-header-brand group flex min-w-0 items-center gap-3 justify-self-start',
-    mark: 'app-header-brand-mark ring-foreground/15 dark:ring-border flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-sm ring-1 transition-all duration-300 group-hover:scale-105',
+    mark: 'app-header-brand-mark ring-foreground/15 dark:ring-border flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm ring-1 transition-all duration-300 group-hover:scale-105',
     name: 'app-header-brand-name min-w-0 max-w-[min(42vw,13rem)] truncate text-xl leading-none font-semibold tracking-tight [font-family:var(--font-serif)] lg:max-w-40 xl:max-w-44 2xl:max-w-56',
   },
   desktopNav:

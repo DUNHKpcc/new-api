@@ -30,6 +30,7 @@ type RankingsResponse struct {
 	TopDroppers        []RankingMover     `json:"top_droppers"`
 	ModelsHistory      ModelHistorySeries `json:"models_history"`
 	VendorShareHistory VendorShareSeries  `json:"vendor_share_history"`
+	rankingMeta        *rankingSnapshotMeta
 }
 
 const (
@@ -124,6 +125,28 @@ type rankingCacheItem struct {
 	data      *RankingsResponse
 }
 
+type rankingSnapshotMeta struct {
+	config                rankingPeriodConfig
+	currentStart          int64
+	currentEnd            int64
+	previousStart         int64
+	previousEnd           int64
+	previousTokensByModel map[string]int64
+}
+
+type rankingAdjustmentPoint struct {
+	model  string
+	bucket int64
+	tokens int64
+	label  string
+}
+
+type rankingAdjustmentSet struct {
+	currentByModel  map[string]int64
+	previousByModel map[string]int64
+	points          []rankingAdjustmentPoint
+}
+
 type rankingModelMeta struct {
 	vendor     string
 	vendorIcon string
@@ -173,6 +196,23 @@ func GetRankingsSnapshot(period string) (*RankingsResponse, error) {
 	return data, nil
 }
 
+func GetRankingsSnapshotForDate(period string, date string) (*RankingsResponse, error) {
+	config, err := rankingConfig(period)
+	if err != nil {
+		return nil, err
+	}
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil || parsedDate.Format("2006-01-02") != date {
+		return nil, fmt.Errorf("invalid ranking date: %s", date)
+	}
+	currentStart := parsedDate.UTC().Unix()
+	currentEnd := parsedDate.UTC().Add(24*time.Hour).Unix() - 1
+	if config.duration != 24*time.Hour {
+		currentStart = currentEnd - int64(config.duration/time.Second) + 1
+	}
+	return buildRankingsSnapshotForRange(config, currentStart, currentEnd)
+}
+
 func GetDisplayRankingsSnapshot(period string) (*RankingsResponse, error) {
 	data, err := GetRankingsSnapshot(period)
 	if err != nil {
@@ -218,6 +258,10 @@ func rankingConfig(period string) (rankingPeriodConfig, error) {
 
 func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*RankingsResponse, error) {
 	startTime, endTime := rankingTimeRange(config, now)
+	return buildRankingsSnapshotForRange(config, startTime, endTime)
+}
+
+func buildRankingsSnapshotForRange(config rankingPeriodConfig, startTime int64, endTime int64) (*RankingsResponse, error) {
 	currentTotals, err := model.GetRankingQuotaTotals(startTime, endTime)
 	if err != nil {
 		return nil, err
@@ -255,15 +299,45 @@ func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*Rankings
 		TopDroppers:        droppers,
 		ModelsHistory:      modelHistory,
 		VendorShareHistory: vendorHistory,
+		rankingMeta: &rankingSnapshotMeta{
+			config:                config,
+			currentStart:          startTime,
+			currentEnd:            endTime,
+			previousStart:         previousStartForSnapshot(config, startTime),
+			previousEnd:           previousEndForSnapshot(config, startTime),
+			previousTokensByModel: previousTokensByModel,
+		},
 	}, nil
+}
+
+func previousStartForSnapshot(config rankingPeriodConfig, currentStart int64) int64 {
+	if !config.hasPrevious {
+		return 0
+	}
+	start, _ := previousRankingTimeRange(config, currentStart)
+	return start
+}
+
+func previousEndForSnapshot(config rankingPeriodConfig, currentStart int64) int64 {
+	if !config.hasPrevious {
+		return 0
+	}
+	_, end := previousRankingTimeRange(config, currentStart)
+	return end
 }
 
 func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.RankingDisplayConfig, period string) (*RankingsResponse, error) {
 	if data == nil || !config.Enabled {
 		return data, nil
 	}
-	periodConfig, ok := config.Periods[period]
-	if !ok || len(periodConfig.Adjustments) == 0 {
+	if period == "" {
+		period = "week"
+	}
+	adjustments, err := buildRankingAdjustmentSet(data, config, period)
+	if err != nil {
+		return nil, err
+	}
+	if len(adjustments.currentByModel) == 0 && len(adjustments.previousByModel) == 0 && len(adjustments.points) == 0 {
 		return data, nil
 	}
 
@@ -274,31 +348,52 @@ func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.
 	result.ModelsHistory.Points = append([]ModelHistoryPoint(nil), data.ModelsHistory.Points...)
 	result.VendorShareHistory.Vendors = append([]VendorShareVendor(nil), data.VendorShareHistory.Vendors...)
 	result.VendorShareHistory.Points = append([]VendorSharePoint(nil), data.VendorShareHistory.Points...)
-
-	adjustmentByModel := make(map[string]int64)
-	adjustmentByVendor := make(map[string]int64)
-	displayedTokensByModel := make(map[string]int64, len(result.Models))
-	adjusted := false
-	for idx := range result.Models {
-		row := &result.Models[idx]
-		addedTokens := periodConfig.Adjustments[row.ModelName]
-		if addedTokens > 0 {
-			if row.TotalTokens > operation_setting.MaxRankingDisplayAddedTokens-addedTokens {
-				return nil, fmt.Errorf("ranking display total exceeds the supported range for model %s", row.ModelName)
-			}
-			var err error
-			adjustmentByVendor[row.Vendor], err = addRankingTokens(adjustmentByVendor[row.Vendor], addedTokens)
-			if err != nil {
-				return nil, err
-			}
-			row.TotalTokens += addedTokens
-			adjustmentByModel[row.ModelName] = addedTokens
-			adjusted = true
-		}
-		displayedTokensByModel[row.ModelName] = row.TotalTokens
+	if data.rankingMeta != nil {
+		meta := *data.rankingMeta
+		meta.previousTokensByModel = cloneRankingTokenMap(data.rankingMeta.previousTokensByModel)
+		result.rankingMeta = &meta
 	}
-	if !adjusted {
-		return data, nil
+
+	modelVendor := make(map[string]string, len(result.Models))
+	for idx := range result.Models {
+		modelVendor[result.Models[idx].ModelName] = result.Models[idx].Vendor
+	}
+	for modelName := range adjustments.currentByModel {
+		if _, ok := modelVendor[modelName]; !ok {
+			modelVendor[modelName] = rankingUnknownVendor
+		}
+	}
+
+	adjustmentByVendor := make(map[string]int64)
+	for modelName, delta := range adjustments.currentByModel {
+		vendor := modelVendor[modelName]
+		var err error
+		adjustmentByVendor[vendor], err = addRankingTokens(adjustmentByVendor[vendor], delta)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for modelName, delta := range adjustments.currentByModel {
+		rowIndex := -1
+		for idx := range result.Models {
+			if result.Models[idx].ModelName == modelName {
+				rowIndex = idx
+				break
+			}
+		}
+		if rowIndex < 0 {
+			result.Models = append(result.Models, RankedModel{
+				ModelName: modelName,
+				Vendor:    modelVendor[modelName],
+				Category:  "all",
+			})
+			rowIndex = len(result.Models) - 1
+		}
+		if result.Models[rowIndex].TotalTokens > operation_setting.MaxRankingDisplayAddedTokens-delta {
+			return nil, fmt.Errorf("ranking display total exceeds the supported range for model %s", modelName)
+		}
+		result.Models[rowIndex].TotalTokens += delta
 	}
 
 	totalTokens := int64(0)
@@ -326,6 +421,16 @@ func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.
 		}
 	}
 
+	previousTokensByModel := previousRankingTokens(data)
+	for modelName, delta := range adjustments.previousByModel {
+		var err error
+		previousTokensByModel[modelName], err = addRankingTokens(previousTokensByModel[modelName], delta)
+		if err != nil {
+			return nil, err
+		}
+	}
+	previousRanksByModel := rankingRanksFromTokens(previousTokensByModel)
+
 	sort.Slice(result.Models, func(i, j int) bool {
 		if result.Models[i].TotalTokens == result.Models[j].TotalTokens {
 			return result.Models[i].ModelName < result.Models[j].ModelName
@@ -335,25 +440,39 @@ func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.
 	for idx := range result.Models {
 		result.Models[idx].Rank = idx + 1
 		result.Models[idx].Share = rankingShare(result.Models[idx].TotalTokens, totalTokens)
+		result.Models[idx].previousTokens = previousTokensByModel[result.Models[idx].ModelName]
+		result.Models[idx].PreviousRank = nil
+		if previousRank, ok := previousRanksByModel[result.Models[idx].ModelName]; ok {
+			previousRankCopy := previousRank
+			result.Models[idx].PreviousRank = &previousRankCopy
+		}
 		result.Models[idx].GrowthPct = rankingGrowthPct(result.Models[idx].TotalTokens, result.Models[idx].previousTokens)
 	}
 
+	vendorPreviousTokens := previousRankingVendorTokens(previousTokensByModel, modelVendor)
+	vendorIndex := make(map[string]int, len(result.Vendors))
+	for idx := range result.Vendors {
+		vendorIndex[result.Vendors[idx].Vendor] = idx
+	}
+	for vendorName, delta := range adjustmentByVendor {
+		idx, ok := vendorIndex[vendorName]
+		if !ok {
+			result.Vendors = append(result.Vendors, RankedVendor{Vendor: vendorName, TopModel: ""})
+			idx = len(result.Vendors) - 1
+			vendorIndex[vendorName] = idx
+		}
+		var err error
+		result.Vendors[idx].TotalTokens, err = addRankingTokens(result.Vendors[idx].TotalTokens, delta)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for idx := range result.Vendors {
 		vendor := &result.Vendors[idx]
-		delta := adjustmentByVendor[vendor.Vendor]
-		if delta > 0 {
-			var err error
-			vendor.TotalTokens, err = addRankingTokens(vendor.TotalTokens, delta)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if topModelTokens, exists := displayedTokensByModel[vendor.TopModel]; exists {
-			for _, modelRow := range result.Models {
-				if modelRow.Vendor == vendor.Vendor && modelRow.TotalTokens > topModelTokens {
-					vendor.TopModel = modelRow.ModelName
-					topModelTokens = modelRow.TotalTokens
-				}
+		vendor.previousTokens = vendorPreviousTokens[vendor.Vendor]
+		for _, modelRow := range result.Models {
+			if modelRow.Vendor == vendor.Vendor && (vendor.TopModel == "" || modelRow.TotalTokens > modelTotalByName(result.Models, vendor.TopModel)) {
+				vendor.TopModel = modelRow.ModelName
 			}
 		}
 		vendor.Share = rankingShare(vendor.TotalTokens, totalTokens)
@@ -368,10 +487,10 @@ func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.
 	for idx := range result.Vendors {
 		result.Vendors[idx].Rank = idx + 1
 	}
-	if err := applyModelHistoryAdjustments(&result.ModelsHistory, adjustmentByModel); err != nil {
+	if err := applyModelHistoryTimeline(&result.ModelsHistory, adjustments.points, result.Models); err != nil {
 		return nil, err
 	}
-	if err := applyVendorHistoryAdjustments(&result.VendorShareHistory, adjustmentByVendor, totalTokens); err != nil {
+	if err := applyVendorHistoryTimeline(&result.VendorShareHistory, adjustments.points, result.Models, adjustmentByVendor, totalTokens); err != nil {
 		return nil, err
 	}
 
@@ -380,161 +499,342 @@ func applyRankingDisplayConfig(data *RankingsResponse, config operation_setting.
 	return &result, nil
 }
 
-func applyModelHistoryAdjustments(history *ModelHistorySeries, adjustments map[string]int64) error {
-	if history == nil || len(adjustments) == 0 || len(history.Points) == 0 {
-		return nil
+func buildRankingAdjustmentSet(data *RankingsResponse, config operation_setting.RankingDisplayConfig, period string) (rankingAdjustmentSet, error) {
+	set := rankingAdjustmentSet{
+		currentByModel:  make(map[string]int64),
+		previousByModel: make(map[string]int64),
+		points:          make([]rankingAdjustmentPoint, 0),
 	}
-
-	historyModels := make(map[string]struct{}, len(history.Models))
-	for _, item := range history.Models {
-		historyModels[item.Name] = struct{}{}
+	meta := data.rankingMeta
+	if meta == nil {
+		meta = fallbackRankingSnapshotMeta(data, period)
 	}
-	adjustmentBySeries := make(map[string]int64)
-	for modelName, addedTokens := range adjustments {
-		seriesName := modelName
-		if _, ok := historyModels[modelName]; !ok {
-			seriesName = rankingOthersLabel
+	if periodConfig, ok := config.Periods[period]; ok {
+		bucket := latestRankingAdjustmentBucket(data, meta)
+		for modelName, addedTokens := range periodConfig.Adjustments {
+			if addedTokens <= 0 {
+				continue
+			}
+			if err := addRankingAdjustment(set.currentByModel, modelName, addedTokens); err != nil {
+				return rankingAdjustmentSet{}, err
+			}
+			set.points = append(set.points, rankingAdjustmentPoint{
+				model: modelName, bucket: bucket, tokens: addedTokens,
+				label: time.Unix(bucket, 0).Format(meta.config.labelLayout),
+			})
 		}
-		var err error
-		adjustmentBySeries[seriesName], err = addRankingTokens(adjustmentBySeries[seriesName], addedTokens)
+	}
+	for date, day := range config.DailyRecords {
+		dateStart, dateEnd, err := rankingDateRange(date)
 		if err != nil {
-			return err
+			return rankingAdjustmentSet{}, err
 		}
-	}
-
-	latestTs := history.Points[0].Ts
-	for _, point := range history.Points[1:] {
-		if point.Ts > latestTs {
-			latestTs = point.Ts
-		}
-	}
-	for idx := range history.Models {
-		addedTokens := adjustmentBySeries[history.Models[idx].Name]
-		if addedTokens == 0 {
-			continue
-		}
-		var err error
-		history.Models[idx].Total, err = addRankingTokens(history.Models[idx].Total, addedTokens)
-		if err != nil {
-			return err
-		}
-	}
-	for idx := range history.Points {
-		point := &history.Points[idx]
-		if point.Ts != latestTs {
-			continue
-		}
-		addedTokens := adjustmentBySeries[point.Model]
-		if addedTokens == 0 {
-			continue
-		}
-		var err error
-		point.Tokens, err = addRankingTokens(point.Tokens, addedTokens)
-		if err != nil {
-			return err
-		}
-		delete(adjustmentBySeries, point.Model)
-	}
-	for seriesName, addedTokens := range adjustmentBySeries {
-		if addedTokens == 0 {
-			continue
-		}
-		latestPoint := history.Points[len(history.Points)-1]
-		vendor := rankingOthersLabel
-		for _, item := range history.Models {
-			if item.Name == seriesName {
-				vendor = item.Vendor
-				break
+		if rangesOverlap(dateStart, dateEnd, meta.currentStart, meta.currentEnd) {
+			bucket := rankingAdjustmentBucket(dateStart, meta.currentStart, meta.currentEnd, meta.config.bucketSize)
+			for modelName, addedTokens := range day.Adjustments {
+				if addedTokens <= 0 {
+					continue
+				}
+				if err := addRankingAdjustment(set.currentByModel, modelName, addedTokens); err != nil {
+					return rankingAdjustmentSet{}, err
+				}
+				set.points = append(set.points, rankingAdjustmentPoint{
+					model: modelName, bucket: bucket, tokens: addedTokens,
+					label: time.Unix(bucket, 0).Format(meta.config.labelLayout),
+				})
 			}
 		}
-		history.Points = append(history.Points, ModelHistoryPoint{
-			Ts: latestTs, Label: latestPoint.Label, Model: seriesName,
-			Vendor: vendor, Tokens: addedTokens,
-		})
+		if meta.previousStart > 0 && rangesOverlap(dateStart, dateEnd, meta.previousStart, meta.previousEnd) {
+			for modelName, addedTokens := range day.Adjustments {
+				if addedTokens <= 0 {
+					continue
+				}
+				if err := addRankingAdjustment(set.previousByModel, modelName, addedTokens); err != nil {
+					return rankingAdjustmentSet{}, err
+				}
+			}
+		}
 	}
+	return set, nil
+}
+
+func addRankingAdjustment(target map[string]int64, modelName string, addedTokens int64) error {
+	updated, err := addRankingTokens(target[modelName], addedTokens)
+	if err != nil {
+		return err
+	}
+	target[modelName] = updated
 	return nil
 }
 
-func applyVendorHistoryAdjustments(history *VendorShareSeries, adjustments map[string]int64, totalTokens int64) error {
-	if history == nil || len(adjustments) == 0 || len(history.Points) == 0 {
+func rankingDateRange(date string) (int64, int64, error) {
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil || parsedDate.Format("2006-01-02") != date {
+		return 0, 0, fmt.Errorf("invalid ranking date: %s", date)
+	}
+	start := parsedDate.UTC().Unix()
+	return start, parsedDate.UTC().Add(24*time.Hour).Unix() - 1, nil
+}
+
+func rangesOverlap(firstStart int64, firstEnd int64, secondStart int64, secondEnd int64) bool {
+	return firstStart <= secondEnd && firstEnd >= secondStart
+}
+
+func rankingAdjustmentBucket(timestamp int64, startTime int64, endTime int64, bucketSize int64) int64 {
+	if bucketSize <= 0 {
+		bucketSize = 3600
+	}
+	bucket := timestamp - timestamp%bucketSize
+	firstBucket := startTime - startTime%bucketSize
+	lastBucket := endTime - endTime%bucketSize
+	if bucket < firstBucket {
+		return firstBucket
+	}
+	if bucket > lastBucket {
+		return lastBucket
+	}
+	return bucket
+}
+
+func latestRankingAdjustmentBucket(data *RankingsResponse, meta *rankingSnapshotMeta) int64 {
+	latest := int64(0)
+	for _, point := range data.ModelsHistory.Points {
+		parsed, err := time.Parse(time.RFC3339, point.Ts)
+		if err == nil && parsed.Unix() > latest {
+			latest = parsed.Unix() - parsed.Unix()%meta.config.bucketSize
+		}
+	}
+	if latest == 0 {
+		latest = meta.currentEnd - meta.currentEnd%meta.config.bucketSize
+	}
+	return latest
+}
+
+func fallbackRankingSnapshotMeta(data *RankingsResponse, period string) *rankingSnapshotMeta {
+	config, err := rankingConfig(period)
+	if err != nil {
+		config, _ = rankingConfig("week")
+	}
+	now := time.Now()
+	start, end := rankingTimeRange(config, now)
+	return &rankingSnapshotMeta{
+		config:                config,
+		currentStart:          start,
+		currentEnd:            end,
+		previousStart:         previousStartForSnapshot(config, start),
+		previousEnd:           previousEndForSnapshot(config, start),
+		previousTokensByModel: previousRankingTokens(data),
+	}
+}
+
+func previousRankingTokens(data *RankingsResponse) map[string]int64 {
+	if data != nil && data.rankingMeta != nil && len(data.rankingMeta.previousTokensByModel) > 0 {
+		return cloneRankingTokenMap(data.rankingMeta.previousTokensByModel)
+	}
+	result := make(map[string]int64)
+	if data == nil {
+		return result
+	}
+	for _, row := range data.Models {
+		if row.previousTokens > 0 {
+			result[row.ModelName] = row.previousTokens
+		}
+	}
+	return result
+}
+
+func rankingRanksFromTokens(tokens map[string]int64) map[string]int {
+	models := make([]string, 0, len(tokens))
+	for modelName := range tokens {
+		models = append(models, modelName)
+	}
+	sort.Slice(models, func(i, j int) bool {
+		if tokens[models[i]] == tokens[models[j]] {
+			return models[i] < models[j]
+		}
+		return tokens[models[i]] > tokens[models[j]]
+	})
+	result := make(map[string]int, len(models))
+	for idx, modelName := range models {
+		result[modelName] = idx + 1
+	}
+	return result
+}
+
+func previousRankingVendorTokens(tokens map[string]int64, modelVendor map[string]string) map[string]int64 {
+	result := make(map[string]int64)
+	for modelName, value := range tokens {
+		vendor := modelVendor[modelName]
+		if vendor == "" {
+			vendor = rankingUnknownVendor
+		}
+		updated, err := addRankingTokens(result[vendor], value)
+		if err == nil {
+			result[vendor] = updated
+		}
+	}
+	return result
+}
+
+func cloneRankingTokenMap(source map[string]int64) map[string]int64 {
+	result := make(map[string]int64, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func modelTotalByName(models []RankedModel, modelName string) int64 {
+	for _, model := range models {
+		if model.ModelName == modelName {
+			return model.TotalTokens
+		}
+	}
+	return 0
+}
+
+func applyModelHistoryTimeline(history *ModelHistorySeries, points []rankingAdjustmentPoint, models []RankedModel) error {
+	if history == nil || len(points) == 0 {
 		return nil
 	}
-
-	historyVendors := make(map[string]struct{}, len(history.Vendors))
-	for _, item := range history.Vendors {
-		historyVendors[item.Name] = struct{}{}
+	modelVendor := make(map[string]string, len(models))
+	for _, model := range models {
+		modelVendor[model.ModelName] = model.Vendor
 	}
-	adjustmentBySeries := make(map[string]int64)
-	for vendor, addedTokens := range adjustments {
-		seriesName := vendor
-		if _, ok := historyVendors[vendor]; !ok {
-			seriesName = rankingOthersLabel
+	modelIndex := make(map[string]int, len(history.Models))
+	for idx, model := range history.Models {
+		modelIndex[model.Name] = idx
+	}
+	pointIndex := make(map[string]int, len(history.Points))
+	for idx, point := range history.Points {
+		pointIndex[point.Ts+"\x00"+point.Model] = idx
+	}
+	for _, adjustment := range points {
+		idx, ok := modelIndex[adjustment.model]
+		if !ok {
+			history.Models = append(history.Models, ModelHistoryModel{
+				Name: adjustment.model, Vendor: modelVendor[adjustment.model],
+			})
+			idx = len(history.Models) - 1
+			modelIndex[adjustment.model] = idx
 		}
 		var err error
-		adjustmentBySeries[seriesName], err = addRankingTokens(adjustmentBySeries[seriesName], addedTokens)
+		history.Models[idx].Total, err = addRankingTokens(history.Models[idx].Total, adjustment.tokens)
+		if err != nil {
+			return err
+		}
+		ts := time.Unix(adjustment.bucket, 0).UTC().Format(time.RFC3339)
+		key := ts + "\x00" + adjustment.model
+		pointIdx, exists := pointIndex[key]
+		if !exists {
+			history.Points = append(history.Points, ModelHistoryPoint{
+				Ts: ts, Label: adjustment.label, Model: adjustment.model,
+				Vendor: modelVendor[adjustment.model], Tokens: adjustment.tokens,
+			})
+			pointIndex[key] = len(history.Points) - 1
+			continue
+		}
+		history.Points[pointIdx].Tokens, err = addRankingTokens(history.Points[pointIdx].Tokens, adjustment.tokens)
 		if err != nil {
 			return err
 		}
 	}
-
-	latestTs := history.Points[0].Ts
-	for _, point := range history.Points[1:] {
-		if point.Ts > latestTs {
-			latestTs = point.Ts
+	sort.Slice(history.Points, func(i, j int) bool {
+		if history.Points[i].Ts == history.Points[j].Ts {
+			return history.Points[i].Model < history.Points[j].Model
 		}
+		return history.Points[i].Ts < history.Points[j].Ts
+	})
+	buckets := make(map[string]struct{})
+	for _, point := range history.Points {
+		buckets[point.Ts] = struct{}{}
+	}
+	history.Buckets = len(buckets)
+	return nil
+}
+
+func applyVendorHistoryTimeline(history *VendorShareSeries, points []rankingAdjustmentPoint, models []RankedModel, adjustmentByVendor map[string]int64, totalTokens int64) error {
+	if history == nil || len(points) == 0 {
+		return nil
+	}
+	modelVendor := make(map[string]string, len(models))
+	for _, model := range models {
+		modelVendor[model.ModelName] = model.Vendor
+	}
+	vendorIndex := make(map[string]int, len(history.Vendors))
+	for idx, vendor := range history.Vendors {
+		vendorIndex[vendor.Name] = idx
+	}
+	pointIndex := make(map[string]int, len(history.Points))
+	for idx, point := range history.Points {
+		pointIndex[point.Ts+"\x00"+point.Vendor] = idx
+	}
+	seriesForVendor := func(vendor string) string {
+		if _, ok := vendorIndex[vendor]; ok {
+			return vendor
+		}
+		if _, ok := vendorIndex[rankingOthersLabel]; !ok {
+			history.Vendors = append(history.Vendors, VendorShareVendor{Name: rankingOthersLabel})
+			vendorIndex[rankingOthersLabel] = len(history.Vendors) - 1
+		}
+		return rankingOthersLabel
+	}
+	for _, adjustment := range points {
+		vendor := modelVendor[adjustment.model]
+		if vendor == "" {
+			vendor = rankingUnknownVendor
+		}
+		series := seriesForVendor(vendor)
+		ts := time.Unix(adjustment.bucket, 0).UTC().Format(time.RFC3339)
+		key := ts + "\x00" + series
+		pointIdx, exists := pointIndex[key]
+		if !exists {
+			history.Points = append(history.Points, VendorSharePoint{
+				Ts: ts, Label: adjustment.label, Vendor: series, Tokens: adjustment.tokens,
+			})
+			pointIndex[key] = len(history.Points) - 1
+		} else {
+			var err error
+			history.Points[pointIdx].Tokens, err = addRankingTokens(history.Points[pointIdx].Tokens, adjustment.tokens)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for vendorName, delta := range adjustmentByVendor {
+		series := seriesForVendor(vendorName)
+		idx := vendorIndex[series]
+		var err error
+		history.Vendors[idx].Total, err = addRankingTokens(history.Vendors[idx].Total, delta)
+		if err != nil {
+			return err
+		}
+	}
+	sort.Slice(history.Points, func(i, j int) bool {
+		if history.Points[i].Ts == history.Points[j].Ts {
+			return history.Points[i].Vendor < history.Points[j].Vendor
+		}
+		return history.Points[i].Ts < history.Points[j].Ts
+	})
+	bucketTotals := make(map[string]int64)
+	for _, point := range history.Points {
+		var err error
+		bucketTotals[point.Ts], err = addRankingTokens(bucketTotals[point.Ts], point.Tokens)
+		if err != nil {
+			return err
+		}
+	}
+	for idx := range history.Points {
+		history.Points[idx].Share = rankingShare(history.Points[idx].Tokens, bucketTotals[history.Points[idx].Ts])
 	}
 	for idx := range history.Vendors {
-		addedTokens := adjustmentBySeries[history.Vendors[idx].Name]
-		if addedTokens > 0 {
-			var err error
-			history.Vendors[idx].Total, err = addRankingTokens(history.Vendors[idx].Total, addedTokens)
-			if err != nil {
-				return err
-			}
-		}
 		history.Vendors[idx].Share = rankingShare(history.Vendors[idx].Total, totalTokens)
 	}
-
-	latestBucketTotal := int64(0)
-	for idx := range history.Points {
-		point := &history.Points[idx]
-		if point.Ts != latestTs {
-			continue
-		}
-		addedTokens := adjustmentBySeries[point.Vendor]
-		if addedTokens > 0 {
-			var err error
-			point.Tokens, err = addRankingTokens(point.Tokens, addedTokens)
-			if err != nil {
-				return err
-			}
-			delete(adjustmentBySeries, point.Vendor)
-		}
-		var err error
-		latestBucketTotal, err = addRankingTokens(latestBucketTotal, point.Tokens)
-		if err != nil {
-			return err
-		}
+	buckets := make(map[string]struct{})
+	for _, point := range history.Points {
+		buckets[point.Ts] = struct{}{}
 	}
-	for seriesName, addedTokens := range adjustmentBySeries {
-		if addedTokens == 0 {
-			continue
-		}
-		latestPoint := history.Points[len(history.Points)-1]
-		history.Points = append(history.Points, VendorSharePoint{
-			Ts: latestTs, Label: latestPoint.Label, Vendor: seriesName, Tokens: addedTokens,
-		})
-		var err error
-		latestBucketTotal, err = addRankingTokens(latestBucketTotal, addedTokens)
-		if err != nil {
-			return err
-		}
-	}
-	for idx := range history.Points {
-		if history.Points[idx].Ts == latestTs {
-			history.Points[idx].Share = rankingShare(history.Points[idx].Tokens, latestBucketTotal)
-		}
-	}
+	history.Buckets = len(buckets)
 	return nil
 }
 

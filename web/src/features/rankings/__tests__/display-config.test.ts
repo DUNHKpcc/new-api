@@ -21,35 +21,42 @@ import { describe, test } from 'node:test'
 
 import {
   getRankingDisplayTotal,
+  MAX_RANKING_DISPLAY_DATES,
   parseRankingDisplayConfig,
   serializeRankingDisplayConfig,
 } from '../display-config'
 
 describe('ranking display configuration', () => {
-  test('preserves valid added tokens for each supported period', () => {
+  test('preserves valid date-based added tokens', () => {
     const config = parseRankingDisplayConfig(
       JSON.stringify({
         version: 1,
         enabled: true,
-        periods: {
-          today: { adjustments: { 'model-a': 100 } },
-          week: { adjustments: { 'model-b': 200 } },
+        daily_records: {
+          '2026-08-22': { adjustments: { 'model-a': 100 } },
+          '2026-08-21': { adjustments: { 'model-b': 200 } },
         },
       })
     )
 
     assert.equal(config.enabled, true)
-    assert.equal(config.periods.today?.adjustments['model-a'], 100)
-    assert.equal(config.periods.week?.adjustments['model-b'], 200)
+    assert.equal(
+      config.daily_records['2026-08-22']?.adjustments['model-a'],
+      100
+    )
+    assert.equal(
+      config.daily_records['2026-08-21']?.adjustments['model-b'],
+      200
+    )
   })
 
-  test('drops invalid and zero adjustments before saving', () => {
+  test('drops invalid and zero date adjustments before saving', () => {
     const config = parseRankingDisplayConfig(
       JSON.stringify({
         version: 1,
         enabled: true,
-        periods: {
-          week: {
+        daily_records: {
+          '2026-08-22': {
             adjustments: {
               'model-a': 100,
               'model-zero': 0,
@@ -63,8 +70,64 @@ describe('ranking display configuration', () => {
     assert.deepEqual(JSON.parse(serializeRankingDisplayConfig(config)), {
       version: 1,
       enabled: true,
-      periods: { week: { adjustments: { 'model-a': 100 } } },
+      periods: {},
+      daily_records: { '2026-08-22': { adjustments: { 'model-a': 100 } } },
     })
+  })
+
+  test('preserves legacy period adjustments', () => {
+    const config = parseRankingDisplayConfig(
+      JSON.stringify({
+        version: 1,
+        enabled: true,
+        periods: {
+          week: { adjustments: { 'model-a': 200 } },
+        },
+      })
+    )
+
+    assert.equal(config.periods.week?.adjustments['model-a'], 200)
+    assert.deepEqual(JSON.parse(serializeRankingDisplayConfig(config)), {
+      version: 1,
+      enabled: true,
+      periods: { week: { adjustments: { 'model-a': 200 } } },
+      daily_records: {},
+    })
+  })
+
+  test('keeps the newest daily records when the retention limit is exceeded', () => {
+    const daily_records: Record<
+      string,
+      { adjustments: { 'model-a': number } }
+    > = {}
+    for (let index = 0; index <= MAX_RANKING_DISPLAY_DATES; index += 1) {
+      const date = new Date(Date.UTC(2020, 0, index + 1))
+        .toISOString()
+        .slice(0, 10)
+      daily_records[date] = { adjustments: { 'model-a': index + 1 } }
+    }
+
+    const config = parseRankingDisplayConfig(
+      JSON.stringify({ version: 1, enabled: true, daily_records })
+    )
+    const newestDate = Object.keys(daily_records).sort().at(-1)
+
+    assert.equal(
+      Object.keys(config.daily_records).length,
+      MAX_RANKING_DISPLAY_DATES
+    )
+    assert.ok(newestDate)
+    assert.equal(
+      config.daily_records[newestDate]?.adjustments['model-a'],
+      MAX_RANKING_DISPLAY_DATES + 1
+    )
+
+    const serialized = JSON.parse(serializeRankingDisplayConfig(config))
+    assert.equal(
+      Object.keys(serialized.daily_records).length,
+      MAX_RANKING_DISPLAY_DATES
+    )
+    assert.ok(serialized.daily_records[newestDate])
   })
 
   test('previews the formatted total from live and added tokens', () => {
@@ -76,5 +139,6 @@ describe('ranking display configuration', () => {
 
     assert.equal(config.enabled, false)
     assert.deepEqual(config.periods, {})
+    assert.deepEqual(config.daily_records, {})
   })
 })

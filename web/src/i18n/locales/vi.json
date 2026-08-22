@@ -5600,6 +5600,21 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Calibration date": "Ngày hiệu chỉnh",
+    "Daily calibration records are stored by date and automatically included in today, week, month, and year totals, trends, and charts.": "Bản ghi hiệu chỉnh được lưu theo ngày và tự động tính vào tổng, xu hướng và biểu đồ hôm nay, tuần, tháng và năm.",
+    "Affiliate onboarding": "Hướng dẫn chương trình đối tác",
+    "Become an affiliate to earn commissions. Invite users and receive quota rewards.": "Trở thành đối tác để nhận hoa hồng. Mời người dùng và nhận phần thưởng hạn mức.",
+    "Dismiss affiliate guide": "Đóng hướng dẫn đối tác",
+    "Earn rewards with referrals": "Nhận thưởng khi giới thiệu",
+    "Open Affiliate Center": "Mở Trung tâm đối tác",
+    "Download clients, examples, and other helpful resources from here.": "Tải xuống ứng dụng, ví dụ và các tài nguyên hữu ích khác tại đây.",
+    "Open Resource Downloads": "Mở Tải tài nguyên",
+    "Resource downloads onboarding": "Hướng dẫn tải tài nguyên",
+    "Dismiss resource downloads guide": "Đóng hướng dẫn tải tài nguyên",
+    "Open the lottery panel to view current rewards and winners.": "Mở bảng xổ số để xem phần thưởng và người chiến thắng hiện tại.",
+    "View Lottery": "Xem xổ số",
+    "Lottery onboarding": "Hướng dẫn xổ số",
+    "Dismiss lottery guide": "Đóng hướng dẫn xổ số"
   }
 }

@@ -27,6 +27,8 @@ import {
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ConsoleOnboardingPanel } from '@/components/layout/components/console-onboarding'
+import { useConsoleOnboarding } from '@/components/layout/components/console-onboarding-context'
 import type { NotificationFeedItem } from '@/components/notifications/notification-feed'
 import { partitionNotificationItems } from '@/components/notifications/notification-sections'
 import { RichContent } from '@/components/rich-content'
@@ -193,11 +195,13 @@ type NotificationPopoverProps = {
 
 export function NotificationPopover(props: NotificationPopoverProps) {
   const { t } = useTranslation()
+  const lotteryOnboarding = useConsoleOnboarding('lottery')
   const notifications = useNotifications()
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('notice')
   const sections = partitionNotificationItems(notifications.items)
   const hasLottery = !notifications.loading && sections.lottery.length > 0
+  const showLotteryTrigger = hasLottery || lotteryOnboarding.isActive
   const unreadLotteryCount = hasLottery
     ? sections.lottery.filter((item) => item.unread).length
     : 0
@@ -207,8 +211,14 @@ export function NotificationPopover(props: NotificationPopoverProps) {
 
   return (
     <Popover
-      open={open}
+      open={lotteryOnboarding.isActive || open}
       onOpenChange={(nextOpen) => {
+        if (lotteryOnboarding.isActive && !nextOpen) {
+          lotteryOnboarding.complete()
+          setOpen(false)
+          return
+        }
+
         setOpen(nextOpen)
         if (nextOpen && hasLottery) setActiveTab('lottery')
       }}
@@ -221,7 +231,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             size='icon'
             className={cn(
               'relative size-9 overflow-visible data-[lottery-active=true]:w-auto',
-              hasLottery && 'h-9 w-auto min-w-9 gap-1.5 px-2.5',
+              showLotteryTrigger && 'h-9 w-auto min-w-9 gap-1.5 px-2.5',
               props.className
             )}
             aria-label={t('System Announcements')}
@@ -229,7 +239,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             data-notification-unread={
               hasUnreadNotifications ? 'true' : undefined
             }
-            data-lottery-active={hasLottery ? 'true' : undefined}
+            data-lottery-active={showLotteryTrigger ? 'true' : undefined}
             data-lottery-unread={unreadLotteryCount > 0 ? 'true' : undefined}
           />
         }
@@ -242,7 +252,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
           )}
           aria-hidden='true'
         />
-        {hasLottery ? (
+        {showLotteryTrigger ? (
           <>
             <span
               className='bg-foreground/30 h-4 w-px shrink-0'
@@ -266,75 +276,104 @@ export function NotificationPopover(props: NotificationPopoverProps) {
       <PopoverContent
         align='end'
         sideOffset={8}
-        className='w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
+        className={
+          lotteryOnboarding.isActive
+            ? 'border-foreground w-[min(18rem,calc(100vw-1.5rem))] border-2'
+            : 'w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
+        }
       >
-        <PopoverHeader className='gap-1 px-1'>
-          <PopoverTitle>{t('System Announcements')}</PopoverTitle>
-          <p className='text-muted-foreground text-xs'>
-            {t('Latest platform updates and notices')}
-          </p>
-        </PopoverHeader>
+        {lotteryOnboarding.isActive ? (
+          <ConsoleOnboardingPanel
+            icon={Gift}
+            title={t('Lottery')}
+            description={t(
+              'Open the lottery panel to view current rewards and winners.'
+            )}
+            actionLabel={t('View Lottery')}
+            dismissLabel={t('Dismiss lottery guide')}
+            onAction={() => {
+              lotteryOnboarding.complete()
+              setActiveTab('lottery')
+              setOpen(true)
+            }}
+            onDismiss={() => {
+              lotteryOnboarding.complete()
+              setOpen(false)
+            }}
+          />
+        ) : (
+          <>
+            <PopoverHeader className='gap-1 px-1'>
+              <PopoverTitle>{t('System Announcements')}</PopoverTitle>
+              <p className='text-muted-foreground text-xs'>
+                {t('Latest platform updates and notices')}
+              </p>
+            </PopoverHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className='grid w-full grid-cols-3'>
-            <TabsTrigger value='notice' className='gap-1.5'>
-              <Bell className='size-3.5' aria-hidden='true' />
-              {t('Notice')}
-            </TabsTrigger>
-            <TabsTrigger value='timeline' className='gap-1.5'>
-              <Megaphone className='size-3.5' aria-hidden='true' />
-              {t('Timeline')}
-            </TabsTrigger>
-            <TabsTrigger value='lottery' className='gap-1.5'>
-              <Gift className='size-3.5' aria-hidden='true' />
-              {t('Lottery')}
-            </TabsTrigger>
-          </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className='grid w-full grid-cols-3'>
+                <TabsTrigger value='notice' className='gap-1.5'>
+                  <Bell className='size-3.5' aria-hidden='true' />
+                  {t('Notice')}
+                </TabsTrigger>
+                <TabsTrigger value='timeline' className='gap-1.5'>
+                  <Megaphone className='size-3.5' aria-hidden='true' />
+                  {t('Timeline')}
+                </TabsTrigger>
+                <TabsTrigger value='lottery' className='gap-1.5'>
+                  <Gift className='size-3.5' aria-hidden='true' />
+                  {t('Lottery')}
+                </TabsTrigger>
+              </TabsList>
 
-          <TabsContent value='notice' className='mt-2'>
-            <NotificationList
-              items={sections.notice}
-              loading={notifications.loading}
-              emptyMessage={t('No announcements at this time')}
-              onMarkRead={notifications.markAsRead}
-            />
-          </TabsContent>
+              <TabsContent value='notice' className='mt-2'>
+                <NotificationList
+                  items={sections.notice}
+                  loading={notifications.loading}
+                  emptyMessage={t('No announcements at this time')}
+                  onMarkRead={notifications.markAsRead}
+                />
+              </TabsContent>
 
-          <TabsContent value='timeline' className='mt-2'>
-            <NotificationList
-              items={sections.timeline}
-              loading={notifications.loading}
-              emptyMessage={t('No system announcements')}
-              onMarkRead={notifications.markAsRead}
-            />
-          </TabsContent>
+              <TabsContent value='timeline' className='mt-2'>
+                <NotificationList
+                  items={sections.timeline}
+                  loading={notifications.loading}
+                  emptyMessage={t('No system announcements')}
+                  onMarkRead={notifications.markAsRead}
+                />
+              </TabsContent>
 
-          <TabsContent value='lottery' className='mt-2'>
-            <NotificationList
-              items={sections.lottery}
-              loading={notifications.loading}
-              emptyMessage={t('No lottery content at this time')}
-              emptyIcon={<Gift className='size-5' aria-hidden='true' />}
-              onMarkRead={notifications.markAsRead}
-            />
-          </TabsContent>
-        </Tabs>
+              <TabsContent value='lottery' className='mt-2'>
+                <NotificationList
+                  items={sections.lottery}
+                  loading={notifications.loading}
+                  emptyMessage={t('No lottery content at this time')}
+                  emptyIcon={<Gift className='size-5' aria-hidden='true' />}
+                  onMarkRead={notifications.markAsRead}
+                />
+              </TabsContent>
+            </Tabs>
 
-        <div className='flex justify-between gap-2'>
-          <Button
-            type='button'
-            variant='outline'
-            size='sm'
-            disabled={notifications.loading || notifications.unreadCount === 0}
-            onClick={notifications.markAllAsRead}
-          >
-            <CheckCheck aria-hidden='true' />
-            {t('Mark all as read')}
-          </Button>
-          <Button type='button' size='sm' onClick={() => setOpen(false)}>
-            {t('Close')}
-          </Button>
-        </div>
+            <div className='flex justify-between gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={
+                  notifications.loading || notifications.unreadCount === 0
+                }
+                onClick={notifications.markAllAsRead}
+              >
+                <CheckCheck aria-hidden='true' />
+                {t('Mark all as read')}
+              </Button>
+              <Button type='button' size='sm' onClick={() => setOpen(false)}>
+                {t('Close')}
+              </Button>
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   )

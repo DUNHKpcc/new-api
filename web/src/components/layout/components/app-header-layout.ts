@@ -46,7 +46,7 @@ export const appHeaderLayoutClasses = {
     'app-header-utilities flex shrink-0 items-center gap-0.5 [&>button]:size-10 [&>button]:rounded-sm [&>button_svg]:size-5 [&_[data-slot=avatar]]:size-7',
   brand: {
     link: 'app-header-brand text-foreground inline-flex h-10 min-w-0 items-center gap-3 font-medium transition-colors outline-none select-none',
-    mark: 'app-header-brand-mark ring-foreground/15 dark:ring-border flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-sm ring-1',
+    mark: 'app-header-brand-mark ring-foreground/15 dark:ring-border flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm ring-1',
     name: 'app-header-brand-name hidden max-w-[12rem] min-w-0 truncate text-xl leading-none font-semibold tracking-tight [font-family:var(--font-serif)] md:block',
   },
   topNav: {

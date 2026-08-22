@@ -24,7 +24,15 @@ func GetRankings(c *gin.Context) {
 }
 
 func GetLiveRankings(c *gin.Context) {
-	result, err := service.GetRankingsSnapshot(c.DefaultQuery("period", "week"))
+	period := c.DefaultQuery("period", "week")
+	date := c.Query("date")
+	var result *service.RankingsResponse
+	var err error
+	if date != "" {
+		result, err = service.GetRankingsSnapshotForDate(period, date)
+	} else {
+		result, err = service.GetRankingsSnapshot(period)
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,

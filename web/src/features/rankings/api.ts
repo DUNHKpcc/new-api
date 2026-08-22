@@ -34,8 +34,11 @@ export async function getRankings(
 }
 
 export async function getLiveRankings(
-  period: RankingPeriod
+  period: RankingPeriod,
+  date?: string
 ): Promise<RankingsResponse> {
-  const res = await api.get('/api/rankings/live', { params: { period } })
+  const res = await api.get('/api/rankings/live', {
+    params: { period, ...(date ? { date } : {}) },
+  })
   return res.data
 }

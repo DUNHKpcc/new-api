@@ -30,10 +30,11 @@ export function useRankings(period: RankingPeriod) {
   })
 }
 
-export function useLiveRankings(period: RankingPeriod) {
+export function useLiveRankings(period: RankingPeriod, date?: string) {
   return useQuery({
-    queryKey: ['rankings-live', period],
-    queryFn: () => getLiveRankings(period),
+    queryKey: ['rankings-live', period, date],
+    queryFn: () => getLiveRankings(period, date),
     staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 1000,
   })
 }

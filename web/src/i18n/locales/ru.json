@@ -5600,6 +5600,21 @@
     "Zero retention": "Без хранения данных",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Calibration date": "Дата калибровки",
+    "Daily calibration records are stored by date and automatically included in today, week, month, and year totals, trends, and charts.": "Записи калибровки сохраняются по датам и автоматически учитываются в итогах, трендах и графиках за день, неделю, месяц и год.",
+    "Affiliate onboarding": "Руководство по партнёрской программе",
+    "Become an affiliate to earn commissions. Invite users and receive quota rewards.": "Станьте партнёром, чтобы получать комиссионные. Приглашайте пользователей и получайте награды в виде квоты.",
+    "Dismiss affiliate guide": "Закрыть руководство по партнёрской программе",
+    "Earn rewards with referrals": "Получайте награды за приглашения",
+    "Open Affiliate Center": "Открыть партнёрский центр",
+    "Download clients, examples, and other helpful resources from here.": "Здесь можно скачать клиенты, примеры и другие полезные ресурсы.",
+    "Open Resource Downloads": "Открыть загрузки ресурсов",
+    "Resource downloads onboarding": "Руководство по загрузкам ресурсов",
+    "Dismiss resource downloads guide": "Закрыть руководство по загрузкам",
+    "Open the lottery panel to view current rewards and winners.": "Откройте панель лотереи, чтобы посмотреть текущие награды и победителей.",
+    "View Lottery": "Открыть лотерею",
+    "Lottery onboarding": "Руководство по лотерее",
+    "Dismiss lottery guide": "Закрыть руководство по лотерее"
   }
 }

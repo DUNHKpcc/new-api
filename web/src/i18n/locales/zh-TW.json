@@ -5600,6 +5600,21 @@
     "Zero retention": "零數據保留",
     "Zhipu": "智譜",
     "Zhipu V4": "智譜 V4",
-    "Zoom": "縮放"
+    "Zoom": "縮放",
+    "Calibration date": "校準日期",
+    "Daily calibration records are stored by date and automatically included in today, week, month, and year totals, trends, and charts.": "校準記錄會按日期保存，並自動彙總到今天、本週、本月和本年的總量、趨勢與圖表。",
+    "Affiliate onboarding": "代理中心導覽",
+    "Become an affiliate to earn commissions. Invite users and receive quota rewards.": "成為代理即可賺取佣金，邀請用戶還能獲得額度獎勵。",
+    "Dismiss affiliate guide": "關閉代理導覽",
+    "Earn rewards with referrals": "邀請用戶，賺取獎勵",
+    "Open Affiliate Center": "開啟代理中心",
+    "Download clients, examples, and other helpful resources from here.": "在這裡下載用戶端、範例和其他實用資源。",
+    "Open Resource Downloads": "開啟資源下載",
+    "Resource downloads onboarding": "資源下載導覽",
+    "Dismiss resource downloads guide": "關閉資源下載導覽",
+    "Open the lottery panel to view current rewards and winners.": "開啟抽獎面板，查看目前獎品與中獎資訊。",
+    "View Lottery": "查看抽獎",
+    "Lottery onboarding": "抽獎導覽",
+    "Dismiss lottery guide": "關閉抽獎導覽"
   }
 }

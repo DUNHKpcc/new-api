@@ -55,6 +55,10 @@ import type {
   NavGroup as NavGroupProps,
 } from '../types'
 import { ChatPresetsItem } from './chat-presets-item'
+import {
+  AffiliateOnboarding,
+  ResourceDownloadsOnboarding,
+} from './console-onboarding'
 import { NavItemIcon } from './nav-item-icon'
 
 /**
@@ -134,6 +138,8 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
         <span className='min-w-0 flex-1 truncate'>{item.title}</span>
         {item.badge && <NavBadge>{item.badge}</NavBadge>}
       </SidebarMenuButton>
+      {item.url === '/affiliate' && <AffiliateOnboarding />}
+      {item.url === '/resource-downloads' && <ResourceDownloadsOnboarding />}
     </SidebarMenuItem>
   )
 }

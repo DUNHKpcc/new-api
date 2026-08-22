@@ -90,6 +90,69 @@ func TestApplyRankingDisplayConfigWithNoAddedTokensKeepsLiveTotals(t *testing.T)
 	assert.Equal(t, RankingDataModeLive, result.DataMode)
 }
 
+func TestApplyRankingDisplayConfigAggregatesDailyRecordsIntoHistoryBuckets(t *testing.T) {
+	previousRank := 1
+	weekConfig, err := rankingConfig("week")
+	require.NoError(t, err)
+	currentStart, _, err := rankingDateRange("2026-08-19")
+	require.NoError(t, err)
+	currentEnd := currentStart + 4*24*60*60 - 1
+	live := &RankingsResponse{
+		DataMode: RankingDataModeLive,
+		Models: []RankedModel{
+			{Rank: 1, PreviousRank: &previousRank, ModelName: "model-a", Vendor: "Vendor A", TotalTokens: 100, previousTokens: 80},
+			{Rank: 2, ModelName: "model-b", Vendor: "Vendor B", TotalTokens: 50, previousTokens: 100},
+		},
+		Vendors: []RankedVendor{
+			{Rank: 1, Vendor: "Vendor A", TotalTokens: 100, TopModel: "model-a", previousTokens: 80},
+			{Rank: 2, Vendor: "Vendor B", TotalTokens: 50, TopModel: "model-b", previousTokens: 100},
+		},
+		ModelsHistory: ModelHistorySeries{
+			Models: []ModelHistoryModel{{Name: "model-a", Vendor: "Vendor A", Total: 100}, {Name: "model-b", Vendor: "Vendor B", Total: 50}},
+			Points: []ModelHistoryPoint{
+				{Ts: "2026-08-20T00:00:00Z", Label: "Aug 20", Model: "model-a", Vendor: "Vendor A", Tokens: 40},
+				{Ts: "2026-08-21T00:00:00Z", Label: "Aug 21", Model: "model-a", Vendor: "Vendor A", Tokens: 60},
+			},
+		},
+		VendorShareHistory: VendorShareSeries{
+			Vendors: []VendorShareVendor{{Name: "Vendor A", Total: 100}, {Name: "Vendor B", Total: 50}},
+			Points: []VendorSharePoint{
+				{Ts: "2026-08-20T00:00:00Z", Label: "Aug 20", Vendor: "Vendor A", Tokens: 40, Share: 1},
+				{Ts: "2026-08-21T00:00:00Z", Label: "Aug 21", Vendor: "Vendor A", Tokens: 60, Share: 1},
+			},
+		},
+		rankingMeta: &rankingSnapshotMeta{
+			config:                weekConfig,
+			currentStart:          currentStart,
+			currentEnd:            currentEnd,
+			previousStart:         currentStart - 7*24*60*60,
+			previousEnd:           currentStart - 1,
+			previousTokensByModel: map[string]int64{"model-a": 80, "model-b": 100},
+		},
+	}
+	config := operation_setting.RankingDisplayConfig{
+		Version: operation_setting.RankingDisplayConfigVersion,
+		Enabled: true,
+		DailyRecords: map[string]operation_setting.RankingDisplayDay{
+			"2026-08-18": {Adjustments: map[string]int64{"model-a": 20}},
+			"2026-08-20": {Adjustments: map[string]int64{"model-a": 30}},
+			"2026-08-21": {Adjustments: map[string]int64{"model-a": 70}},
+		},
+	}
+
+	result, err := applyRankingDisplayConfig(live, config, "week")
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(200), result.Models[0].TotalTokens)
+	assert.Equal(t, float64(100), result.Models[0].GrowthPct)
+	assert.Equal(t, int64(70), result.ModelsHistory.Points[0].Tokens)
+	assert.Equal(t, int64(130), result.ModelsHistory.Points[1].Tokens)
+	assert.Equal(t, int64(70), result.VendorShareHistory.Points[0].Tokens)
+	assert.Equal(t, int64(130), result.VendorShareHistory.Points[1].Tokens)
+	assert.Equal(t, 2, result.ModelsHistory.Buckets)
+	assert.Equal(t, 2, result.VendorShareHistory.Buckets)
+}
+
 func TestApplyRankingDisplayConfigRejectsTotalsAboveSafeIntegerRange(t *testing.T) {
 	live := &RankingsResponse{
 		DataMode: RankingDataModeLive,
@@ -115,4 +178,10 @@ func TestApplyRankingDisplayConfigRejectsTotalsAboveSafeIntegerRange(t *testing.
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Equal(t, operation_setting.MaxRankingDisplayAddedTokens, live.Models[0].TotalTokens)
+}
+
+func TestGetRankingsSnapshotForDateRejectsInvalidDate(t *testing.T) {
+	_, err := GetRankingsSnapshotForDate("today", "2026-02-30")
+
+	assert.Error(t, err)
 }

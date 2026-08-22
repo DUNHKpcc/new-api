@@ -5600,6 +5600,21 @@
     "Zero retention": "Aucune rétention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Calibration date": "Date de calibration",
+    "Daily calibration records are stored by date and automatically included in today, week, month, and year totals, trends, and charts.": "Les enregistrements de calibration sont conservés par date et inclus automatiquement dans les totaux, tendances et graphiques du jour, de la semaine, du mois et de l’année.",
+    "Affiliate onboarding": "Guide du programme d’affiliation",
+    "Become an affiliate to earn commissions. Invite users and receive quota rewards.": "Devenez affilié pour gagner des commissions. Invitez des utilisateurs et recevez des récompenses de quota.",
+    "Dismiss affiliate guide": "Fermer le guide d’affiliation",
+    "Earn rewards with referrals": "Gagnez des récompenses grâce aux parrainages",
+    "Open Affiliate Center": "Ouvrir le centre d’affiliation",
+    "Download clients, examples, and other helpful resources from here.": "Téléchargez ici les clients, exemples et autres ressources utiles.",
+    "Open Resource Downloads": "Ouvrir les téléchargements de ressources",
+    "Resource downloads onboarding": "Guide des téléchargements de ressources",
+    "Dismiss resource downloads guide": "Fermer le guide des téléchargements",
+    "Open the lottery panel to view current rewards and winners.": "Ouvrez le panneau de loterie pour voir les récompenses et les gagnants actuels.",
+    "View Lottery": "Voir la loterie",
+    "Lottery onboarding": "Guide de la loterie",
+    "Dismiss lottery guide": "Fermer le guide de la loterie"
   }
 }

@@ -29,6 +29,19 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot='popover-trigger' {...props} />
 }
 
+function PopoverArrow({ className, ...props }: PopoverPrimitive.Arrow.Props) {
+  return (
+    <PopoverPrimitive.Arrow
+      data-slot='popover-arrow'
+      className={cn(
+        'relative block h-1.5 w-3 overflow-clip data-[side=bottom]:top-[-6px] data-[side=left]:right-[-9px] data-[side=left]:rotate-90 data-[side=right]:left-[-9px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-6px] data-[side=top]:rotate-180 before:absolute before:bottom-0 before:left-1/2 before:h-2.5 before:w-2.5 before:-translate-x-1/2 before:translate-y-1/2 before:rotate-45 before:border before:border-foreground/10 before:bg-popover',
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function PopoverContent({
   className,
   align = 'center',
@@ -110,6 +123,7 @@ function PopoverDescription({
 
 export {
   Popover,
+  PopoverArrow,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,

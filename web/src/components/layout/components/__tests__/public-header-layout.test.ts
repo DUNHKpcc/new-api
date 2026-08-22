@@ -75,7 +75,7 @@ describe('public header layout', () => {
       tokens(publicHeaderLayoutClasses.header.scrolled).includes('rounded-2xl'),
       false
     )
-    assert.ok(tokens(publicHeaderLayoutClasses.brand.mark).includes('size-8'))
+    assert.ok(tokens(publicHeaderLayoutClasses.brand.mark).includes('size-9'))
     assert.ok(
       tokens(publicHeaderLayoutClasses.brand.mark).includes(
         'app-header-brand-mark'
