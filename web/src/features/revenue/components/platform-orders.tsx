@@ -17,11 +17,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -34,7 +45,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getAllBillingHistory } from '@/features/wallet/api'
+import {
+  completeOrder,
+  getAllBillingHistory,
+  isApiSuccess,
+} from '@/features/wallet/api'
 import {
   formatTimestamp,
   getPaymentMethodName,
@@ -42,6 +57,7 @@ import {
 } from '@/features/wallet/lib/billing'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import { revenueMonthRange } from '../lib/analytics'
 import {
@@ -60,6 +76,8 @@ export function PlatformOrders() {
   const [month, setMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   )
+  const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
+  const [completing, setCompleting] = useState(false)
   const range = useMemo(() => revenueMonthRange(month), [month])
   const query = useQuery({
     queryKey: [
@@ -108,6 +126,28 @@ export function PlatformOrders() {
     staleTime: 5 * 60 * 1000,
   })
   const orderContext = orderContextQuery.data
+
+  const handleConfirmComplete = async () => {
+    const tradeNo = confirmTradeNo
+    if (!tradeNo) return
+
+    setCompleting(true)
+    try {
+      const response = await completeOrder({ trade_no: tradeNo })
+      if (isApiSuccess(response)) {
+        toast.success(t('Order completed successfully'))
+        setConfirmTradeNo(null)
+        await query.refetch()
+      } else {
+        toast.error(response.message || t('Failed to complete order'))
+      }
+    } catch (error) {
+      handleServerError(error)
+    } finally {
+      setCompleting(false)
+    }
+  }
+
   let tableContent: ReactNode
   if (query.isLoading) {
     tableContent = (
@@ -143,6 +183,7 @@ export function PlatformOrders() {
             <TableHead>{t('Payment')}</TableHead>
             <TableHead>{t('Status')}</TableHead>
             <TableHead>{t('Completed at')}</TableHead>
+            <TableHead>{t('Actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -220,6 +261,24 @@ export function PlatformOrders() {
                     ? formatTimestamp(record.complete_time)
                     : '-'}
                 </TableCell>
+                <TableCell>
+                  {record.status === 'pending' ? (
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant='outline'
+                      onClick={() => setConfirmTradeNo(record.trade_no)}
+                      disabled={completing}
+                    >
+                      {completing && confirmTradeNo === record.trade_no ? (
+                        <Loader2 className='animate-spin' />
+                      ) : null}
+                      {t('Complete Order')}
+                    </Button>
+                  ) : (
+                    '-'
+                  )}
+                </TableCell>
               </TableRow>
             )
           })}
@@ -288,6 +347,33 @@ export function PlatformOrders() {
           </Button>
         </div>
       </div>
+
+      <AlertDialog
+        open={!!confirmTradeNo}
+        onOpenChange={(open) => !open && setConfirmTradeNo(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Complete Order')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'Are you sure you want to manually complete this order? The user will be credited with the corresponding quota.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={completing}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmComplete}
+              disabled={completing}
+            >
+              {completing ? t('Processing...') : t('Confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -39,12 +39,20 @@ const order = {
   status: 'success' as const,
 }
 
+const pendingOrder = {
+  ...order,
+  id: 2,
+  trade_no: 'wallet-pending-42',
+  status: 'pending' as const,
+  complete_time: 0,
+}
+
 mock.module('@tanstack/react-query', () => ({
   keepPreviousData: {},
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => {
     if (queryKey[1] === 'platform-orders') {
       return {
-        data: { data: { items: [order], total: 1 } },
+        data: { data: { items: [order, pendingOrder], total: 2 } },
         isLoading: false,
         isError: false,
       }
@@ -66,7 +74,7 @@ await i18n.use(initReactI18next).init({
   resources: { en: { translation: {} } },
 })
 
-describe('platform order amount display', () => {
+describe('platform order display', () => {
   after(() => mock.restore())
 
   test('shows the credited amount separately from the payment amount', () => {
@@ -78,5 +86,15 @@ describe('platform order amount display', () => {
     assert.match(markup, />Payment<\/th>/)
     assert.match(markup, />\$100<\/td>/)
     assert.match(markup, />99<\/td>/)
+  })
+
+  test('shows pending status and the manual completion action', () => {
+    const markup = renderToStaticMarkup(
+      createElement(I18nextProvider, { i18n }, createElement(PlatformOrders))
+    )
+
+    assert.match(markup, />Pending<\/span>/)
+    assert.match(markup, />Complete Order<\/button>/)
+    assert.match(markup, /wallet-pending-42/)
   })
 })
