@@ -23,6 +23,7 @@ export type AnnouncementNotification = {
   type?: string
   content?: string
   extra?: string
+  image?: string
   publishDate?: string | Date
 }
 
@@ -94,6 +95,7 @@ export function getAnnouncementNotificationKey(
     publishDate: announcement.publishDate ?? '',
     content: announcement.content?.trim() ?? '',
     extra: announcement.extra?.trim() ?? '',
+    image: announcement.image ?? '',
     type: announcement.type ?? '',
   })
   const revision = hashString(fingerprint)
@@ -189,6 +191,7 @@ export function buildNotificationFeed(
       type: announcement.type,
       content: announcement.content?.trim() ?? '',
       extra: announcement.extra?.trim() || undefined,
+      image: announcement.image,
       publishDate: announcement.publishDate,
       unread:
         !readAnnouncementKeys.has(key) &&

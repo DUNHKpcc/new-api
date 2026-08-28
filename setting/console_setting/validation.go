@@ -180,6 +180,18 @@ func validateAnnouncements(announcementsStr string) error {
 				return fmt.Errorf("第%d个公告的说明长度不能超过200字符", i+1)
 			}
 		}
+		if image, exists := ann["image"]; exists {
+			imageStr, ok := image.(string)
+			if !ok || imageStr == "" {
+				return fmt.Errorf("第%d个公告的图片格式不正确", i+1)
+			}
+			if !strings.HasPrefix(imageStr, "data:image/webp;base64,") {
+				return fmt.Errorf("第%d个公告的图片必须是WebP格式", i+1)
+			}
+			if len(imageStr) > 500_000 {
+				return fmt.Errorf("第%d个公告的图片不能超过300KB", i+1)
+			}
+		}
 	}
 	return nil
 }

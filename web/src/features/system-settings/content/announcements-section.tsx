@@ -60,6 +60,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { compressImageToWebP } from '@/features/resource-downloads/lib/compress-thumbnail'
 import dayjs from '@/lib/dayjs'
 
 import { SettingsSwitchField } from '../components/settings-form-layout'
@@ -72,6 +73,7 @@ type Announcement = {
   publishDate: string
   type: 'default' | 'ongoing' | 'success' | 'warning' | 'error'
   extra?: string
+  image?: string
 }
 
 type AnnouncementsSectionProps = {
@@ -90,6 +92,7 @@ const announcementSchema = z.object({
     .string()
     .max(100, 'Extra must be less than 100 characters')
     .optional(),
+  image: z.string().optional(),
 })
 
 type AnnouncementFormValues = z.infer<typeof announcementSchema>
@@ -144,6 +147,7 @@ export function AnnouncementsSection({
   const [editingAnnouncement, setEditingAnnouncement] =
     useState<Announcement | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<'single' | 'batch'>('single')
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   const form = useForm<AnnouncementFormValues>({
     resolver: zodResolver(announcementSchema),
@@ -152,6 +156,7 @@ export function AnnouncementsSection({
       publishDate: new Date().toISOString(),
       type: 'default',
       extra: '',
+      image: '',
     },
   })
 
@@ -195,6 +200,7 @@ export function AnnouncementsSection({
       publishDate: new Date().toISOString(),
       type: 'default',
       extra: '',
+      image: '',
     })
     setShowDialog(true)
   }
@@ -206,6 +212,7 @@ export function AnnouncementsSection({
       publishDate: announcement.publishDate,
       type: announcement.type,
       extra: announcement.extra || '',
+      image: announcement.image || '',
     })
     setShowDialog(true)
   }
@@ -263,6 +270,19 @@ export function AnnouncementsSection({
     }
     setHasChanges(true)
     setShowDialog(false)
+  }
+
+  const handleImageUpload = async (file: File) => {
+    setUploadingImage(true)
+    try {
+      const image = await compressImageToWebP(file)
+      form.setValue('image', image, { shouldDirty: true })
+      toast.success(t('Announcement image uploaded'))
+    } catch {
+      toast.error(t('Announcement image upload failed'))
+    } finally {
+      setUploadingImage(false)
+    }
   }
 
   const handleSaveAll = async () => {
@@ -418,6 +438,20 @@ export function AnnouncementsSection({
               header: t('Extra'),
               cellClassName: 'text-muted-foreground max-w-xs truncate',
               cell: (announcement) => announcement.extra || '-',
+            },
+            {
+              id: 'image',
+              header: t('Image'),
+              cell: (announcement) =>
+                announcement.image ? (
+                  <img
+                    src={announcement.image}
+                    alt={t('Announcement image')}
+                    className='size-10 rounded border object-cover'
+                  />
+                ) : (
+                  '-'
+                ),
             },
             {
               id: 'actions',
@@ -578,6 +612,41 @@ export function AnnouncementsSection({
                     {t(
                       'Optional supplementary information (max 100 characters)'
                     )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='image'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Announcement image (Optional)')}</FormLabel>
+                  <FormControl>
+                    <div className='space-y-2'>
+                      {field.value ? (
+                        <img
+                          src={field.value}
+                          alt={t('Announcement image')}
+                          className='max-h-48 w-full rounded-md border object-cover'
+                        />
+                      ) : null}
+                      <Input
+                        type='file'
+                        accept='image/jpeg,image/png,image/webp'
+                        disabled={uploadingImage}
+                        aria-label={t('Upload announcement image')}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          if (file) void handleImageUpload(file)
+                          event.target.value = ''
+                        }}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t('Images are compressed to WebP before saving.')}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
