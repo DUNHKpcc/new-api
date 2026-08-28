@@ -24,6 +24,10 @@ import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
 import {
+  TimeRangeFilterDialog,
+  type TimeRangeFilterValue,
+} from '@/components/time-range-filter-dialog'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -45,6 +49,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { getSavedChartPreferences } from '@/features/dashboard/lib'
 import {
   completeOrder,
   getAllBillingHistory,
@@ -58,27 +63,44 @@ import {
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
+import { getRollingDateRange } from '@/lib/time'
 
-import { revenueMonthRange } from '../lib/analytics'
 import {
   getOrderUser,
   isSubscriptionOrderTradeNo,
   loadPlatformOrderContext,
   resolveOrderSubscription,
 } from '../lib/platform-orders'
-import { RevenueMonthSelector } from './revenue-month-selector'
 
 export function PlatformOrders() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
   const [keyword, setKeyword] = useState('')
-  const [month, setMonth] = useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  )
+  const chartPreferences = useMemo(() => getSavedChartPreferences(), [])
+  const [filters, setFilters] = useState<TimeRangeFilterValue>(() => {
+    const { start, end } = getRollingDateRange(
+      chartPreferences.defaultTimeRangeDays
+    )
+    return {
+      start_timestamp: start,
+      end_timestamp: end,
+      time_granularity: chartPreferences.defaultTimeGranularity,
+    }
+  })
   const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
   const [completing, setCompleting] = useState(false)
-  const range = useMemo(() => revenueMonthRange(month), [month])
+  const range = useMemo(
+    () => ({
+      startTime: Math.floor(
+        (filters.start_timestamp ?? new Date()).getTime() / 1000
+      ),
+      endTime: Math.floor(
+        (filters.end_timestamp ?? new Date()).getTime() / 1000
+      ),
+    }),
+    [filters.end_timestamp, filters.start_timestamp]
+  )
   const query = useQuery({
     queryKey: [
       'revenue',
@@ -306,12 +328,28 @@ export function PlatformOrders() {
             placeholder={t('Search by order number...')}
           />
         </form>
-        <RevenueMonthSelector
-          month={month}
-          onMonthChange={(value) => {
+        <TimeRangeFilterDialog
+          currentFilters={filters}
+          defaultTimeRangeDays={chartPreferences.defaultTimeRangeDays}
+          defaultTimeGranularity={chartPreferences.defaultTimeGranularity}
+          onFilterChange={(nextFilters) => {
             setPage(1)
-            setMonth(value)
+            setFilters(nextFilters)
           }}
+          onReset={() => {
+            const { start, end } = getRollingDateRange(
+              chartPreferences.defaultTimeRangeDays
+            )
+            setPage(1)
+            setFilters({
+              start_timestamp: start,
+              end_timestamp: end,
+              time_granularity: chartPreferences.defaultTimeGranularity,
+            })
+          }}
+          titleKey='Platform orders'
+          descriptionKey='Filter platform orders by time range.'
+          showGranularity={false}
         />
       </div>
 

@@ -28,6 +28,10 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  TimeRangeFilterDialog,
+  type TimeRangeFilterValue,
+} from '@/components/time-range-filter-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -38,7 +42,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getSavedChartPreferences } from '@/features/dashboard/lib'
 import { formatMinorCurrency, formatNumber, formatPercent } from '@/lib/format'
+import { getRollingDateRange } from '@/lib/time'
 
 import {
   createRevenueCost,
@@ -51,12 +57,10 @@ import {
   calculateRevenueProfit,
   combineRevenueTotals,
   revenueMonthKey,
-  revenueMonthRange,
   sumMinorAmounts,
 } from '../lib/analytics'
 import type { RevenueCostMutation } from '../types'
 import { RevenueCostEditor } from './revenue-cost-editor'
-import { RevenueMonthSelector } from './revenue-month-selector'
 import { RevenueVisualization } from './revenue-visualization'
 
 type MetricCardProps = {
@@ -99,10 +103,28 @@ function MetricCard(props: MetricCardProps) {
 export function RevenueOverview() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [month, setMonth] = useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  const chartPreferences = useMemo(() => getSavedChartPreferences(), [])
+  const [filters, setFilters] = useState<TimeRangeFilterValue>(() => {
+    const { start, end } = getRollingDateRange(
+      chartPreferences.defaultTimeRangeDays
+    )
+    return {
+      start_timestamp: start,
+      end_timestamp: end,
+      time_granularity: chartPreferences.defaultTimeGranularity,
+    }
+  })
+  const range = useMemo(
+    () => ({
+      startTime: Math.floor(
+        (filters.start_timestamp ?? new Date()).getTime() / 1000
+      ),
+      endTime: Math.floor(
+        (filters.end_timestamp ?? new Date()).getTime() / 1000
+      ),
+    }),
+    [filters.end_timestamp, filters.start_timestamp]
   )
-  const range = useMemo(() => revenueMonthRange(month), [month])
   const platformQuery = useQuery({
     queryKey: ['revenue', 'platform-summary', range.startTime, range.endTime],
     queryFn: () => getPlatformRevenueSummary(range.startTime, range.endTime),
@@ -111,7 +133,7 @@ export function RevenueOverview() {
     queryKey: ['revenue', 'external-summary', range.startTime, range.endTime],
     queryFn: () => getExternalRevenueSummary(range.startTime, range.endTime),
   })
-  const monthKey = revenueMonthKey(month)
+  const monthKey = revenueMonthKey(filters.start_timestamp ?? new Date())
   const costsQuery = useQuery({
     queryKey: ['revenue', 'costs', monthKey],
     queryFn: () => getRevenueCosts({ month: monthKey, page: 1, pageSize: 100 }),
@@ -181,7 +203,25 @@ export function RevenueOverview() {
   return (
     <div className='space-y-4'>
       <div className='flex flex-wrap items-center justify-between gap-2'>
-        <RevenueMonthSelector month={month} onMonthChange={setMonth} />
+        <TimeRangeFilterDialog
+          currentFilters={filters}
+          defaultTimeRangeDays={chartPreferences.defaultTimeRangeDays}
+          defaultTimeGranularity={chartPreferences.defaultTimeGranularity}
+          onFilterChange={setFilters}
+          onReset={() => {
+            const { start, end } = getRollingDateRange(
+              chartPreferences.defaultTimeRangeDays
+            )
+            setFilters({
+              start_timestamp: start,
+              end_timestamp: end,
+              time_granularity: chartPreferences.defaultTimeGranularity,
+            })
+          }}
+          titleKey='Revenue management'
+          descriptionKey='Filter revenue data by time range.'
+          showGranularity={false}
+        />
         <Select
           value={currency}
           onValueChange={(value) => value && setCurrency(value)}

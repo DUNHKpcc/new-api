@@ -2135,6 +2135,8 @@
     "Filter models by type, endpoint, vendor, group and tags": "按类型、端点、供应商、分组和标签筛选模型",
     "Filter models...": "筛选模型...",
     "Filter the model analytics view by time range and user.": "按时间范围和用户筛选模型分析视图。",
+    "Filter platform orders by time range.": "按时间范围筛选平台订单。",
+    "Filter revenue data by time range.": "按时间范围筛选收入数据。",
     "Filter the traffic flow view by time range and user.": "按时间范围和用户筛选分流图视图。",
     "Filter...": "筛选...",
     "Filters": "筛选器",
