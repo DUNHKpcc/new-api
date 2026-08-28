@@ -40,9 +40,16 @@ import {
   getPaymentMethodName,
   getStatusConfig,
 } from '@/features/wallet/lib/billing'
+import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 
 import { revenueMonthRange } from '../lib/analytics'
+import {
+  getOrderUser,
+  isSubscriptionOrderTradeNo,
+  loadPlatformOrderContext,
+  resolveOrderSubscription,
+} from '../lib/platform-orders'
 import { RevenueMonthSelector } from './revenue-month-selector'
 
 export function PlatformOrders() {
@@ -70,9 +77,37 @@ export function PlatformOrders() {
       }),
     placeholderData: keepPreviousData,
   })
-  const records = query.data?.data?.items ?? []
+  const queryItems = query.data?.data?.items
+  const records = useMemo(() => queryItems ?? [], [queryItems])
   const total = query.data?.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / 20))
+  const contextUserIds = useMemo(
+    () => [...new Set(records.map((record) => record.user_id))].sort(),
+    [records]
+  )
+  const contextSubscriptionUserIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          records
+            .filter((record) => isSubscriptionOrderTradeNo(record.trade_no))
+            .map((record) => record.user_id)
+        ),
+      ].sort(),
+    [records]
+  )
+  const orderContextQuery = useQuery({
+    queryKey: [
+      'revenue',
+      'platform-order-context',
+      contextUserIds,
+      contextSubscriptionUserIds,
+    ],
+    queryFn: () => loadPlatformOrderContext(records),
+    enabled: records.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+  const orderContext = orderContextQuery.data
   let tableContent: ReactNode
   if (query.isLoading) {
     tableContent = (
@@ -101,7 +136,10 @@ export function PlatformOrders() {
           <TableRow>
             <TableHead>{t('Order number')}</TableHead>
             <TableHead>{t('User ID')}</TableHead>
+            <TableHead>{t('Username')}</TableHead>
+            <TableHead>{t('Subscription')}</TableHead>
             <TableHead>{t('Payment Method')}</TableHead>
+            <TableHead>{t('Amount')}</TableHead>
             <TableHead>{t('Payment')}</TableHead>
             <TableHead>{t('Status')}</TableHead>
             <TableHead>{t('Completed at')}</TableHead>
@@ -110,6 +148,14 @@ export function PlatformOrders() {
         <TableBody>
           {records.map((record) => {
             const statusConfig = getStatusConfig(record.status)
+            const user = getOrderUser(record, orderContext)
+            const subscription = resolveOrderSubscription(record, orderContext)
+            const username = user?.username?.trim()
+            const displayName = user?.display_name?.trim()
+            const subscriptionTitle =
+              subscription?.title === 'Subscription order'
+                ? t('Subscription order')
+                : subscription?.title
             return (
               <TableRow key={record.id}>
                 <TableCell>
@@ -119,7 +165,45 @@ export function PlatformOrders() {
                 </TableCell>
                 <TableCell>{record.user_id}</TableCell>
                 <TableCell>
+                  <div className='min-w-32'>
+                    <div className='max-w-44 truncate font-medium'>
+                      {username || displayName || `#${record.user_id}`}
+                    </div>
+                    {username && displayName && username !== displayName ? (
+                      <div className='text-muted-foreground max-w-44 truncate text-xs'>
+                        {displayName}
+                      </div>
+                    ) : null}
+                    <div className='text-muted-foreground text-xs'>
+                      #{record.user_id}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {subscriptionTitle ? (
+                    <div className='min-w-36'>
+                      <div className='max-w-52 truncate font-medium'>
+                        {subscriptionTitle}
+                      </div>
+                      {subscription?.planId ? (
+                        <div className='text-muted-foreground text-xs'>
+                          #{subscription.planId}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    '-'
+                  )}
+                </TableCell>
+                <TableCell>
                   {getPaymentMethodName(record.payment_method, t)}
+                </TableCell>
+                <TableCell className='font-semibold'>
+                  {formatCurrencyFromUSD(record.amount, {
+                    digitsLarge: 2,
+                    digitsSmall: 2,
+                    abbreviate: false,
+                  })}
                 </TableCell>
                 <TableCell className='font-semibold'>
                   {formatNumber(record.money)}

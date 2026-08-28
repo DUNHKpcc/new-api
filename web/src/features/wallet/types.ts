@@ -271,6 +271,13 @@ export interface TopupRecord {
   complete_time?: number
   /** Payment status */
   status: TopupStatus
+  /** Optional admin-facing user context returned by enriched list endpoints */
+  username?: string
+  display_name?: string
+  /** Optional subscription context when this record originated from a plan order */
+  subscription_plan_id?: number
+  subscription_plan_title?: string
+  plan_id?: number
 }
 
 /**
