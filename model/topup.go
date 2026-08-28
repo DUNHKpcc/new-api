@@ -506,10 +506,20 @@ func applyTopUpCompletionRange(query *gorm.DB, startTime int64, endTime int64) *
 	if startTime <= 0 || endTime <= startTime {
 		return query
 	}
-	return query.Where("complete_time >= ? AND complete_time < ?", startTime, endTime)
+	// Pending orders do not have a completion timestamp yet. Keep them visible
+	// in the month in which they were created so administrators can complete
+	// them from the ranged order list.
+	return query.Where(
+		"(complete_time >= ? AND complete_time < ?) OR (status = ? AND create_time >= ? AND create_time < ?)",
+		startTime,
+		endTime,
+		common.TopUpStatusPending,
+		startTime,
+		endTime,
+	)
 }
 
-// GetAllTopUps 获取全平台的充值记录（管理员使用，可按完成时间筛选）。
+// GetAllTopUps 获取全平台的充值记录（管理员使用，可按完成时间筛选，待支付订单按创建时间回退）。
 func GetAllTopUps(pageInfo *common.PageInfo, startTime int64, endTime int64) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -583,7 +593,7 @@ func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (to
 	return topups, total, nil
 }
 
-// SearchAllTopUps 按订单号和完成时间搜索全平台充值记录（管理员使用）。
+// SearchAllTopUps 按订单号和完成时间搜索全平台充值记录（管理员使用，待支付订单按创建时间回退）。
 func SearchAllTopUps(keyword string, pageInfo *common.PageInfo, startTime int64, endTime int64) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {

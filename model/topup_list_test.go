@@ -50,3 +50,42 @@ func TestSearchAllTopUpsCombinesKeywordAndCompletionRange(t *testing.T) {
 	require.Len(t, records, 1)
 	assert.Equal(t, "august-target", records[0].TradeNo)
 }
+
+func TestGetAllTopUpsIncludesPendingOrdersByCreationTime(t *testing.T) {
+	truncateTables(t)
+
+	topUps := []TopUp{
+		{TradeNo: "august-pending", CreateTime: 1_722_600_000, Status: common.TopUpStatusPending},
+		{TradeNo: "july-pending", CreateTime: 1_722_470_400, Status: common.TopUpStatusPending},
+	}
+	require.NoError(t, DB.Create(&topUps).Error)
+
+	pageInfo := &common.PageInfo{Page: 1, PageSize: 20}
+	records, total, err := GetAllTopUps(pageInfo, 1_722_556_800, 1_725_148_800)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, records, 1)
+	assert.Equal(t, "august-pending", records[0].TradeNo)
+}
+
+func TestSearchAllTopUpsIncludesPendingOrdersByCreationTime(t *testing.T) {
+	truncateTables(t)
+
+	topUps := []TopUp{
+		{TradeNo: "august-pending-target", CreateTime: 1_722_600_000, Status: common.TopUpStatusPending},
+		{TradeNo: "july-pending-target", CreateTime: 1_722_470_400, Status: common.TopUpStatusPending},
+	}
+	require.NoError(t, DB.Create(&topUps).Error)
+
+	pageInfo := &common.PageInfo{Page: 1, PageSize: 20}
+	records, total, err := SearchAllTopUps(
+		"%target%",
+		pageInfo,
+		1_722_556_800,
+		1_725_148_800,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, records, 1)
+	assert.Equal(t, "august-pending-target", records[0].TradeNo)
+}
