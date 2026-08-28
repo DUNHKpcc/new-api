@@ -467,7 +467,11 @@ export function GlobalNotificationCenter() {
                 }}
               >
                 <Bell
-                  className={globalNotificationCenterLayout.triggerIcon}
+                  className={cn(
+                    globalNotificationCenterLayout.triggerIcon,
+                    notifications.unreadCount > 0 &&
+                      'text-destructive topbar-alert-icon'
+                  )}
                   aria-hidden='true'
                 />
                 <span className='text-xs leading-none'>
