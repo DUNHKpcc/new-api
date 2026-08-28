@@ -33,6 +33,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 @import './theme.css';
 @import './theme-presets.css';
+@import '../components/pcc-agent-ticket/pcc-agent-ticket.css';
 
 @keyframes topbar-alert-shake {
   0%,

@@ -2,6 +2,8 @@ package console_setting
 
 import "github.com/QuantumNous/new-api/setting/config"
 
+const defaultGlobalNotifications = `[{"id":450,"kind":"pcc-agent-ticket","title":"PccAgent 450 美元额度活动","content":"使用 PccAgent，拖动票尾即可领取价值 450 美元的 AI API 额度。","extra":"撕下票尾即代表领取成功","publishDate":"2026-08-28T00:00:00Z","type":"success"}]`
+
 type ConsoleSetting struct {
 	ApiInfo                    string `json:"api_info"`                     // 控制台 API 信息 (JSON 数组字符串)
 	UptimeKumaGroups           string `json:"uptime_kuma_groups"`           // Uptime Kuma 分组配置 (JSON 数组字符串)
@@ -20,7 +22,7 @@ var defaultConsoleSetting = ConsoleSetting{
 	ApiInfo:                    "",
 	UptimeKumaGroups:           "",
 	Announcements:              "",
-	GlobalNotifications:        "",
+	GlobalNotifications:        defaultGlobalNotifications,
 	FAQ:                        "",
 	ApiInfoEnabled:             true,
 	UptimeKumaEnabled:          true,

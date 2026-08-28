@@ -69,6 +69,7 @@ import { useUpdateOption } from '../hooks/use-update-option'
 
 type Announcement = {
   id: number
+  kind?: string
   title?: string
   content: string
   publishDate: string

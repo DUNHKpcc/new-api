@@ -29,6 +29,7 @@ import { useEffect } from 'react'
 
 import { NavigationProgress } from '@/components/navigation-progress'
 import { GlobalNotificationCenter } from '@/components/notifications/global-notification-center'
+import { PccAgentTicket } from '@/components/pcc-agent-ticket/pcc-agent-ticket'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeCustomizationProvider } from '@/context/theme-customization-provider'
 import { saveAffiliateCode } from '@/features/auth/lib/storage'
@@ -98,6 +99,7 @@ function RootComponent() {
       <NavigationProgress />
       <Outlet />
       <GlobalNotificationCenter />
+      <PccAgentTicket />
       <Toaster closeButton duration={5000} position='top-center' richColors />
       {import.meta.env.MODE === 'development' && (
         <>

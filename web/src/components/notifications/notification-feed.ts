@@ -20,6 +20,7 @@ import type { LotteryItem } from '@/features/lottery/types'
 
 export type AnnouncementNotification = {
   id?: number | string
+  kind?: string
   type?: string
   title?: string
   content?: string
@@ -31,6 +32,7 @@ export type AnnouncementNotification = {
 export type NotificationFeedItem = {
   key: string
   source: 'discount' | 'notice' | 'announcement' | 'global' | 'lottery'
+  kind?: string
   type?: string
   title?: string
   content: string
@@ -96,6 +98,7 @@ export function getAnnouncementNotificationKey(
   announcement: AnnouncementNotification
 ): string {
   const fingerprint = JSON.stringify({
+    kind: announcement.kind ?? '',
     publishDate: announcement.publishDate ?? '',
     content: announcement.content?.trim() ?? '',
     extra: announcement.extra?.trim() ?? '',
@@ -213,6 +216,7 @@ export function buildNotificationFeed(
     items.push({
       key,
       source: 'global',
+      kind: notification.kind,
       type: notification.type,
       title: notification.title,
       content: notification.content?.trim() ?? '',
@@ -265,6 +269,7 @@ export function buildNotificationFeed(
   return items.map((item) => ({
     key: item.key,
     source: item.source,
+    kind: item.kind,
     type: item.type,
     title: item.title,
     content: item.content,

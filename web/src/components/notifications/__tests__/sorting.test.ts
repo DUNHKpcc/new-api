@@ -209,6 +209,7 @@ describe('notification feed ordering', () => {
   test('keeps global notifications independent with their own read keys', () => {
     const notification = {
       id: 'maintenance',
+      kind: 'pcc-agent-ticket',
       title: 'Global maintenance',
       content: 'The service will restart once.',
       publishDate: '2026-08-10T08:00:00Z',
@@ -231,6 +232,7 @@ describe('notification feed ordering', () => {
     assert.equal(global?.key, key)
     assert.equal(global?.unread, false)
     assert.equal(global?.title, 'Global maintenance')
+    assert.equal(global?.kind, 'pcc-agent-ticket')
   })
 
   test('treats newly published winning information as unread', () => {

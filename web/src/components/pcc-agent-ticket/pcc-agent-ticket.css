@@ -1,0 +1,614 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+.pcc-agent-ticket-root {
+  --pcc-ink: var(--operator-ink, var(--foreground, #0b0b0b));
+  --pcc-paper: var(--operator-paper, var(--card, #fffdf4));
+  --pcc-yellow: var(--operator-yellow, var(--warning, #f1d532));
+  --pcc-green: var(--operator-green, var(--success, #a9e448));
+  --pcc-grid: var(--operator-grid, rgb(0 0 0 / 10%));
+  --pcc-hard-shadow: var(--operator-hard-shadow, #171717);
+  --pcc-accent-ink: oklch(0.12 0 0);
+  --pcc-stub-width: 15.6rem;
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+  background: rgb(7 7 7 / 48%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.pcc-agent-ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pcc-stub-width);
+  width: min(62.4rem, 100%);
+  min-height: 15.6rem;
+  overflow: hidden;
+  isolation: isolate;
+  border: 2px solid var(--pcc-ink);
+  border-radius: 0.25rem;
+  color: var(--pcc-ink);
+  background: var(--pcc-paper);
+  box-shadow: 5px 5px 0 var(--pcc-hard-shadow);
+  font-family: var(--font-comic-display, var(--font-sans, sans-serif));
+  animation: pcc-agent-ticket-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pcc-agent-ticket__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0.9rem 1.25rem 0.75rem;
+  background-color: var(--pcc-paper);
+  background-image: radial-gradient(
+    circle,
+    var(--pcc-grid) 1px,
+    transparent 1.15px
+  );
+  background-position: 0 0;
+  background-size: 14px 14px;
+}
+
+.pcc-agent-ticket__topline,
+.pcc-agent-ticket__stub-topline,
+.pcc-agent-ticket__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-family: var(--font-comic-mono, ui-monospace, monospace);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.pcc-agent-ticket__serial,
+.pcc-agent-ticket__footer {
+  color: color-mix(in oklch, var(--pcc-ink) 64%, transparent);
+}
+
+.pcc-agent-ticket__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+}
+
+.pcc-agent-ticket__brand-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  padding: 0.25rem;
+  border: 2px solid var(--pcc-ink);
+  border-radius: 0.125rem;
+  background: #fff;
+  box-shadow: 2px 2px 0 var(--pcc-yellow);
+}
+
+.pcc-agent-ticket__logo {
+  width: 100%;
+  height: 100%;
+}
+
+.pcc-agent-ticket__brand-name {
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.pcc-agent-ticket__headline {
+  max-width: 28rem;
+  margin: 0.6rem 0 0;
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.12;
+}
+
+.pcc-agent-ticket__amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  margin-top: 0.05rem;
+  white-space: nowrap;
+}
+
+.pcc-agent-ticket__currency {
+  font-family: var(--font-comic-mono, ui-monospace, monospace);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.pcc-agent-ticket__amount strong {
+  font-family: var(--font-comic-mono, ui-monospace, monospace);
+  font-size: 2.7rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 0.95;
+}
+
+.pcc-agent-ticket__unit {
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.pcc-agent-ticket__subline {
+  margin: 0.22rem 0 0;
+  color: color-mix(in oklch, var(--pcc-ink) 66%, transparent);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.pcc-agent-ticket__footer {
+  margin-top: auto;
+  padding-top: 0.45rem;
+  border-top: 1px dashed color-mix(in oklch, var(--pcc-ink) 48%, transparent);
+  font-size: 0.55rem;
+}
+
+.pcc-agent-ticket__stub-shell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--pcc-yellow);
+}
+
+.pcc-agent-ticket__stub,
+.pcc-agent-ticket__claim-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.9rem 0.85rem 0.75rem 1.2rem;
+  color: var(--pcc-accent-ink);
+  text-align: left;
+}
+
+.pcc-agent-ticket__stub {
+  z-index: 2;
+  border: 0;
+  background: var(--pcc-yellow);
+  cursor: grab;
+  touch-action: none;
+  transform: translate3d(
+      var(--pcc-ticket-drag-x),
+      calc(var(--pcc-ticket-drag-progress) * -3px),
+      0
+    )
+    rotate(var(--pcc-ticket-drag-tilt));
+  transform-origin: left center;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms ease;
+  will-change: transform;
+}
+
+.pcc-agent-ticket__stub-topline {
+  width: 100%;
+  padding-right: 1.35rem;
+}
+
+.pcc-agent-ticket__stub-topline span:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.pcc-agent-ticket__stub:hover {
+  box-shadow: inset 5px 0 0 var(--pcc-ink);
+}
+
+.pcc-agent-ticket__stub:active,
+.pcc-agent-ticket.is-dragging .pcc-agent-ticket__stub {
+  cursor: grabbing;
+}
+
+.pcc-agent-ticket.is-dragging .pcc-agent-ticket__stub {
+  box-shadow:
+    inset 5px 0 0 var(--pcc-ink),
+    0 5px 0 color-mix(in oklch, var(--pcc-ink) 22%, transparent);
+  transition: none;
+}
+
+.pcc-agent-ticket__stub:focus-visible,
+.pcc-agent-ticket__close:focus-visible {
+  outline: 3px solid var(--pcc-green);
+  outline-offset: -3px;
+}
+
+.pcc-agent-ticket__stub-title {
+  margin-top: 1rem;
+  font-size: 1.2rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.pcc-agent-ticket__stub-guide {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  max-width: 8.2rem;
+  margin-top: 0.75rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pcc-agent-ticket__stub-guide svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  margin-top: -0.08rem;
+}
+
+.pcc-agent-ticket__stub-amount {
+  margin-top: auto;
+  font-family: var(--font-comic-mono, ui-monospace, monospace);
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pcc-agent-ticket__claim-panel {
+  z-index: 1;
+  justify-content: center;
+  gap: 0.18rem;
+  padding-inline: 1rem;
+  background: var(--pcc-green);
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease;
+}
+
+.pcc-agent-ticket.is-claimed .pcc-agent-ticket__claim-panel {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.pcc-agent-ticket.is-claimed .pcc-agent-ticket__stub {
+  animation: pcc-agent-ticket-tear 440ms cubic-bezier(0.2, 0.75, 0.2, 1)
+    forwards;
+}
+
+.pcc-agent-ticket__claim-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0.2rem;
+  border: 2px solid var(--pcc-ink);
+  border-radius: 50%;
+  background: var(--pcc-paper);
+  stroke-width: 3;
+}
+
+.pcc-agent-ticket__claim-label {
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.pcc-agent-ticket__claim-panel strong {
+  font-family: var(--font-comic-mono, ui-monospace, monospace);
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.pcc-agent-ticket__claim-panel small {
+  max-width: 7rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.pcc-agent-ticket__seam {
+  position: absolute;
+  top: 1.1rem;
+  bottom: 1.1rem;
+  left: calc(100% - var(--pcc-stub-width));
+  z-index: 5;
+  width: 1rem;
+  pointer-events: none;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--pcc-ink) 0 2px, transparent 2.4px)
+    center top / 12px 12px repeat-y;
+}
+
+.pcc-agent-ticket__notch {
+  position: absolute;
+  left: calc(100% - var(--pcc-stub-width));
+  z-index: 6;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--pcc-ink);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.pcc-agent-ticket__notch--top {
+  top: -18px;
+  clip-path: inset(18px 0 0 0);
+}
+
+.pcc-agent-ticket__notch--bottom {
+  bottom: -18px;
+  clip-path: inset(0 0 18px 0);
+}
+
+.pcc-agent-ticket__close {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  z-index: 8;
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  place-items: center;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 0.125rem;
+  color: var(--pcc-accent-ink);
+  background: transparent;
+  cursor: pointer;
+}
+
+.pcc-agent-ticket__close:hover {
+  border-color: var(--pcc-ink);
+  background: var(--pcc-paper);
+}
+
+.pcc-agent-ticket__close svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pcc-agent-ticket__confetti {
+  position: absolute;
+  top: 0.8rem;
+  right: 7.8rem;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.pcc-agent-ticket__confetti i {
+  position: absolute;
+  display: block;
+  width: 0.35rem;
+  height: 0.8rem;
+  border: 1px solid var(--pcc-ink);
+  background: var(--pcc-yellow);
+  animation: pcc-agent-ticket-confetti 560ms ease-out both;
+}
+
+.pcc-agent-ticket__confetti i:nth-child(1) {
+  transform: rotate(-22deg);
+}
+
+.pcc-agent-ticket__confetti i:nth-child(2) {
+  left: 1rem;
+  background: var(--pcc-green);
+  animation-delay: 80ms;
+  transform: rotate(18deg);
+}
+
+.pcc-agent-ticket__confetti i:nth-child(3) {
+  left: 2rem;
+  background: var(--pcc-paper);
+  animation-delay: 140ms;
+  transform: rotate(34deg);
+}
+
+@keyframes pcc-agent-ticket-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem) rotate(-0.8deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+}
+
+@keyframes pcc-agent-ticket-tear {
+  0% {
+    opacity: 1;
+    transform: translate3d(
+        var(--pcc-ticket-drag-x),
+        calc(var(--pcc-ticket-drag-progress) * -3px),
+        0
+      )
+      rotate(var(--pcc-ticket-drag-tilt));
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(115%, 0.35rem, 7deg);
+  }
+}
+
+@keyframes pcc-agent-ticket-confetti {
+  from {
+    opacity: 0;
+    transform: translateY(0) rotate(0);
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-1.1rem) rotate(18deg);
+  }
+}
+
+@media (max-width: 560px) {
+  .pcc-agent-ticket-root {
+    --pcc-stub-width: 8.35rem;
+    padding: max(0.75rem, env(safe-area-inset-top, 0px))
+      max(0.5rem, env(safe-area-inset-right, 0px))
+      max(0.75rem, env(safe-area-inset-bottom, 0px))
+      max(0.5rem, env(safe-area-inset-left, 0px));
+  }
+
+  .pcc-agent-ticket {
+    min-height: 9.45rem;
+  }
+
+  .pcc-agent-ticket__body {
+    padding: 0.75rem 0.8rem 0.65rem;
+  }
+
+  .pcc-agent-ticket__brand {
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+  }
+
+  .pcc-agent-ticket__brand-mark {
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0.2rem;
+  }
+
+  .pcc-agent-ticket__brand-name {
+    font-size: 0.86rem;
+  }
+
+  .pcc-agent-ticket__headline {
+    margin-top: 0.45rem;
+    font-size: 0.9rem;
+  }
+
+  .pcc-agent-ticket__amount strong {
+    font-size: 2.3rem;
+  }
+
+  .pcc-agent-ticket__unit {
+    max-width: 4.3rem;
+    white-space: normal;
+  }
+
+  .pcc-agent-ticket__subline {
+    max-width: 10rem;
+    font-size: 0.58rem;
+  }
+
+  .pcc-agent-ticket__footer {
+    padding-top: 0.35rem;
+    font-size: 0.46rem;
+  }
+
+  .pcc-agent-ticket__stub,
+  .pcc-agent-ticket__claim-panel {
+    padding: 0.75rem 0.6rem 0.6rem 0.85rem;
+  }
+
+  .pcc-agent-ticket__stub-title {
+    margin-top: 0.8rem;
+    font-size: 1rem;
+  }
+
+  .pcc-agent-ticket__stub-guide {
+    max-width: 6.7rem;
+    margin-top: 0.55rem;
+    font-size: 0.56rem;
+  }
+
+  .pcc-agent-ticket__stub-topline {
+    gap: 0.25rem;
+    font-size: 0.52rem;
+  }
+
+  .pcc-agent-ticket__stub-amount {
+    font-size: 1.15rem;
+  }
+
+  .pcc-agent-ticket__notch {
+    width: 30px;
+    height: 30px;
+  }
+
+  .pcc-agent-ticket__notch--top {
+    top: -15px;
+    clip-path: inset(15px 0 0 0);
+  }
+
+  .pcc-agent-ticket__notch--bottom {
+    bottom: -15px;
+    clip-path: inset(0 0 15px 0);
+  }
+
+  .pcc-agent-ticket__seam {
+    top: 0.95rem;
+    bottom: 0.95rem;
+    width: 0.85rem;
+    background-size: 11px 11px;
+  }
+
+  .pcc-agent-ticket__close {
+    top: 0.2rem;
+    right: 0.2rem;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .pcc-agent-ticket-root {
+    --pcc-stub-width: 7.35rem;
+  }
+
+  .pcc-agent-ticket__headline {
+    max-width: 11rem;
+    font-size: 0.82rem;
+  }
+
+  .pcc-agent-ticket__amount strong {
+    font-size: 2rem;
+  }
+
+  .pcc-agent-ticket__stub-guide {
+    max-width: 5.75rem;
+    font-size: 0.52rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcc-agent-ticket,
+  .pcc-agent-ticket__stub,
+  .pcc-agent-ticket__claim-panel,
+  .pcc-agent-ticket__confetti i {
+    animation: none;
+    transition: none;
+  }
+}
