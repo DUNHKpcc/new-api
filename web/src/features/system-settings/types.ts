@@ -174,10 +174,12 @@ export type ContentSettings = {
   VersionUpdateDetails: string
   'console_setting.api_info': string
   'console_setting.announcements': string
+  'console_setting.global_notifications': string
   'console_setting.faq': string
   'console_setting.uptime_kuma_groups': string
   'console_setting.api_info_enabled': boolean
   'console_setting.announcements_enabled': boolean
+  'console_setting.global_notifications_enabled': boolean
   'console_setting.faq_enabled': boolean
   'console_setting.uptime_kuma_enabled': boolean
   DataExportEnabled: boolean

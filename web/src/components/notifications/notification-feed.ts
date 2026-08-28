@@ -21,6 +21,7 @@ import type { LotteryItem } from '@/features/lottery/types'
 export type AnnouncementNotification = {
   id?: number | string
   type?: string
+  title?: string
   content?: string
   extra?: string
   image?: string
@@ -29,7 +30,7 @@ export type AnnouncementNotification = {
 
 export type NotificationFeedItem = {
   key: string
-  source: 'discount' | 'notice' | 'announcement' | 'lottery'
+  source: 'discount' | 'notice' | 'announcement' | 'global' | 'lottery'
   type?: string
   title?: string
   content: string
@@ -44,9 +45,11 @@ type BuildNotificationFeedOptions = {
   discountNotice: string
   notice: string
   announcements: AnnouncementNotification[]
+  globalNotifications?: AnnouncementNotification[]
   lastReadDiscountNotice: string
   lastReadNotice: string
   readAnnouncementKeys: string[]
+  readGlobalNotificationKeys?: string[]
   lotteries?: LotteryItem[]
   readLotteryKeys?: string[]
 }
@@ -59,6 +62,7 @@ const notificationSourcePriority: Record<
   notice: 1,
   lottery: 2,
   announcement: 3,
+  global: 2,
 }
 
 export function getLotteryNotificationKey(lottery: LotteryItem): string {
@@ -189,6 +193,7 @@ export function buildNotificationFeed(
       key,
       source: 'announcement',
       type: announcement.type,
+      title: announcement.title,
       content: announcement.content?.trim() ?? '',
       extra: announcement.extra?.trim() || undefined,
       image: announcement.image,
@@ -196,6 +201,25 @@ export function buildNotificationFeed(
       unread:
         !readAnnouncementKeys.has(key) &&
         (!legacyKey || !readAnnouncementKeys.has(legacyKey)),
+      originalIndex: items.length,
+    })
+  }
+
+  const readGlobalNotificationKeys = new Set(
+    options.readGlobalNotificationKeys ?? []
+  )
+  for (const notification of options.globalNotifications ?? []) {
+    const key = `global:${getAnnouncementNotificationKey(notification)}`
+    items.push({
+      key,
+      source: 'global',
+      type: notification.type,
+      title: notification.title,
+      content: notification.content?.trim() ?? '',
+      extra: notification.extra?.trim() || undefined,
+      image: notification.image,
+      publishDate: notification.publishDate,
+      unread: !readGlobalNotificationKeys.has(key),
       originalIndex: items.length,
     })
   }

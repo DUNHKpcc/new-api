@@ -59,6 +59,8 @@ export function useNotifications() {
     refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
   })
   const announcementsEnabled = status?.announcements_enabled ?? false
+  const globalNotificationsEnabled =
+    status?.global_notifications_enabled ?? false
   const announcements = useMemo(() => {
     if (!announcementsEnabled) return []
     return ((status?.announcements || []) as AnnouncementNotification[]).slice(
@@ -66,6 +68,12 @@ export function useNotifications() {
       20
     )
   }, [announcementsEnabled, status?.announcements])
+  const globalNotifications = useMemo(() => {
+    if (!globalNotificationsEnabled) return []
+    return (
+      (status?.global_notifications || []) as AnnouncementNotification[]
+    ).slice(0, 20)
+  }, [globalNotificationsEnabled, status?.global_notifications])
   const lotteries = useMemo(
     () => (lotteryResponse?.success ? lotteryResponse.data || [] : []),
     [lotteryResponse]
@@ -76,10 +84,12 @@ export function useNotifications() {
     lastReadDiscountNotice,
     lastReadNotice,
     readAnnouncementKeys,
+    readGlobalNotificationKeys,
     readLotteryKeys,
     markDiscountNoticeRead,
     markNoticeRead,
     markAnnouncementsRead,
+    markGlobalNotificationsRead,
     replaceAnnouncementReadKeys,
     markLotteriesRead,
   } = useNotificationStore()
@@ -114,19 +124,23 @@ export function useNotifications() {
         discountNotice: discountNoticeContent,
         notice: noticeContent,
         announcements,
+        globalNotifications,
         lastReadDiscountNotice,
         lastReadNotice,
         readAnnouncementKeys,
+        readGlobalNotificationKeys,
         lotteries,
         readLotteryKeys,
       }),
     [
       announcements,
+      globalNotifications,
       discountNoticeContent,
       lastReadDiscountNotice,
       lastReadNotice,
       noticeContent,
       readAnnouncementKeys,
+      readGlobalNotificationKeys,
       readLotteryKeys,
       lotteries,
     ]
@@ -156,10 +170,16 @@ export function useNotifications() {
         return
       }
 
+      if (item.source === 'global') {
+        markGlobalNotificationsRead([item.key])
+        return
+      }
+
       markAnnouncementsRead([item.key])
     },
     [
       markAnnouncementsRead,
+      markGlobalNotificationsRead,
       markDiscountNoticeRead,
       markLotteriesRead,
       markNoticeRead,
@@ -192,14 +212,24 @@ export function useNotifications() {
         )
       )
     }
+    if (globalNotifications.length > 0) {
+      markGlobalNotificationsRead(
+        globalNotifications.map(
+          (notification) =>
+            `global:${getAnnouncementNotificationKey(notification)}`
+        )
+      )
+    }
     if (lotteries.length > 0) {
       markLotteriesRead(lotteries.map(getLotteryNotificationKey))
     }
   }, [
     announcements,
+    globalNotifications,
     discountNoticeContent,
     lotteries,
     markAnnouncementsRead,
+    markGlobalNotificationsRead,
     markDiscountNoticeRead,
     markLotteriesRead,
     markNoticeRead,

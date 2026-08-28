@@ -206,6 +206,33 @@ describe('notification feed ordering', () => {
     assert.equal(feed[0]?.unread, true)
   })
 
+  test('keeps global notifications independent with their own read keys', () => {
+    const notification = {
+      id: 'maintenance',
+      title: 'Global maintenance',
+      content: 'The service will restart once.',
+      publishDate: '2026-08-10T08:00:00Z',
+    }
+    const key = `global:${getAnnouncementNotificationKey(notification)}`
+    const feed = buildNotificationFeed({
+      discountNotice: '',
+      notice: '',
+      announcements: [notification],
+      globalNotifications: [notification],
+      lastReadDiscountNotice: '',
+      lastReadNotice: '',
+      readAnnouncementKeys: [getAnnouncementNotificationKey(notification)],
+      readGlobalNotificationKeys: [key],
+    })
+
+    const timeline = feed.find((item) => item.source === 'announcement')
+    const global = feed.find((item) => item.source === 'global')
+    assert.equal(timeline?.unread, false)
+    assert.equal(global?.key, key)
+    assert.equal(global?.unread, false)
+    assert.equal(global?.title, 'Global maintenance')
+  })
+
   test('treats newly published winning information as unread', () => {
     const lottery = {
       id: 'summer-draw',

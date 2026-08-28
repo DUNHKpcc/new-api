@@ -25,6 +25,7 @@ import { DashboardSection } from './dashboard-section'
 import { DiscountNoticeSection } from './discount-notice-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
+import { GlobalNotificationsSection } from './global-notifications-section'
 import { LotterySection } from './lottery-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
 import { VersionUpdateSection } from './version-update-section'
@@ -63,6 +64,16 @@ const CONTENT_SECTIONS = [
       <AnnouncementsSection
         enabled={settings['console_setting.announcements_enabled']}
         data={settings['console_setting.announcements']}
+      />
+    ),
+  },
+  {
+    id: 'global-notifications',
+    titleKey: 'Global Notifications',
+    build: (settings: ContentSettings) => (
+      <GlobalNotificationsSection
+        enabled={settings['console_setting.global_notifications_enabled']}
+        data={settings['console_setting.global_notifications']}
       />
     ),
   },

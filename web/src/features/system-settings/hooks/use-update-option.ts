@@ -41,6 +41,8 @@ const STATUS_RELATED_KEYS = new Set([
   'oidc.display_name',
   'console_setting.announcements',
   'console_setting.announcements_enabled',
+  'console_setting.global_notifications',
+  'console_setting.global_notifications_enabled',
 ])
 
 export function getOptionInvalidationQueryKeys(optionKey: string): string[] {

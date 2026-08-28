@@ -37,4 +37,12 @@ describe('content settings navigation', () => {
       'Version update details'
     )
   })
+
+  test('exposes global notifications as an independent content section', () => {
+    assert.equal(CONTENT_SECTION_IDS.includes('global-notifications'), true)
+    assert.equal(
+      getContentSectionMeta('global-notifications').titleKey,
+      'Global Notifications'
+    )
+  })
 })

@@ -16,24 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { NotificationFeedItem } from './notification-feed'
+import { AnnouncementsSection } from './announcements-section'
 
-type NotificationSections = {
-  notice: NotificationFeedItem[]
-  timeline: NotificationFeedItem[]
-  global: NotificationFeedItem[]
-  lottery: NotificationFeedItem[]
+type GlobalNotificationsSectionProps = {
+  enabled: boolean
+  data: string
 }
 
-export function partitionNotificationItems(
-  items: NotificationFeedItem[]
-): NotificationSections {
-  return {
-    notice: items.filter(
-      (item) => item.source === 'discount' || item.source === 'notice'
-    ),
-    timeline: items.filter((item) => item.source === 'announcement'),
-    global: items.filter((item) => item.source === 'global'),
-    lottery: items.filter((item) => item.source === 'lottery'),
-  }
+export function GlobalNotificationsSection(
+  props: GlobalNotificationsSectionProps
+) {
+  return (
+    <AnnouncementsSection
+      enabled={props.enabled}
+      data={props.data}
+      optionKey='console_setting.global_notifications'
+      enabledOptionKey='console_setting.global_notifications_enabled'
+      titleKey='Global Notifications'
+    />
+  )
 }

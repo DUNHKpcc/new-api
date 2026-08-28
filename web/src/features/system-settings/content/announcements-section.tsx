@@ -69,6 +69,7 @@ import { useUpdateOption } from '../hooks/use-update-option'
 
 type Announcement = {
   id: number
+  title?: string
   content: string
   publishDate: string
   type: 'default' | 'ongoing' | 'success' | 'warning' | 'error'
@@ -79,9 +80,20 @@ type Announcement = {
 type AnnouncementsSectionProps = {
   enabled: boolean
   data: string
+  optionKey?:
+    | 'console_setting.announcements'
+    | 'console_setting.global_notifications'
+  enabledOptionKey?:
+    | 'console_setting.announcements_enabled'
+    | 'console_setting.global_notifications_enabled'
+  titleKey?: string
 }
 
 const announcementSchema = z.object({
+  title: z
+    .string()
+    .max(120, 'Title must be less than 120 characters')
+    .optional(),
   content: z
     .string()
     .min(1, 'Content is required')
@@ -135,6 +147,9 @@ const typeOptions = [
 export function AnnouncementsSection({
   enabled,
   data,
+  optionKey = 'console_setting.announcements',
+  enabledOptionKey = 'console_setting.announcements_enabled',
+  titleKey = 'Announcements',
 }: AnnouncementsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
@@ -183,7 +198,7 @@ export function AnnouncementsSection({
   const handleToggleEnabled = async (checked: boolean) => {
     try {
       await updateOption.mutateAsync({
-        key: 'console_setting.announcements_enabled',
+        key: enabledOptionKey,
         value: checked,
       })
       setIsEnabled(checked)
@@ -196,6 +211,7 @@ export function AnnouncementsSection({
   const handleAdd = () => {
     setEditingAnnouncement(null)
     form.reset({
+      title: '',
       content: '',
       publishDate: new Date().toISOString(),
       type: 'default',
@@ -208,6 +224,7 @@ export function AnnouncementsSection({
   const handleEdit = (announcement: Announcement) => {
     setEditingAnnouncement(announcement)
     form.reset({
+      title: announcement.title || '',
       content: announcement.content,
       publishDate: announcement.publishDate,
       type: announcement.type,
@@ -288,7 +305,7 @@ export function AnnouncementsSection({
   const handleSaveAll = async () => {
     try {
       await updateOption.mutateAsync({
-        key: 'console_setting.announcements',
+        key: optionKey,
         value: JSON.stringify(announcements),
       })
       setHasChanges(false)
@@ -330,7 +347,7 @@ export function AnnouncementsSection({
   }
 
   return (
-    <SettingsSection title={t('Announcements')}>
+    <SettingsSection title={t(titleKey)}>
       <div className='space-y-4'>
         <div className='flex flex-wrap items-center justify-between gap-2'>
           <div className='flex flex-wrap items-center gap-2'>
@@ -503,6 +520,19 @@ export function AnnouncementsSection({
             onSubmit={form.handleSubmit(handleSubmitForm)}
             className='space-y-4'
           >
+            <FormField
+              control={form.control}
+              name='title'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Title (Optional)')}</FormLabel>
+                  <FormControl>
+                    <Input placeholder={t('Announcement title')} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name='content'

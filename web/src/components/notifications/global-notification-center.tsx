@@ -94,6 +94,11 @@ function NotificationItem(props: NotificationItemProps) {
         aria-hidden='true'
       />
     )
+  } else if (props.item.source === 'global') {
+    sourceLabel = t('Global')
+    sourceMarker = (
+      <Bell className='text-destructive size-3.5 shrink-0' aria-hidden='true' />
+    )
   } else if (props.item.source === 'discount') {
     sourceLabel = t('Discount')
     sourceMarker = (

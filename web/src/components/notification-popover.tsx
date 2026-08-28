@@ -98,6 +98,14 @@ function NotificationList(props: NotificationListProps) {
                 aria-hidden='true'
               />
             )
+          } else if (item.source === 'global') {
+            sourceLabel = t('Global')
+            sourceMarker = (
+              <Bell
+                className='text-destructive size-3.5 shrink-0'
+                aria-hidden='true'
+              />
+            )
           } else if (item.source === 'discount') {
             sourceLabel = t('Discount')
             sourceMarker = (
@@ -311,7 +319,7 @@ export function NotificationPopover(props: NotificationPopoverProps) {
             </PopoverHeader>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className='grid w-full grid-cols-3'>
+              <TabsList className='grid w-full grid-cols-4'>
                 <TabsTrigger value='notice' className='gap-1.5'>
                   <Bell className='size-3.5' aria-hidden='true' />
                   {t('Notice')}
@@ -319,6 +327,10 @@ export function NotificationPopover(props: NotificationPopoverProps) {
                 <TabsTrigger value='timeline' className='gap-1.5'>
                   <Megaphone className='size-3.5' aria-hidden='true' />
                   {t('Timeline')}
+                </TabsTrigger>
+                <TabsTrigger value='global' className='gap-1.5'>
+                  <Bell className='size-3.5' aria-hidden='true' />
+                  {t('Global')}
                 </TabsTrigger>
                 <TabsTrigger value='lottery' className='gap-1.5'>
                   <Gift className='size-3.5' aria-hidden='true' />
@@ -340,6 +352,15 @@ export function NotificationPopover(props: NotificationPopoverProps) {
                   items={sections.timeline}
                   loading={notifications.loading}
                   emptyMessage={t('No system announcements')}
+                  onMarkRead={notifications.markAsRead}
+                />
+              </TabsContent>
+
+              <TabsContent value='global' className='mt-2'>
+                <NotificationList
+                  items={sections.global}
+                  loading={notifications.loading}
+                  emptyMessage={t('No global notifications')}
                   onMarkRead={notifications.markAsRead}
                 />
               </TabsContent>

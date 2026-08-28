@@ -26,6 +26,7 @@ interface NotificationState {
   lastReadNotice: string
   // Array of read announcement keys (id or content hash)
   readAnnouncementKeys: string[]
+  readGlobalNotificationKeys: string[]
   // Array of read lottery keys (id or content hash)
   readLotteryKeys: string[]
   // Timestamp of last "Close Today" action
@@ -35,6 +36,7 @@ interface NotificationState {
   markDiscountNoticeRead: (noticeContent: string) => void
   markNoticeRead: (noticeContent: string) => void
   markAnnouncementsRead: (keys: string[]) => void
+  markGlobalNotificationsRead: (keys: string[]) => void
   replaceAnnouncementReadKeys: (keys: string[]) => void
   markLotteriesRead: (keys: string[]) => void
   setClosedUntilDate: (date: string | null) => void
@@ -52,6 +54,7 @@ export const useNotificationStore = create<NotificationState>()(
       lastReadDiscountNotice: '',
       lastReadNotice: '',
       readAnnouncementKeys: [],
+      readGlobalNotificationKeys: [],
       readLotteryKeys: [],
       closedUntilDate: null,
 
@@ -69,6 +72,14 @@ export const useNotificationStore = create<NotificationState>()(
         set((state) => ({
           readAnnouncementKeys: [
             ...new Set([...state.readAnnouncementKeys, ...keys]),
+          ],
+        }))
+      },
+
+      markGlobalNotificationsRead: (keys: string[]) => {
+        set((state) => ({
+          readGlobalNotificationKeys: [
+            ...new Set([...state.readGlobalNotificationKeys, ...keys]),
           ],
         }))
       },
@@ -105,6 +116,7 @@ export const useNotificationStore = create<NotificationState>()(
         lastReadDiscountNotice: state.lastReadDiscountNotice,
         lastReadNotice: state.lastReadNotice,
         readAnnouncementKeys: state.readAnnouncementKeys,
+        readGlobalNotificationKeys: state.readGlobalNotificationKeys,
         readLotteryKeys: state.readLotteryKeys,
         closedUntilDate: state.closedUntilDate,
       }),

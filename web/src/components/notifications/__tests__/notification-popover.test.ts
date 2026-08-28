@@ -23,7 +23,7 @@ import type { NotificationFeedItem } from '../notification-feed'
 import { partitionNotificationItems } from '../notification-sections'
 
 describe('system announcements popover', () => {
-  test('keeps notices, timeline announcements, and lotteries in separate tabs', () => {
+  test('keeps notices, timeline announcements, global notifications, and lotteries in separate tabs', () => {
     const items: NotificationFeedItem[] = [
       {
         key: 'discount',
@@ -44,6 +44,13 @@ describe('system announcements popover', () => {
         unread: false,
       },
       {
+        key: 'global',
+        source: 'global',
+        title: 'Global update',
+        content: 'Read this on every page',
+        unread: true,
+      },
+      {
         key: 'lottery',
         source: 'lottery',
         title: 'Summer draw',
@@ -61,6 +68,10 @@ describe('system announcements popover', () => {
     assert.deepEqual(
       sections.timeline.map((item) => item.key),
       ['announcement']
+    )
+    assert.deepEqual(
+      sections.global.map((item) => item.key),
+      ['global']
     )
     assert.deepEqual(
       sections.lottery.map((item) => item.key),
