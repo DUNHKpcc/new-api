@@ -206,6 +206,9 @@ func SetApiRouter(router *gin.Engine) {
 		adminRevenueRoute.Use(middleware.AdminAuth(), middleware.DisableCache())
 		{
 			adminRevenueRoute.GET("/platform-summary", controller.GetPlatformRevenueSummary)
+			adminRevenueRoute.GET("/costs", controller.ListRevenueCosts)
+			adminRevenueRoute.POST("/costs", middleware.CriticalRateLimit(), controller.CreateRevenueCost)
+			adminRevenueRoute.PUT("/costs/:id", middleware.CriticalRateLimit(), controller.UpdateRevenueCost)
 		}
 
 		// Subscription billing (plans, purchase, admin management)
