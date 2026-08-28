@@ -69,6 +69,8 @@ func ValidateConsoleSettings(settingsStr string, settingType string) error {
 		return validateApiInfo(settingsStr)
 	case "Announcements":
 		return validateAnnouncements(settingsStr)
+	case "GlobalNotifications":
+		return validateAnnouncements(settingsStr)
 	case "FAQ":
 		return validateFAQ(settingsStr)
 	case "UptimeKumaGroups":
@@ -236,6 +238,14 @@ func getPublishTime(item map[string]interface{}) time.Time {
 
 func GetAnnouncements() []map[string]interface{} {
 	list := getJSONList(GetConsoleSetting().Announcements)
+	sort.SliceStable(list, func(i, j int) bool {
+		return getPublishTime(list[i]).After(getPublishTime(list[j]))
+	})
+	return list
+}
+
+func GetGlobalNotifications() []map[string]interface{} {
+	list := getJSONList(GetConsoleSetting().GlobalNotifications)
 	sort.SliceStable(list, func(i, j int) bool {
 		return getPublishTime(list[i]).After(getPublishTime(list[j]))
 	})
