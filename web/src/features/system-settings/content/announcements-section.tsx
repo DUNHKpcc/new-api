@@ -87,6 +87,7 @@ type AnnouncementsSectionProps = {
     | 'console_setting.announcements_enabled'
     | 'console_setting.global_notifications_enabled'
   titleKey?: string
+  itemLabelKey?: string
 }
 
 const announcementSchema = z.object({
@@ -150,6 +151,7 @@ export function AnnouncementsSection({
   optionKey = 'console_setting.announcements',
   enabledOptionKey = 'console_setting.announcements_enabled',
   titleKey = 'Announcements',
+  itemLabelKey = 'Announcement',
 }: AnnouncementsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
@@ -163,6 +165,7 @@ export function AnnouncementsSection({
     useState<Announcement | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<'single' | 'batch'>('single')
   const [uploadingImage, setUploadingImage] = useState(false)
+  const itemLabel = t(itemLabelKey)
 
   const form = useForm<AnnouncementFormValues>({
     resolver: zodResolver(announcementSchema),
@@ -491,11 +494,13 @@ export function AnnouncementsSection({
         open={showDialog}
         onOpenChange={setShowDialog}
         title={
-          editingAnnouncement ? t('Edit Announcement') : t('Add Announcement')
+          editingAnnouncement
+            ? t('Edit {{item}}', { item: itemLabel })
+            : t('Add {{item}}', { item: itemLabel })
         }
-        description={t(
-          'Create or update system announcements for the dashboard'
-        )}
+        description={t('Create or update {{item}} for the dashboard', {
+          item: itemLabel,
+        })}
         contentClassName='max-w-2xl'
         contentHeight='auto'
         bodyClassName='space-y-4'
@@ -527,7 +532,10 @@ export function AnnouncementsSection({
                 <FormItem>
                   <FormLabel>{t('Title (Optional)')}</FormLabel>
                   <FormControl>
-                    <Input placeholder={t('Announcement title')} {...field} />
+                    <Input
+                      placeholder={t('{{item}} title', { item: itemLabel })}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

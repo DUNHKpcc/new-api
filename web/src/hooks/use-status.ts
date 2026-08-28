@@ -41,6 +41,8 @@ type UseStatusOptions = {
   refetchInterval?: number | false
 }
 
+const MAX_STATUS_CACHE_CHARS = 1_500_000
+
 export function useStatus(options: UseStatusOptions = {}) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['status'],
@@ -63,7 +65,13 @@ export function useStatus(options: UseStatusOptions = {}) {
       // Save to localStorage
       try {
         if (typeof window !== 'undefined' && status) {
-          window.localStorage.setItem('status', JSON.stringify(status))
+          const serializedStatus = JSON.stringify(status)
+          // Large notification images should not evict the whole status cache.
+          if (serializedStatus.length <= MAX_STATUS_CACHE_CHARS) {
+            window.localStorage.setItem('status', serializedStatus)
+          } else {
+            window.localStorage.removeItem('status')
+          }
         }
       } catch {
         /* empty */

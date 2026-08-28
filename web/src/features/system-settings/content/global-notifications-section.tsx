@@ -33,6 +33,7 @@ export function GlobalNotificationsSection(
       optionKey='console_setting.global_notifications'
       enabledOptionKey='console_setting.global_notifications_enabled'
       titleKey='Global Notifications'
+      itemLabelKey='Global notification'
     />
   )
 }

@@ -236,20 +236,25 @@ func getPublishTime(item map[string]interface{}) time.Time {
 	return time.Time{}
 }
 
-func GetAnnouncements() []map[string]interface{} {
-	list := getJSONList(GetConsoleSetting().Announcements)
+const maxPublicNotificationItems = 20
+
+func getPublicNotifications(settings string) []map[string]interface{} {
+	list := getJSONList(settings)
 	sort.SliceStable(list, func(i, j int) bool {
 		return getPublishTime(list[i]).After(getPublishTime(list[j]))
 	})
+	if len(list) > maxPublicNotificationItems {
+		return list[:maxPublicNotificationItems]
+	}
 	return list
 }
 
+func GetAnnouncements() []map[string]interface{} {
+	return getPublicNotifications(GetConsoleSetting().Announcements)
+}
+
 func GetGlobalNotifications() []map[string]interface{} {
-	list := getJSONList(GetConsoleSetting().GlobalNotifications)
-	sort.SliceStable(list, func(i, j int) bool {
-		return getPublishTime(list[i]).After(getPublishTime(list[j]))
-	})
-	return list
+	return getPublicNotifications(GetConsoleSetting().GlobalNotifications)
 }
 
 func GetFAQ() []map[string]interface{} {
