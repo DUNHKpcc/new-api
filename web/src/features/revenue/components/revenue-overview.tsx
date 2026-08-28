@@ -16,12 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BadgeDollarSign,
   CircleDollarSign,
   Landmark,
   ReceiptText,
+  TrendingDown,
+  TrendingUp,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -36,10 +38,24 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatMinorCurrency, formatNumber } from '@/lib/format'
+import { formatMinorCurrency, formatNumber, formatPercent } from '@/lib/format'
 
-import { getExternalRevenueSummary, getPlatformRevenueSummary } from '../api'
-import { combineRevenueTotals, revenueMonthRange } from '../lib/analytics'
+import {
+  createRevenueCost,
+  getExternalRevenueSummary,
+  getPlatformRevenueSummary,
+  getRevenueCosts,
+  updateRevenueCost,
+} from '../api'
+import {
+  calculateRevenueProfit,
+  combineRevenueTotals,
+  revenueMonthKey,
+  revenueMonthRange,
+  sumMinorAmounts,
+} from '../lib/analytics'
+import type { RevenueCostMutation } from '../types'
+import { RevenueCostEditor } from './revenue-cost-editor'
 import { RevenueMonthSelector } from './revenue-month-selector'
 import { RevenueVisualization } from './revenue-visualization'
 
@@ -49,6 +65,7 @@ type MetricCardProps = {
   description: string
   icon: React.ComponentType<{ className?: string }>
   loading: boolean
+  valueClassName?: string
 }
 
 function MetricCard(props: MetricCardProps) {
@@ -63,7 +80,9 @@ function MetricCard(props: MetricCardProps) {
           {props.loading ? (
             <Skeleton className='h-7 w-28' />
           ) : (
-            <p className='truncate text-xl font-semibold tabular-nums'>
+            <p
+              className={`truncate text-xl font-semibold tabular-nums ${props.valueClassName ?? ''}`}
+            >
               {props.value}
             </p>
           )}
@@ -79,6 +98,7 @@ function MetricCard(props: MetricCardProps) {
 
 export function RevenueOverview() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [month, setMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   )
@@ -91,19 +111,32 @@ export function RevenueOverview() {
     queryKey: ['revenue', 'external-summary', range.startTime, range.endTime],
     queryFn: () => getExternalRevenueSummary(range.startTime, range.endTime),
   })
+  const monthKey = revenueMonthKey(month)
+  const costsQuery = useQuery({
+    queryKey: ['revenue', 'costs', monthKey],
+    queryFn: () => getRevenueCosts({ month: monthKey, page: 1, pageSize: 100 }),
+  })
   const platform = platformQuery.data?.data
   const external = externalQuery.data?.data
   const totals = useMemo(
     () => combineRevenueTotals(platform, external),
     [external, platform]
   )
+  const costItems = costsQuery.data?.data?.items
+  const availableCurrencies = useMemo(() => {
+    const currencies = new Set([
+      ...totals.map((item) => item.currency),
+      ...(costItems ?? []).map((item) => item.currency),
+    ])
+    return [...currencies].sort()
+  }, [costItems, totals])
   const [currency, setCurrency] = useState('CNY')
   useEffect(() => {
-    if (totals.length === 0) return
-    if (!totals.some((item) => item.currency === currency)) {
-      setCurrency(totals[0].currency)
+    if (availableCurrencies.length === 0) return
+    if (!availableCurrencies.includes(currency)) {
+      setCurrency(availableCurrencies[0])
     }
-  }, [currency, totals])
+  }, [availableCurrencies, currency])
   const selected = totals.find((item) => item.currency === currency) ?? {
     currency,
     totalAmountMinor: '0',
@@ -112,6 +145,37 @@ export function RevenueOverview() {
     platformCount: 0,
     externalCount: 0,
   }
+  const costRecords = useMemo(
+    () => (costItems ?? []).filter((item) => item.currency === currency),
+    [costItems, currency]
+  )
+  const costMinor = useMemo(
+    () => sumMinorAmounts(costRecords.map((item) => item.amount_minor)),
+    [costRecords]
+  )
+  const createCostMutation = useMutation({
+    mutationFn: createRevenueCost,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['revenue', 'costs'] })
+    },
+  })
+  const updateCostMutation = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number
+      payload: RevenueCostMutation
+    }) => updateRevenueCost(id, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['revenue', 'costs'] })
+    },
+  })
+  const profit = useMemo(
+    () => calculateRevenueProfit(selected.totalAmountMinor, costMinor),
+    [costMinor, selected.totalAmountMinor]
+  )
+  const netIsNegative = profit.netAmountMinor.startsWith('-')
   const loading = platformQuery.isLoading || externalQuery.isLoading
 
   return (
@@ -126,31 +190,80 @@ export function RevenueOverview() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(totals.length > 0 ? totals : [{ currency: 'CNY' }]).map(
-              (item) => (
-                <SelectItem key={item.currency} value={item.currency}>
-                  {item.currency}
-                </SelectItem>
-              )
-            )}
+            {(availableCurrencies.length > 0
+              ? availableCurrencies
+              : ['CNY']
+            ).map((item) => (
+              <SelectItem key={item} value={item}>
+                {item}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
-      {platformQuery.isError || externalQuery.isError ? (
+      {platformQuery.isError || externalQuery.isError || costsQuery.isError ? (
         <Alert variant='destructive'>
           <AlertDescription>
-            {t('Failed to load revenue data')}
+            {costsQuery.isError
+              ? t('Failed to load cost records')
+              : t('Failed to load revenue data')}
           </AlertDescription>
         </Alert>
       ) : null}
 
-      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
+      <RevenueCostEditor
+        month={monthKey}
+        currency={currency}
+        records={costRecords}
+        totalAmountMinor={costMinor}
+        loading={costsQuery.isLoading}
+        error={costsQuery.isError}
+        onSaved={async (payload, record) => {
+          if (record) {
+            await updateCostMutation.mutateAsync({ id: record.id, payload })
+            return
+          }
+          await createCostMutation.mutateAsync(payload)
+        }}
+      />
+
+      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7'>
         <MetricCard
           label={t('Total revenue')}
           value={formatMinorCurrency(selected.totalAmountMinor, currency)}
           description={t('Platform and external revenue')}
           icon={CircleDollarSign}
+          loading={loading}
+        />
+        <MetricCard
+          label={t('Total cost')}
+          value={formatMinorCurrency(profit.costAmountMinor, currency)}
+          description={t('Recorded costs by category')}
+          icon={ReceiptText}
+          loading={costsQuery.isLoading}
+        />
+        <MetricCard
+          label={t('Net income')}
+          value={formatMinorCurrency(profit.netAmountMinor, currency)}
+          description={t('Total revenue minus total cost')}
+          icon={netIsNegative ? TrendingDown : TrendingUp}
+          valueClassName={
+            netIsNegative
+              ? 'text-destructive'
+              : 'text-emerald-600 dark:text-emerald-400'
+          }
+          loading={loading}
+        />
+        <MetricCard
+          label={t('Profit margin')}
+          value={
+            profit.marginPercent === null
+              ? '-'
+              : formatPercent(profit.marginPercent)
+          }
+          description={t('Net income as a share of revenue')}
+          icon={TrendingUp}
           loading={loading}
         />
         <MetricCard

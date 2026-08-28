@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { VChart } from '@visactor/react-vchart'
-import { ChartSpline, GitFork } from 'lucide-react'
+import { AreaChart, BarChart3, GitFork } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -29,13 +29,19 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { getDashboardChartColors } from '@/features/dashboard/lib/charts'
 import { buildFlowSankeySpec } from '@/features/dashboard/lib/flow'
 import { formatMinorCurrency, formatNumber } from '@/lib/format'
 import { useChartTheme } from '@/lib/use-chart-theme'
 import { VCHART_OPTION } from '@/lib/vchart'
 
-import { buildRevenueFlowGraph } from '../lib/analytics'
-import type { ExternalRevenueSummary, PlatformRevenueSummary } from '../types'
+import { buildRevenueFlowGraph, buildRevenueTimeline } from '../lib/analytics'
+import type {
+  ExternalRevenueSummary,
+  PlatformRevenueSummary,
+  RevenueChartMetric,
+  RevenueChartView,
+} from '../types'
 
 type RevenueVisualizationProps = {
   currency: string
@@ -43,16 +49,34 @@ type RevenueVisualizationProps = {
   external: ExternalRevenueSummary | undefined
 }
 
-type WavePoint = {
-  date: string
-  source: string
-  amount: number
+function formatTrendValue(
+  datum: Record<string, unknown>,
+  metric: RevenueChartMetric,
+  currency: string
+): string {
+  if (metric === 'count') return formatNumber(Number(datum.count) || 0)
+  const amountMinor = datum.amountMinor
+  return formatMinorCurrency(
+    typeof amountMinor === 'string' ? amountMinor : '0',
+    currency
+  )
+}
+
+function formatTrendAxisValue(
+  value: number | string,
+  metric: RevenueChartMetric,
+  currency: string
+): string {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return '--'
+  if (metric === 'count') return formatNumber(numericValue)
+  return formatMinorCurrency(String(Math.round(numericValue * 100)), currency)
 }
 
 export function RevenueVisualization(props: RevenueVisualizationProps) {
   const { t } = useTranslation()
-  const [view, setView] = useState<'flow' | 'wave'>('flow')
-  const [metric, setMetric] = useState<'amount' | 'count'>('amount')
+  const [view, setView] = useState<RevenueChartView>('bar')
+  const [metric, setMetric] = useState<RevenueChartMetric>('amount')
   const { resolvedTheme, themeReady } = useChartTheme()
   const flow = useMemo(
     () =>
@@ -87,68 +111,114 @@ export function RevenueVisualization(props: RevenueVisualizationProps) {
       ),
     [flow, metric, props.currency, t]
   )
-  const waveData = useMemo(() => {
-    const points = new Map<string, WavePoint>()
-    const platformTimeline = props.platform?.timeline ?? []
-    const externalTimeline = props.external?.timeline ?? []
-    const addPoint = (date: string, source: string, amountMinor: string) => {
-      const key = `${date}\u0000${source}`
-      const amount = Number(BigInt(amountMinor)) / 100
-      const current = points.get(key)
-      if (current) {
-        current.amount += amount
-      } else {
-        points.set(key, { date, source, amount })
-      }
+  const trendData = useMemo(() => {
+    const sourceLabels = {
+      platform: t('Platform orders'),
+      external: t('External revenue'),
     }
-    platformTimeline
-      .filter((item) => item.currency === props.currency)
-      .forEach((item) =>
-        addPoint(item.date, t('Platform orders'), item.amount_minor)
-      )
-    externalTimeline
-      .filter((item) => item.currency === props.currency)
-      .forEach((item) =>
-        addPoint(item.date, t('External revenue'), item.amount_minor)
-      )
-    return [...points.values()].sort((left, right) =>
-      left.date.localeCompare(right.date)
-    )
-  }, [props.currency, props.external, props.platform, t])
-  const waveSpec = useMemo(
-    () => ({
-      type: 'area' as const,
-      data: [{ id: 'revenue', values: waveData }],
-      xField: 'date',
-      yField: 'amount',
-      seriesField: 'source',
-      stack: false,
-      point: { visible: true, size: 5 },
-      line: { style: { lineWidth: 2.5 } },
-      area: { style: { fillOpacity: 0.12 } },
-      axes: [
-        {
-          orient: 'bottom' as const,
-          label: { autoRotate: true, autoHide: true },
+    return buildRevenueTimeline(
+      props.platform,
+      props.external,
+      props.currency,
+      metric
+    ).map((item) => ({
+      ...item,
+      Time: item.date,
+      Source: sourceLabels[item.source],
+      Value: item.value,
+    }))
+  }, [metric, props.currency, props.external, props.platform, t])
+  const trendSpecs = useMemo(() => {
+    const sourceDomain = [t('Platform orders'), t('External revenue')]
+    const color = {
+      type: 'ordinal',
+      domain: sourceDomain,
+      range: getDashboardChartColors(sourceDomain.length),
+    }
+    const axes = [
+      {
+        orient: 'bottom' as const,
+        label: { autoRotate: true, autoHide: true, autoLimit: true },
+        tick: { visible: false },
+      },
+      {
+        orient: 'left' as const,
+        label: {
+          formatMethod: (value: number | string) =>
+            formatTrendAxisValue(value, metric, props.currency),
         },
-        {
-          orient: 'left' as const,
-          label: {
-            formatMethod: (value: number) =>
-              formatMinorCurrency(
-                Math.round(value * 100).toString(),
-                props.currency
-              ),
+        grid: { visible: true },
+      },
+    ]
+    const tooltip = {
+      mark: {
+        content: [
+          {
+            key: (datum: Record<string, unknown>) => String(datum.Source ?? ''),
+            value: (datum: Record<string, unknown>) =>
+              formatTrendValue(datum, metric, props.currency),
           },
+        ],
+      },
+      dimension: {
+        content: [
+          {
+            key: (datum: Record<string, unknown>) => String(datum.Source ?? ''),
+            value: (datum: Record<string, unknown>) =>
+              formatTrendValue(datum, metric, props.currency),
+          },
+        ],
+      },
+    }
+    return {
+      bar: {
+        type: 'bar' as const,
+        data: [{ id: 'revenue-bar', values: trendData }],
+        xField: 'Time',
+        yField: 'Value',
+        seriesField: 'Source',
+        stack: true,
+        legends: {
+          visible: true,
+          selectMode: 'single',
+          orient: 'top' as const,
         },
-      ],
-      legends: { visible: true, orient: 'top' as const },
-      tooltip: { mark: { content: [{ key: 'source', value: 'amount' }] } },
-      animation: false,
-    }),
-    [props.currency, waveData]
-  )
-  const hasData = view === 'flow' ? flow.links.length > 0 : waveData.length > 0
+        color,
+        axes,
+        bar: { state: { hover: { stroke: '#000', lineWidth: 1 } } },
+        tooltip,
+        background: { fill: 'transparent' },
+        animation: true,
+      },
+      area: {
+        type: 'area' as const,
+        data: [{ id: 'revenue-area', values: trendData }],
+        xField: 'Time',
+        yField: 'Value',
+        seriesField: 'Source',
+        stack: false,
+        legends: {
+          visible: true,
+          selectMode: 'single',
+          orient: 'top' as const,
+        },
+        color,
+        axes,
+        area: {
+          style: { fillOpacity: 0.08, curveType: 'monotone' },
+        },
+        line: { style: { lineWidth: 2, curveType: 'monotone' } },
+        point: { visible: false },
+        tooltip,
+        background: { fill: 'transparent' },
+        animation: true,
+      },
+    }
+  }, [metric, props.currency, t, trendData])
+  const hasTrendData = trendData.some((item) => item.value > 0)
+  const hasFlowData = flow.links.some((link) => link.value > 0)
+  const hasData = view === 'flow' ? hasFlowData : hasTrendData
+  const chartSpec = view === 'flow' ? flowSpec : trendSpecs[view]
   let chartContent: ReactNode = null
   if (!hasData) {
     chartContent = (
@@ -166,7 +236,7 @@ export function RevenueVisualization(props: RevenueVisualizationProps) {
       <VChart
         key={`${view}-${metric}-${props.currency}-${resolvedTheme}`}
         spec={{
-          ...(view === 'flow' ? flowSpec : waveSpec),
+          ...chartSpec,
           theme: resolvedTheme === 'dark' ? 'dark' : 'light',
           background: 'transparent',
         }}
@@ -177,51 +247,63 @@ export function RevenueVisualization(props: RevenueVisualizationProps) {
 
   return (
     <Card>
-      <CardHeader className='flex-row items-center justify-between gap-3'>
+      <CardHeader className='grid-cols-1 items-start gap-3 sm:grid-cols-[1fr_auto] sm:items-center'>
         <CardTitle>{t('Revenue analysis')}</CardTitle>
-        <div className='flex flex-wrap justify-end gap-2'>
-          {view === 'flow' ? (
-            <div
-              className='border-border/60 bg-muted/30 flex gap-0.5 rounded-md border p-1'
-              data-revenue-metric-toggle='true'
+        <div className='flex w-full flex-wrap justify-end gap-2 sm:w-auto'>
+          <div
+            className='border-border/60 bg-muted/30 flex gap-0.5 rounded-md border p-1'
+            data-revenue-metric-toggle='true'
+          >
+            <Button
+              size='sm'
+              variant={metric === 'amount' ? 'secondary' : 'ghost'}
+              onClick={() => setMetric('amount')}
+              aria-pressed={metric === 'amount'}
             >
-              <Button
-                size='sm'
-                variant={metric === 'amount' ? 'secondary' : 'ghost'}
-                onClick={() => setMetric('amount')}
-              >
-                {t('Amount')}
-              </Button>
-              <Button
-                size='sm'
-                variant={metric === 'count' ? 'secondary' : 'ghost'}
-                onClick={() => setMetric('count')}
-              >
-                {t('Orders')}
-              </Button>
-            </div>
-          ) : null}
+              {t('Amount')}
+            </Button>
+            <Button
+              size='sm'
+              variant={metric === 'count' ? 'secondary' : 'ghost'}
+              onClick={() => setMetric('count')}
+              aria-pressed={metric === 'count'}
+            >
+              {t('Orders')}
+            </Button>
+          </div>
           <div
             className='border-border/60 bg-muted/30 flex gap-0.5 rounded-md border p-1'
             data-revenue-view-toggle='true'
           >
             <Button
               size='icon-sm'
+              variant={view === 'bar' ? 'secondary' : 'ghost'}
+              onClick={() => setView('bar')}
+              aria-pressed={view === 'bar'}
+              title={t('Bar Chart')}
+              aria-label={t('Bar Chart')}
+            >
+              <BarChart3 />
+            </Button>
+            <Button
+              size='icon-sm'
+              variant={view === 'area' ? 'secondary' : 'ghost'}
+              onClick={() => setView('area')}
+              aria-pressed={view === 'area'}
+              title={t('Area Chart')}
+              aria-label={t('Area Chart')}
+            >
+              <AreaChart />
+            </Button>
+            <Button
+              size='icon-sm'
               variant={view === 'flow' ? 'secondary' : 'ghost'}
               onClick={() => setView('flow')}
+              aria-pressed={view === 'flow'}
               title={t('Flow chart')}
               aria-label={t('Flow chart')}
             >
               <GitFork />
-            </Button>
-            <Button
-              size='icon-sm'
-              variant={view === 'wave' ? 'secondary' : 'ghost'}
-              onClick={() => setView('wave')}
-              title={t('Trend chart')}
-              aria-label={t('Trend chart')}
-            >
-              <ChartSpline />
             </Button>
           </div>
         </div>

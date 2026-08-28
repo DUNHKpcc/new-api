@@ -27,14 +27,22 @@ import type {
   CombinedRevenueTotal,
   ExternalRevenueSummary,
   PlatformRevenueSummary,
+  RevenueChartMetric,
   RevenueMonthRange,
+  RevenueProfitSummary,
+  RevenueTimelineDatum,
 } from '../types'
 
 const COLORS = ['#2563eb', '#0f766e', '#d97706', '#9333ea', '#dc2626']
+export const MAX_MANUAL_COST_MINOR = 1_000_000_000_000_000n
 
 function bigintValue(value: string | undefined): bigint {
   if (!value || !/^\d+$/.test(value)) return 0n
-  return BigInt(value)
+  try {
+    return BigInt(value)
+  } catch {
+    return 0n
+  }
 }
 
 export function revenueMonthRange(month: Date): RevenueMonthRange {
@@ -48,6 +56,51 @@ export function revenueMonthRange(month: Date): RevenueMonthRange {
       month: 'long',
     }).format(start),
   }
+}
+
+export function revenueMonthKey(month: Date): string {
+  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Parse a non-negative money input while keeping all arithmetic in minor units. */
+export function nonNegativeDecimalAmountToMinor(value: string): string | null {
+  const normalized = value.trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null
+  const [whole, fraction = ''] = normalized.split('.')
+  let minor: bigint
+  try {
+    minor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
+  } catch {
+    return null
+  }
+  if (minor < 0n || minor > MAX_MANUAL_COST_MINOR) return null
+  return minor.toString()
+}
+
+export function calculateRevenueProfit(
+  revenueAmountMinor: string,
+  costAmountMinor: string
+): RevenueProfitSummary {
+  const revenue = bigintValue(revenueAmountMinor)
+  const cost = bigintValue(costAmountMinor)
+  const net = revenue - cost
+  const marginPercent =
+    revenue > 0n ? (Number(net) / Number(revenue)) * 100 : null
+  return {
+    revenueAmountMinor: revenue.toString(),
+    costAmountMinor: cost.toString(),
+    netAmountMinor: net.toString(),
+    marginPercent:
+      marginPercent !== null && Number.isFinite(marginPercent)
+        ? marginPercent
+        : null,
+  }
+}
+
+export function sumMinorAmounts(values: string[]): string {
+  return values
+    .reduce((total, value) => total + bigintValue(value), 0n)
+    .toString()
 }
 
 export function combineRevenueTotals(
@@ -78,6 +131,132 @@ export function combineRevenueTotals(
       externalCount: externalTotal?.count ?? 0,
     }
   })
+}
+
+type TimelineAccumulator = {
+  amount: bigint
+  count: number
+}
+
+function dateKeyFromTimestamp(
+  timestamp: number,
+  timezoneOffset: number
+): string | null {
+  if (!Number.isFinite(timestamp) || !Number.isFinite(timezoneOffset)) {
+    return null
+  }
+  const date = new Date((timestamp + timezoneOffset * 60) * 1000)
+  if (!Number.isFinite(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
+}
+
+function addTimelinePoint(
+  points: Map<string, TimelineAccumulator>,
+  date: string,
+  amountMinor: string,
+  count: number
+) {
+  const current = points.get(date) ?? { amount: 0n, count: 0 }
+  current.amount += bigintValue(amountMinor)
+  const normalizedCount = Number(count)
+  current.count +=
+    Number.isFinite(normalizedCount) && normalizedCount > 0
+      ? Math.trunc(normalizedCount)
+      : 0
+  points.set(date, current)
+}
+
+function timelineDates(
+  platform: PlatformRevenueSummary | undefined,
+  external: ExternalRevenueSummary | undefined,
+  fallbackDates: string[]
+): string[] {
+  const summary = platform ?? external
+  if (
+    !summary ||
+    !Number.isFinite(summary.start_time) ||
+    !Number.isFinite(summary.end_time)
+  ) {
+    return [...new Set(fallbackDates)].sort()
+  }
+  const offset = Number.isFinite(summary.timezone_offset)
+    ? summary.timezone_offset
+    : 0
+  const start = dateKeyFromTimestamp(summary.start_time, offset)
+  const end = dateKeyFromTimestamp(
+    Math.max(summary.start_time, summary.end_time - 1),
+    offset
+  )
+  if (!start || !end) return [...new Set(fallbackDates)].sort()
+  const startDay = Date.parse(`${start}T00:00:00Z`)
+  const endDay = Date.parse(`${end}T00:00:00Z`)
+  if (
+    !Number.isFinite(startDay) ||
+    !Number.isFinite(endDay) ||
+    endDay < startDay
+  ) {
+    return [...new Set(fallbackDates)].sort()
+  }
+  const dayCount = Math.floor((endDay - startDay) / 86_400_000) + 1
+  // The revenue screen is month-based. A hard cap keeps malformed server
+  // ranges from making the chart allocate an unbounded number of rows.
+  if (dayCount > 366) return [...new Set(fallbackDates)].sort()
+  return Array.from({ length: dayCount }, (_, index) =>
+    new Date(startDay + index * 86_400_000).toISOString().slice(0, 10)
+  )
+}
+
+function timelineValue(
+  amount: bigint,
+  count: number,
+  metric: RevenueChartMetric
+): number {
+  if (metric === 'count') return count
+  const value = Number(amount) / 100
+  return Number.isFinite(value) ? value : 0
+}
+
+export function buildRevenueTimeline(
+  platform: PlatformRevenueSummary | undefined,
+  external: ExternalRevenueSummary | undefined,
+  currency: string,
+  metric: RevenueChartMetric = 'amount'
+): RevenueTimelineDatum[] {
+  const platformPoints = new Map<string, TimelineAccumulator>()
+  const externalPoints = new Map<string, TimelineAccumulator>()
+  ;(platform?.timeline ?? [])
+    .filter((item) => item.currency === currency)
+    .forEach((item) =>
+      addTimelinePoint(platformPoints, item.date, item.amount_minor, item.count)
+    )
+  ;(external?.timeline ?? [])
+    .filter((item) => item.currency === currency)
+    .forEach((item) =>
+      addTimelinePoint(externalPoints, item.date, item.amount_minor, item.count)
+    )
+
+  const dates = timelineDates(platform, external, [
+    ...platformPoints.keys(),
+    ...externalPoints.keys(),
+  ])
+  const sources: Array<
+    ['platform' | 'external', Map<string, TimelineAccumulator>]
+  > = []
+  if (platform) sources.push(['platform', platformPoints])
+  if (external) sources.push(['external', externalPoints])
+
+  return dates.flatMap((date) =>
+    sources.map(([source, points]) => {
+      const point = points.get(date) ?? { amount: 0n, count: 0 }
+      return {
+        date,
+        source,
+        amountMinor: point.amount.toString(),
+        count: point.count,
+        value: timelineValue(point.amount, point.count, metric),
+      }
+    })
+  )
 }
 
 type RevenuePath = {
@@ -122,7 +301,7 @@ export function buildRevenueFlowGraph(
   external: ExternalRevenueSummary | undefined,
   currency: string,
   labels: { platform: string; external: string },
-  metric: 'amount' | 'count' = 'amount'
+  metric: RevenueChartMetric = 'amount'
 ): DashboardFlowGraph {
   const paths: RevenuePath[] = []
   const platformMethods = platform?.by_payment_method ?? []
@@ -214,12 +393,9 @@ export function buildRevenueFlowGraph(
 }
 
 export function decimalAmountToMinor(value: string): string | null {
-  const normalized = value.trim()
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null
-  const [whole, fraction = ''] = normalized.split('.')
-  const minor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
-  if (minor <= 0n || minor > 1_000_000_000_000_000n) return null
-  return minor.toString()
+  const minor = nonNegativeDecimalAmountToMinor(value)
+  if (minor === null || minor === '0') return null
+  return minor
 }
 
 export function minorAmountToDecimal(value: string): string {

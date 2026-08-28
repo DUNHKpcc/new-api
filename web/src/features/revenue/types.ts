@@ -20,6 +20,30 @@ import type { ApiResponse, TopupRecord } from '@/features/wallet/types'
 
 export type RevenueSource = 'xianyu' | 'wechat' | 'alipay' | 'other'
 export type ExternalRevenueStatus = 'active' | 'voided'
+export type RevenueCostCategory = 'server' | 'upstream' | 'account' | 'other'
+
+export interface RevenueCostRecord {
+  id: number
+  month: string
+  category: RevenueCostCategory
+  description: string
+  amount_minor: string
+  currency: string
+  version: number
+  created_by: number
+  updated_by: number
+  create_time: number
+  update_time: number
+}
+
+export interface RevenueCostMutation {
+  month: string
+  category: RevenueCostCategory
+  description: string
+  amount_minor: string
+  currency: string
+  version?: number
+}
 
 export interface ExternalRevenueRecord {
   id: number
@@ -113,9 +137,31 @@ export type ExternalRevenueRecordResponse = ApiResponse<ExternalRevenueRecord>
 export type ExternalRevenueSummaryResponse = ApiResponse<ExternalRevenueSummary>
 export type PlatformRevenueSummaryResponse = ApiResponse<PlatformRevenueSummary>
 
+export interface RevenueCostPage {
+  items: RevenueCostRecord[]
+  total: number
+  total_amount_minor: string
+  page: number
+  page_size: number
+}
+
+export type RevenueCostPageResponse = ApiResponse<RevenueCostPage>
+export type RevenueCostRecordResponse = ApiResponse<RevenueCostRecord>
+
 export interface PlatformOrderPage {
   items: TopupRecord[]
   total: number
+}
+
+export type RevenueChartMetric = 'amount' | 'count'
+export type RevenueChartView = 'bar' | 'area' | 'flow'
+
+export interface RevenueTimelineDatum {
+  date: string
+  source: 'platform' | 'external'
+  amountMinor: string
+  count: number
+  value: number
 }
 
 export interface RevenueMonthRange {
@@ -131,4 +177,11 @@ export interface CombinedRevenueTotal {
   totalAmountMinor: string
   platformCount: number
   externalCount: number
+}
+
+export interface RevenueProfitSummary {
+  revenueAmountMinor: string
+  costAmountMinor: string
+  netAmountMinor: string
+  marginPercent: number | null
 }

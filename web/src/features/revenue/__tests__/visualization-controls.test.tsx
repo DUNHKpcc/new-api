@@ -73,5 +73,10 @@ describe('revenue visualization controls', () => {
       assert.match(className, /border-border\/60/)
       assert.match(className, /p-1/)
     }
+
+    assert.match(markup, /aria-label="Bar Chart"/)
+    assert.match(markup, /aria-label="Area Chart"/)
+    assert.match(markup, /aria-label="Flow chart"/)
+    assert.match(markup, /aria-pressed="true"[^>]*title="Bar Chart"/)
   })
 })

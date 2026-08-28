@@ -24,6 +24,9 @@ import type {
   ExternalRevenueRecordResponse,
   ExternalRevenueSummaryResponse,
   PlatformRevenueSummaryResponse,
+  RevenueCostMutation,
+  RevenueCostPageResponse,
+  RevenueCostRecordResponse,
 } from './types'
 
 type ExternalRevenueListParams = {
@@ -32,6 +35,14 @@ type ExternalRevenueListParams = {
   keyword?: string
   source?: string
   status?: string
+}
+
+export type RevenueCostListParams = {
+  month?: string
+  currency?: string
+  category?: string
+  page?: number
+  pageSize?: number
 }
 
 function requireSuccess<T extends { success?: boolean; message?: string }>(
@@ -110,4 +121,35 @@ export async function getPlatformRevenueSummary(
     `/api/admin/revenue/platform-summary?${summarySearch(startTime, endTime)}`
   )
   return requireSuccess(response.data as PlatformRevenueSummaryResponse)
+}
+
+export async function getRevenueCosts(
+  params: RevenueCostListParams = {}
+): Promise<RevenueCostPageResponse> {
+  const search = new URLSearchParams({
+    p: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 100),
+  })
+  if (params.month) search.set('month', params.month)
+  if (params.currency) search.set('currency', params.currency)
+  if (params.category) search.set('category', params.category)
+  const response = await api.get(
+    `/api/admin/revenue/costs?${search.toString()}`
+  )
+  return requireSuccess(response.data as RevenueCostPageResponse)
+}
+
+export async function createRevenueCost(
+  payload: RevenueCostMutation
+): Promise<RevenueCostRecordResponse> {
+  const response = await api.post('/api/admin/revenue/costs', payload)
+  return requireSuccess(response.data as RevenueCostRecordResponse)
+}
+
+export async function updateRevenueCost(
+  id: number,
+  payload: RevenueCostMutation
+): Promise<RevenueCostRecordResponse> {
+  const response = await api.put(`/api/admin/revenue/costs/${id}`, payload)
+  return requireSuccess(response.data as RevenueCostRecordResponse)
 }
