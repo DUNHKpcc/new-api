@@ -31,7 +31,7 @@ const defaultContentSettings: ContentSettings = {
   'console_setting.api_info': '[]',
   'console_setting.announcements': '[]',
   'console_setting.global_notifications':
-    '[{"id":450,"kind":"pcc-agent-ticket","title":"PccAgent 450 美元额度活动","content":"使用 PccAgent，拖动票尾即可领取价值 450 美元的 AI API 额度。","extra":"撕下票尾即代表领取成功","publishDate":"2026-08-28T00:00:00Z","type":"success"}]',
+    '[{"id":150,"kind":"pcc-agent-ticket","title":"PccAgent 150 美元额度活动","content":"使用 PccAgent，拖动票尾即可领取价值 150 美元的 AI API 额度。","extra":"撕下票尾即代表领取成功","publishDate":"2026-08-28T00:00:00Z","type":"success"}]',
   'console_setting.faq': '[]',
   'console_setting.uptime_kuma_groups': '[]',
   'console_setting.api_info_enabled': true,

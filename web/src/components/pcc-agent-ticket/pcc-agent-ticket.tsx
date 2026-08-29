@@ -161,7 +161,7 @@ function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
   }, [status, statusLoading])
   const ticketTitle =
     ticketNotification?.title?.trim() ||
-    t('Claim {{amount}} in AI API credits', { amount: '$450' })
+    t('Claim {{amount}} in AI API credits', { amount: '$150' })
   const ticketSubline =
     ticketNotification?.content?.trim() ||
     t('Use PccAgent to unlock your credit')
@@ -278,7 +278,7 @@ function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
         aria-label={
           claimed
             ? t('PccAgent credit claimed')
-            : t('PccAgent $450 credit offer')
+            : t('PccAgent $150 credit offer')
         }
         data-state={ticketState}
       >
@@ -287,7 +287,7 @@ function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
             <span className='pcc-agent-ticket__eyebrow'>
               {t('Limited offer')}
             </span>
-            <span className='pcc-agent-ticket__serial'>PCC / 450</span>
+            <span className='pcc-agent-ticket__serial'>PCC / 150</span>
           </div>
 
           <div className='pcc-agent-ticket__brand'>
@@ -301,7 +301,7 @@ function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
 
           <div className='pcc-agent-ticket__amount' aria-hidden='true'>
             <span className='pcc-agent-ticket__currency'>$</span>
-            <strong>450</strong>
+            <strong>150</strong>
             <span className='pcc-agent-ticket__unit'>
               {t('AI API credits')}
             </span>
@@ -332,7 +332,7 @@ function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
             <span className='pcc-agent-ticket__claim-label'>
               {t('Claimed successfully')}
             </span>
-            <strong>$450</strong>
+            <strong>$150</strong>
             <small>{t('PccAgent credit claim complete')}</small>
           </div>
 
@@ -365,7 +365,7 @@ function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
               <ArrowRight aria-hidden='true' />
               <span>{t('Drag right to tear and claim')}</span>
             </span>
-            <span className='pcc-agent-ticket__stub-amount'>$450</span>
+            <span className='pcc-agent-ticket__stub-amount'>$150</span>
           </button>
         </div>
 

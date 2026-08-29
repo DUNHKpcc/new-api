@@ -66,7 +66,7 @@ await i18next.use(initReactI18next).init({
     en: {
       translation: {
         'Limited offer': 'Limited offer',
-        'PccAgent $450 credit offer': 'PccAgent $450 credit offer',
+        'PccAgent $150 credit offer': 'PccAgent $150 credit offer',
         'PccAgent credit claimed': 'PccAgent credit claimed',
         'PccAgent credit claim complete': 'PccAgent credit claim complete',
         'Official PccAgent offer': 'Official PccAgent offer',
@@ -99,9 +99,9 @@ async function renderTicket(): Promise<RenderedTicket> {
     global_notifications_enabled: true,
     global_notifications: [
       {
-        id: 450,
+        id: 150,
         kind: 'pcc-agent-ticket',
-        title: 'PccAgent $450 credit offer',
+        title: 'PccAgent $150 credit offer',
         content: 'Use PccAgent to unlock your credit',
         publishDate: '2026-08-28T00:00:00Z',
         type: 'success',

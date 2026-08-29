@@ -30,21 +30,21 @@ export function PccAgentTicketPreview(props: PccAgentTicketPreviewProps) {
   const { t } = useTranslation()
   const title =
     props.title?.trim() ||
-    t('Claim {{amount}} in AI API credits', { amount: '$450' })
+    t('Claim {{amount}} in AI API credits', { amount: '$150' })
   const content =
     props.content?.trim() || t('Use PccAgent to unlock your credit')
 
   return (
     <article
       className='pcc-agent-ticket pcc-agent-ticket--embedded'
-      aria-label={t('PccAgent $450 credit offer')}
+      aria-label={t('PccAgent $150 credit offer')}
     >
       <div className='pcc-agent-ticket__body'>
         <div className='pcc-agent-ticket__topline'>
           <span className='pcc-agent-ticket__eyebrow'>
             {t('Limited offer')}
           </span>
-          <span className='pcc-agent-ticket__serial'>PCC / 450</span>
+          <span className='pcc-agent-ticket__serial'>PCC / 150</span>
         </div>
 
         <div className='pcc-agent-ticket__brand'>
@@ -58,7 +58,7 @@ export function PccAgentTicketPreview(props: PccAgentTicketPreviewProps) {
 
         <div className='pcc-agent-ticket__amount' aria-hidden='true'>
           <span className='pcc-agent-ticket__currency'>$</span>
-          <strong>450</strong>
+          <strong>150</strong>
           <span className='pcc-agent-ticket__unit'>{t('AI API credits')}</span>
         </div>
 
@@ -71,7 +71,7 @@ export function PccAgentTicketPreview(props: PccAgentTicketPreviewProps) {
             <span>PccAgent</span>
             <span>01 / 01</span>
           </span>
-          <span className='pcc-agent-ticket__stub-title'>$450</span>
+          <span className='pcc-agent-ticket__stub-title'>$150</span>
           <span className='pcc-agent-ticket__stub-guide'>
             <ArrowRight aria-hidden='true' />
             <span>{t('Official PccAgent offer')}</span>
