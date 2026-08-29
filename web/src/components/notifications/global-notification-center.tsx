@@ -24,9 +24,10 @@ import {
   ChevronDown,
   Gift,
   Megaphone,
+  X,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { RichContent } from '@/components/rich-content'
@@ -52,12 +53,130 @@ import {
 import { useFloatingNotificationPosition } from './use-floating-notification-position'
 
 const NOTIFICATION_FEED_ID = 'global-notification-feed'
+const GLOBAL_NOTIFICATION_DISPLAY_PREFIX =
+  'global-notification-overlay:v1:seen:'
 
 type NotificationItemProps = {
   item: NotificationFeedItem
   expanded: boolean
   onExpandedChange: (key: string) => void
   onMarkRead: (item: NotificationFeedItem) => void
+}
+
+function hasGlobalNotificationBeenDisplayed(key: string): boolean {
+  if (typeof window === 'undefined') return false
+
+  try {
+    return (
+      window.localStorage.getItem(
+        `${GLOBAL_NOTIFICATION_DISPLAY_PREFIX}${key}`
+      ) === 'true'
+    )
+  } catch {
+    return false
+  }
+}
+
+function markGlobalNotificationDisplayed(key: string): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(
+      `${GLOBAL_NOTIFICATION_DISPLAY_PREFIX}${key}`,
+      'true'
+    )
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function GlobalNotificationOverlay({
+  notifications,
+}: {
+  notifications: ReturnType<typeof useNotifications>
+}) {
+  const { t } = useTranslation()
+  const [visibleKey, setVisibleKey] = useState<string | null>(null)
+  const evaluatedKeyRef = useRef<string | null>(null)
+  const candidate = useMemo(
+    () =>
+      notifications.unreadItems.find(
+        (item) =>
+          item.source === 'global' &&
+          item.kind !== 'pcc-agent-ticket' &&
+          !hasGlobalNotificationBeenDisplayed(item.key)
+      ) ?? null,
+    [notifications.unreadItems]
+  )
+
+  useEffect(() => {
+    if (notifications.loading || !candidate) return
+    if (evaluatedKeyRef.current === candidate.key) return
+
+    evaluatedKeyRef.current = candidate.key
+    markGlobalNotificationDisplayed(candidate.key)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisibleKey(candidate.key)
+  }, [candidate, notifications.loading])
+
+  if (!candidate || visibleKey !== candidate.key) return null
+
+  return (
+    <div className='pcc-agent-ticket-root pcc-agent-global-overlay-root'>
+      <article
+        className='pcc-agent-global-overlay'
+        role='dialog'
+        aria-modal='true'
+        aria-label={candidate.title || t('Global')}
+      >
+        <div className='pcc-agent-global-overlay__header'>
+          <span>{candidate.title || t('Global')}</span>
+          <button
+            type='button'
+            className='pcc-agent-global-overlay__close'
+            aria-label={t('Close')}
+            onClick={() => setVisibleKey(null)}
+          >
+            <X aria-hidden='true' />
+          </button>
+        </div>
+        <div className='pcc-agent-global-overlay__content'>
+          {candidate.image ? (
+            <img
+              src={candidate.image}
+              alt={candidate.title || t('Lottery image')}
+              className={cn(
+                'pcc-agent-global-overlay__image',
+                LOTTERY_IMAGE_ASPECT_CLASS
+              )}
+            />
+          ) : null}
+          {candidate.content ? (
+            <RichContent breaks content={candidate.content} />
+          ) : null}
+          {candidate.extra ? (
+            <div className='pcc-agent-global-overlay__extra'>
+              <RichContent breaks content={candidate.extra} />
+            </div>
+          ) : null}
+        </div>
+        {candidate.unread ? (
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() => {
+              notifications.markAsRead(candidate)
+              setVisibleKey(null)
+            }}
+          >
+            <Check aria-hidden='true' />
+            {t('Mark as read')}
+          </Button>
+        ) : null}
+      </article>
+    </div>
+  )
 }
 
 function NotificationItem(props: NotificationItemProps) {
@@ -327,172 +446,175 @@ export function GlobalNotificationCenter() {
   }
 
   return (
-    <aside
-      ref={floatingPosition.rootRef}
-      className={cn(
-        globalNotificationCenterLayout.root,
-        floatingPosition.dragging
-          ? 'transition-none'
-          : 'transition-[bottom] duration-200'
-      )}
-      style={floatingPosition.style}
-      aria-label={t('Notifications')}
-      data-floating-action='notification'
-    >
-      <TooltipProvider delay={150}>
-        <AnimatePresence
-          initial={false}
-          mode={globalNotificationCenterLayout.presenceMode}
-        >
-          {expanded ? (
-            <motion.div
-              key='expanded-notification-center'
-              initial={globalNotificationCenterLayout.motion.initial}
-              animate={globalNotificationCenterLayout.motion.animate}
-              exit={globalNotificationCenterLayout.motion.exit}
-              transition={globalNotificationCenterLayout.motion.transition}
-              style={{
-                transformOrigin: globalNotificationCenterLayout.motionOrigin,
-              }}
-              className={globalNotificationCenterLayout.panel}
-            >
-              <div className='flex h-11 items-center border-b px-2'>
-                <button
-                  type='button'
-                  className='hover:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left transition-colors outline-none focus-visible:ring-2'
-                  aria-expanded='true'
-                  aria-controls={NOTIFICATION_FEED_ID}
-                  onClick={() => setExpanded(false)}
-                >
-                  <Bell className='size-4 shrink-0' aria-hidden='true' />
-                  <span className='truncate text-sm font-semibold'>
-                    {t('Notifications')}
-                  </span>
-                  {notifications.unreadCount > 0 ? (
-                    <Badge
-                      variant='destructive'
-                      className='h-5 min-w-5 px-1.5 tabular-nums'
-                    >
-                      {notifications.unreadCount > 99
-                        ? '99+'
-                        : notifications.unreadCount}
-                    </Badge>
-                  ) : null}
-                </button>
+    <>
+      <GlobalNotificationOverlay notifications={notifications} />
+      <aside
+        ref={floatingPosition.rootRef}
+        className={cn(
+          globalNotificationCenterLayout.root,
+          floatingPosition.dragging
+            ? 'transition-none'
+            : 'transition-[bottom] duration-200'
+        )}
+        style={floatingPosition.style}
+        aria-label={t('Notifications')}
+        data-floating-action='notification'
+      >
+        <TooltipProvider delay={150}>
+          <AnimatePresence
+            initial={false}
+            mode={globalNotificationCenterLayout.presenceMode}
+          >
+            {expanded ? (
+              <motion.div
+                key='expanded-notification-center'
+                initial={globalNotificationCenterLayout.motion.initial}
+                animate={globalNotificationCenterLayout.motion.animate}
+                exit={globalNotificationCenterLayout.motion.exit}
+                transition={globalNotificationCenterLayout.motion.transition}
+                style={{
+                  transformOrigin: globalNotificationCenterLayout.motionOrigin,
+                }}
+                className={globalNotificationCenterLayout.panel}
+              >
+                <div className='flex h-11 items-center border-b px-2'>
+                  <button
+                    type='button'
+                    className='hover:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left transition-colors outline-none focus-visible:ring-2'
+                    aria-expanded='true'
+                    aria-controls={NOTIFICATION_FEED_ID}
+                    onClick={() => setExpanded(false)}
+                  >
+                    <Bell className='size-4 shrink-0' aria-hidden='true' />
+                    <span className='truncate text-sm font-semibold'>
+                      {t('Notifications')}
+                    </span>
+                    {notifications.unreadCount > 0 ? (
+                      <Badge
+                        variant='destructive'
+                        className='h-5 min-w-5 px-1.5 tabular-nums'
+                      >
+                        {notifications.unreadCount > 99
+                          ? '99+'
+                          : notifications.unreadCount}
+                      </Badge>
+                    ) : null}
+                  </button>
 
-                {notifications.unreadCount > 0 ? (
+                  {notifications.unreadCount > 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant='ghost'
+                            size='icon-sm'
+                            disabled={notifications.loading}
+                            aria-label={t('Mark all as read')}
+                            onClick={notifications.markAllAsRead}
+                          />
+                        }
+                      >
+                        <CheckCheck />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('Mark all as read')}</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <Button
                           variant='ghost'
                           size='icon-sm'
-                          disabled={notifications.loading}
-                          aria-label={t('Mark all as read')}
-                          onClick={notifications.markAllAsRead}
+                          aria-label={t('Collapse')}
+                          onClick={() => setExpanded(false)}
                         />
                       }
                     >
-                      <CheckCheck />
+                      <ChevronDown className='rotate-180' />
                     </TooltipTrigger>
-                    <TooltipContent>{t('Mark all as read')}</TooltipContent>
+                    <TooltipContent>{t('Collapse')}</TooltipContent>
                   </Tooltip>
+                </div>
+
+                <div
+                  id={NOTIFICATION_FEED_ID}
+                  className={globalNotificationCenterLayout.feed}
+                >
+                  {feedContent}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key='compact-notification-center'
+                initial={globalNotificationCenterLayout.motion.initial}
+                animate={globalNotificationCenterLayout.motion.animate}
+                exit={globalNotificationCenterLayout.motion.exit}
+                transition={globalNotificationCenterLayout.motion.transition}
+                style={{
+                  transformOrigin: globalNotificationCenterLayout.motionOrigin,
+                }}
+                className='flex flex-col items-end gap-2'
+              >
+                {unreadItems.length > 0 ? (
+                  <div
+                    className={globalNotificationCenterLayout.unreadList}
+                    role='region'
+                    aria-label={t('Notifications')}
+                  >
+                    {unreadItems.map((item, index) => (
+                      <CompactNotificationPreview
+                        key={item.key}
+                        item={item}
+                        unreadCount={
+                          index === 0 ? notifications.unreadCount : undefined
+                        }
+                        onOpen={handlePreviewOpen}
+                      />
+                    ))}
+                  </div>
                 ) : null}
 
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant='ghost'
-                        size='icon-sm'
-                        aria-label={t('Collapse')}
-                        onClick={() => setExpanded(false)}
-                      />
+                <Button
+                  variant='outline'
+                  className={globalNotificationCenterLayout.trigger}
+                  aria-expanded='false'
+                  aria-controls={NOTIFICATION_FEED_ID}
+                  aria-keyshortcuts='ArrowUp ArrowDown'
+                  onPointerDown={floatingPosition.handlePointerDown}
+                  onPointerMove={floatingPosition.handlePointerMove}
+                  onPointerUp={floatingPosition.finishDragging}
+                  onPointerCancel={floatingPosition.cancelDragging}
+                  onKeyDown={floatingPosition.handleKeyDown}
+                  onClick={() => {
+                    if (floatingPosition.shouldOpenFromTrigger()) {
+                      setExpanded(true)
                     }
-                  >
-                    <ChevronDown className='rotate-180' />
-                  </TooltipTrigger>
-                  <TooltipContent>{t('Collapse')}</TooltipContent>
-                </Tooltip>
-              </div>
-
-              <div
-                id={NOTIFICATION_FEED_ID}
-                className={globalNotificationCenterLayout.feed}
-              >
-                {feedContent}
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key='compact-notification-center'
-              initial={globalNotificationCenterLayout.motion.initial}
-              animate={globalNotificationCenterLayout.motion.animate}
-              exit={globalNotificationCenterLayout.motion.exit}
-              transition={globalNotificationCenterLayout.motion.transition}
-              style={{
-                transformOrigin: globalNotificationCenterLayout.motionOrigin,
-              }}
-              className='flex flex-col items-end gap-2'
-            >
-              {unreadItems.length > 0 ? (
-                <div
-                  className={globalNotificationCenterLayout.unreadList}
-                  role='region'
-                  aria-label={t('Notifications')}
+                  }}
                 >
-                  {unreadItems.map((item, index) => (
-                    <CompactNotificationPreview
-                      key={item.key}
-                      item={item}
-                      unreadCount={
-                        index === 0 ? notifications.unreadCount : undefined
-                      }
-                      onOpen={handlePreviewOpen}
-                    />
-                  ))}
-                </div>
-              ) : null}
-
-              <Button
-                variant='outline'
-                className={globalNotificationCenterLayout.trigger}
-                aria-expanded='false'
-                aria-controls={NOTIFICATION_FEED_ID}
-                aria-keyshortcuts='ArrowUp ArrowDown'
-                onPointerDown={floatingPosition.handlePointerDown}
-                onPointerMove={floatingPosition.handlePointerMove}
-                onPointerUp={floatingPosition.finishDragging}
-                onPointerCancel={floatingPosition.cancelDragging}
-                onKeyDown={floatingPosition.handleKeyDown}
-                onClick={() => {
-                  if (floatingPosition.shouldOpenFromTrigger()) {
-                    setExpanded(true)
-                  }
-                }}
-              >
-                <Bell
-                  className={cn(
-                    globalNotificationCenterLayout.triggerIcon,
-                    notifications.unreadCount > 0 &&
-                      'text-destructive topbar-alert-icon'
-                  )}
-                  aria-hidden='true'
-                />
-                <span className='text-xs leading-none'>
-                  {t('Notifications')}
-                </span>
-                {notifications.unreadCount > 0 ? (
-                  <span
-                    className='bg-destructive ring-background absolute -top-1 -right-1 size-2.5 rounded-full ring-2'
+                  <Bell
+                    className={cn(
+                      globalNotificationCenterLayout.triggerIcon,
+                      notifications.unreadCount > 0 &&
+                        'text-destructive topbar-alert-icon'
+                    )}
                     aria-hidden='true'
                   />
-                ) : null}
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </TooltipProvider>
-    </aside>
+                  <span className='text-xs leading-none'>
+                    {t('Notifications')}
+                  </span>
+                  {notifications.unreadCount > 0 ? (
+                    <span
+                      className='bg-destructive ring-background absolute -top-1 -right-1 size-2.5 rounded-full ring-2'
+                      aria-hidden='true'
+                    />
+                  ) : null}
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </TooltipProvider>
+      </aside>
+    </>
   )
 }
