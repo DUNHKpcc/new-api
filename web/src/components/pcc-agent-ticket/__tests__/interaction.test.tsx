@@ -262,4 +262,19 @@ describe('PccAgent ticket interaction', () => {
     assert.equal(second.container.querySelector('.pcc-agent-ticket'), null)
     await unmountTicket(second)
   })
+
+  test('does not render again after an anonymous visitor signs in', async () => {
+    useAuthStore.getState().auth.reset('complete')
+    const visitor = await renderTicket()
+    assert.ok(visitor.container.querySelector('.pcc-agent-ticket'))
+    await unmountTicket(visitor)
+
+    resetAuth()
+    const authenticated = await renderTicket()
+    assert.equal(
+      authenticated.container.querySelector('.pcc-agent-ticket'),
+      null
+    )
+    await unmountTicket(authenticated)
+  })
 })

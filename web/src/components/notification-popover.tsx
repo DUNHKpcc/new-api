@@ -31,6 +31,7 @@ import { ConsoleOnboardingPanel } from '@/components/layout/components/console-o
 import { useConsoleOnboarding } from '@/components/layout/components/console-onboarding-context'
 import type { NotificationFeedItem } from '@/components/notifications/notification-feed'
 import { partitionNotificationItems } from '@/components/notifications/notification-sections'
+import { PccAgentTicketPreview } from '@/components/pcc-agent-ticket/pcc-agent-ticket-preview'
 import { RichContent } from '@/components/rich-content'
 import { Button } from '@/components/ui/button'
 import {
@@ -80,6 +81,17 @@ function NotificationList(props: NotificationListProps) {
     <ScrollArea className='notification-scroll-area h-[min(52vh,28rem)]'>
       <div className='divide-y'>
         {props.items.map((item) => {
+          if (item.source === 'global' && item.kind === 'pcc-agent-ticket') {
+            return (
+              <div key={item.key} className='p-3'>
+                <PccAgentTicketPreview
+                  title={item.title}
+                  content={item.content}
+                />
+              </div>
+            )
+          }
+
           let sourceLabel = t('Timeline')
           let sourceMarker: ReactNode = (
             <span

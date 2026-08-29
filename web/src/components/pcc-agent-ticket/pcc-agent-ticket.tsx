@@ -34,6 +34,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import type { AnnouncementNotification } from '../notifications/notification-feed'
 import {
+  getPccAgentTicketBrowserStorageKey,
   getPccAgentTicketStorageKey,
   markPccAgentTicketSeen,
   readPccAgentTicketSeen,
@@ -50,6 +51,16 @@ type TicketStyle = CSSProperties & {
   '--pcc-ticket-drag-x': string
   '--pcc-ticket-drag-tilt': string
   '--pcc-ticket-drag-progress': string
+}
+
+type TicketLoadState = {
+  key: string | null
+  shouldLoad: boolean
+}
+
+type PccAgentTicketDialogProps = {
+  onComplete: () => void
+  onPresented: () => void
 }
 
 const DESKTOP_TEAR_THRESHOLD = 112
@@ -73,18 +84,62 @@ function getTearThreshold(): number {
 }
 
 export function PccAgentTicket() {
-  const { t } = useTranslation()
   const userId = useAuthStore((state) => state.auth.user?.id)
   const bootstrapState = useAuthStore((state) => state.auth.bootstrapState)
   const storageKey = useMemo(
     () => getPccAgentTicketStorageKey(userId),
     [userId]
   )
+  const browserStorageKey = getPccAgentTicketBrowserStorageKey()
+  const visitorStorageKey = getPccAgentTicketStorageKey(undefined)
+  const [loadState, setLoadState] = useState<TicketLoadState>({
+    key: null,
+    shouldLoad: false,
+  })
+  const evaluatedStorageKeyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (bootstrapState === 'checking') return
+    if (evaluatedStorageKeyRef.current === storageKey) return
+
+    evaluatedStorageKeyRef.current = storageKey
+
+    const storage = getBrowserStorage()
+    const shouldLoad =
+      !readPccAgentTicketSeen(storage, browserStorageKey) &&
+      !readPccAgentTicketSeen(storage, visitorStorageKey) &&
+      !readPccAgentTicketSeen(storage, storageKey)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadState({ key: storageKey, shouldLoad })
+  }, [bootstrapState, browserStorageKey, storageKey, visitorStorageKey])
+
+  if (loadState.key !== storageKey || !loadState.shouldLoad) return null
+
+  return (
+    <PccAgentTicketDialog
+      onComplete={() =>
+        setLoadState((current) =>
+          current.key === storageKey
+            ? { ...current, shouldLoad: false }
+            : current
+        )
+      }
+      onPresented={() => {
+        const storage = getBrowserStorage()
+        markPccAgentTicketSeen(storage, browserStorageKey)
+        markPccAgentTicketSeen(storage, visitorStorageKey)
+        markPccAgentTicketSeen(storage, storageKey)
+      }}
+    />
+  )
+}
+
+function PccAgentTicketDialog(props: PccAgentTicketDialogProps) {
+  const { t } = useTranslation()
+  const { onComplete, onPresented } = props
   const [ticketState, setTicketState] = useState<TicketState | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const dragStateRef = useRef<DragState | null>(null)
-  const evaluatedKeyRef = useRef<string | null>(null)
-  const displayedKeyRef = useRef<string | null>(null)
   const { status, loading: statusLoading } = useStatus()
   const ticketNotification = useMemo(() => {
     if (statusLoading || status?.global_notifications_enabled === false) {
@@ -112,26 +167,16 @@ export function PccAgentTicket() {
     t('Use PccAgent to unlock your credit')
 
   useEffect(() => {
-    if (
-      bootstrapState === 'checking' ||
-      statusLoading ||
-      !ticketNotification ||
-      displayedKeyRef.current === storageKey
-    ) {
+    if (statusLoading) return
+    if (!ticketNotification) {
+      onComplete()
       return
     }
-    if (evaluatedKeyRef.current === storageKey) return
-
-    evaluatedKeyRef.current = storageKey
-    const storage = getBrowserStorage()
-    if (readPccAgentTicketSeen(storage, storageKey)) return
-
     // Mark before painting so StrictMode and rapid route transitions cannot duplicate it.
-    markPccAgentTicketSeen(storage, storageKey)
-    displayedKeyRef.current = storageKey
+    onPresented()
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTicketState('ready')
-  }, [bootstrapState, statusLoading, storageKey, ticketNotification])
+  }, [onComplete, onPresented, statusLoading, ticketNotification])
 
   if (!ticketState || !ticketNotification) return null
 
@@ -148,7 +193,6 @@ export function PccAgentTicket() {
   const completeTear = (releasedOffset = 0) => {
     dragStateRef.current = null
     setDragOffset(releasedOffset)
-    markPccAgentTicketSeen(getBrowserStorage(), storageKey)
     setTicketState('claimed')
   }
 
@@ -218,7 +262,7 @@ export function PccAgentTicket() {
   const handleDismiss = () => {
     dragStateRef.current = null
     setDragOffset(0)
-    setTicketState(null)
+    onComplete()
   }
 
   return (
@@ -264,6 +308,10 @@ export function PccAgentTicket() {
           </div>
 
           <p className='pcc-agent-ticket__subline'>{ticketSubline}</p>
+
+          <p className='pcc-agent-ticket__notice-link'>
+            {t('View in Global notifications')}
+          </p>
 
           <div className='pcc-agent-ticket__footer'>
             <span>{t('One-time claim')}</span>

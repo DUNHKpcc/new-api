@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 const PCC_AGENT_TICKET_STORAGE_PREFIX = 'pcc-agent-ticket:v1:seen'
+const PCC_AGENT_TICKET_BROWSER_STORAGE_KEY = `${PCC_AGENT_TICKET_STORAGE_PREFIX}:browser`
 
 export type TicketStorage = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -29,6 +30,10 @@ export function getPccAgentTicketStorageKey(
   }
 
   return `${PCC_AGENT_TICKET_STORAGE_PREFIX}:user:${userId}`
+}
+
+export function getPccAgentTicketBrowserStorageKey(): string {
+  return PCC_AGENT_TICKET_BROWSER_STORAGE_KEY
 }
 
 export function readPccAgentTicketSeen(

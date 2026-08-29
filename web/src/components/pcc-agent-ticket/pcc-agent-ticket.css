@@ -18,14 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 .pcc-agent-ticket-root {
-  --pcc-ink: var(--operator-ink, var(--foreground, #0b0b0b));
-  --pcc-paper: var(--operator-paper, var(--card, #fffdf4));
-  --pcc-yellow: var(--operator-yellow, var(--warning, #f1d532));
-  --pcc-green: var(--operator-green, var(--success, #a9e448));
-  --pcc-grid: var(--operator-grid, rgb(0 0 0 / 10%));
-  --pcc-hard-shadow: var(--operator-hard-shadow, #171717);
-  --pcc-accent-ink: oklch(0.12 0 0);
-  --pcc-stub-width: 15.6rem;
   position: fixed;
   inset: 0;
   z-index: 55;
@@ -37,8 +29,19 @@ For commercial licensing, please contact support@quantumnous.com
     max(1rem, env(safe-area-inset-bottom, 0px))
     max(1rem, env(safe-area-inset-left, 0px));
   background: rgb(7 7 7 / 48%);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.pcc-agent-ticket {
+  --pcc-ink: var(--operator-ink, var(--foreground, #0b0b0b));
+  --pcc-paper: var(--operator-paper, var(--card, #fffdf4));
+  --pcc-yellow: var(--operator-yellow, var(--warning, #f1d532));
+  --pcc-green: var(--operator-green, var(--success, #a9e448));
+  --pcc-grid: var(--operator-grid, rgb(0 0 0 / 10%));
+  --pcc-hard-shadow: var(--operator-hard-shadow, #171717);
+  --pcc-accent-ink: oklch(0.12 0 0);
+  --pcc-stub-width: 15.6rem;
 }
 
 .pcc-agent-ticket {
@@ -56,6 +59,107 @@ For commercial licensing, please contact support@quantumnous.com
   box-shadow: 5px 5px 0 var(--pcc-hard-shadow);
   font-family: var(--font-comic-display, var(--font-sans, sans-serif));
   animation: pcc-agent-ticket-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pcc-agent-ticket--embedded {
+  --pcc-stub-width: 7.4rem;
+  width: 100%;
+  min-height: 9rem;
+  box-shadow: 3px 3px 0 var(--pcc-hard-shadow);
+  animation: none;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__body {
+  padding: 0.65rem 0.8rem 0.55rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__topline,
+.pcc-agent-ticket--embedded .pcc-agent-ticket__stub-topline {
+  font-size: 0.5rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__brand {
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__brand-mark {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0.15rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__brand-name {
+  font-size: 0.82rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__headline {
+  margin-top: 0.38rem;
+  font-size: 0.82rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__currency {
+  font-size: 0.85rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__amount strong {
+  font-size: 2rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__unit {
+  margin-left: 0.2rem;
+  font-size: 0.53rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__subline {
+  margin-top: 0.12rem;
+  font-size: 0.54rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__stub,
+.pcc-agent-ticket--embedded .pcc-agent-ticket__claim-panel {
+  padding: 0.65rem 0.55rem 0.55rem 0.8rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__stub {
+  cursor: default;
+  touch-action: auto;
+  transform: none;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__stub:hover {
+  box-shadow: none;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__stub-title {
+  margin-top: 0.8rem;
+  font-size: 1.15rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__stub-guide {
+  max-width: 5.4rem;
+  margin-top: 0.45rem;
+  font-size: 0.5rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__seam {
+  top: 0.75rem;
+  bottom: 0.75rem;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__notch {
+  width: 28px;
+  height: 28px;
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__notch--top {
+  top: -14px;
+  clip-path: inset(14px 0 0 0);
+}
+
+.pcc-agent-ticket--embedded .pcc-agent-ticket__notch--bottom {
+  bottom: -14px;
+  clip-path: inset(0 0 14px 0);
 }
 
 .pcc-agent-ticket__body {
@@ -167,6 +271,15 @@ For commercial licensing, please contact support@quantumnous.com
   color: color-mix(in oklch, var(--pcc-ink) 66%, transparent);
   font-size: 0.68rem;
   line-height: 1.2;
+}
+
+.pcc-agent-ticket__notice-link {
+  margin: 0.3rem 0 0;
+  color: color-mix(in oklch, var(--pcc-ink) 72%, transparent);
+  font-family: var(--font-comic-mono, ui-monospace, monospace);
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .pcc-agent-ticket__footer {
@@ -474,7 +587,6 @@ For commercial licensing, please contact support@quantumnous.com
 
 @media (max-width: 560px) {
   .pcc-agent-ticket-root {
-    --pcc-stub-width: 8.35rem;
     padding: max(0.75rem, env(safe-area-inset-top, 0px))
       max(0.5rem, env(safe-area-inset-right, 0px))
       max(0.75rem, env(safe-area-inset-bottom, 0px))
@@ -482,7 +594,13 @@ For commercial licensing, please contact support@quantumnous.com
   }
 
   .pcc-agent-ticket {
+    --pcc-stub-width: 8.35rem;
     min-height: 9.45rem;
+  }
+
+  .pcc-agent-ticket--embedded {
+    --pcc-stub-width: 6.4rem;
+    min-height: 8.25rem;
   }
 
   .pcc-agent-ticket__body {
@@ -521,6 +639,10 @@ For commercial licensing, please contact support@quantumnous.com
   .pcc-agent-ticket__subline {
     max-width: 10rem;
     font-size: 0.58rem;
+  }
+
+  .pcc-agent-ticket__notice-link {
+    font-size: 0.48rem;
   }
 
   .pcc-agent-ticket__footer {
