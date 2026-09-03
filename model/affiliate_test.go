@@ -546,7 +546,7 @@ func TestEpayTopUpQuotaOverflowDoesNotCompleteOrder(t *testing.T) {
 		TradeNo: order.TradeNo, ProviderTradeNo: "epay-overflow-provider", PaidAmountMinor: order.ExpectedAmountMinor,
 		PaymentMethod: "alipay", CompletedAt: 200,
 	})
-	assert.True(t, errors.Is(err, ErrEpayQuotaOverflow))
+	assert.True(t, errors.Is(err, ErrTopUpQuotaLimitExceeded))
 	var reloaded TopUp
 	require.NoError(t, DB.First(&reloaded, order.Id).Error)
 	assert.Equal(t, common.TopUpStatusPending, reloaded.Status)

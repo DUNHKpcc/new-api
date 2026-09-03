@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -76,6 +78,180 @@ func TestCompleteEpayTopUpCreditsExactlyOnce(t *testing.T) {
 	var reloadedUser User
 	require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
 	assert.Equal(t, 100+topUp.QuotaAmount, reloadedUser.Quota)
+}
+
+func TestCompleteEpayTopUpKeepsHydratedCacheInSync(t *testing.T) {
+	truncateTables(t)
+	useUserCacheMiniRedis(t)
+	user := User{Username: "epay-cache", AffCode: "epay-cache", Quota: 100, AuthVersion: 1}
+	require.NoError(t, DB.Create(&user).Error)
+	require.NoError(t, populateUserCache(user))
+	topUp := createPendingEpayTopUp(t, "epay-cache-order", user.Id)
+	input := EpaySettlement{
+		TradeNo:         topUp.TradeNo,
+		ProviderTradeNo: "provider-cache",
+		PaidAmountMinor: topUp.ExpectedAmountMinor,
+		PaymentMethod:   "alipay",
+		CompletedAt:     200,
+	}
+
+	_, err := CompleteEpayTopUp(input)
+	require.NoError(t, err)
+	cached, err := cacheGetUserBase(user.Id)
+	require.NoError(t, err)
+	assert.Equal(t, user.Quota+topUp.QuotaAmount, cached.Quota)
+
+	replayed, err := CompleteEpayTopUp(input)
+	require.NoError(t, err)
+	assert.True(t, replayed.AlreadyCompleted)
+	cached, err = cacheGetUserBase(user.Id)
+	require.NoError(t, err)
+	assert.Equal(t, user.Quota+topUp.QuotaAmount, cached.Quota)
+}
+
+func TestCompleteEpayTopUpDoesNotCreatePartialCacheOnMiss(t *testing.T) {
+	truncateTables(t)
+	server := useUserCacheMiniRedis(t)
+	user := User{Username: "epay-cache-miss", AffCode: "epay-cache-miss", Quota: 100, AuthVersion: 1}
+	require.NoError(t, DB.Create(&user).Error)
+	topUp := createPendingEpayTopUp(t, "epay-cache-miss-order", user.Id)
+
+	_, err := CompleteEpayTopUp(EpaySettlement{
+		TradeNo:         topUp.TradeNo,
+		ProviderTradeNo: "provider-cache-miss",
+		PaidAmountMinor: topUp.ExpectedAmountMinor,
+		PaymentMethod:   "alipay",
+		CompletedAt:     200,
+	})
+	require.NoError(t, err)
+	assert.False(t, server.Exists(getUserCacheKey(user.Id)))
+}
+
+func TestCompleteEpayTopUpAllowsNegativeBalance(t *testing.T) {
+	truncateTables(t)
+	user := User{Username: "epay-negative", AffCode: "epay-negative", Quota: -6_000_000}
+	require.NoError(t, DB.Create(&user).Error)
+	topUp := createPendingEpayTopUp(t, "epay-negative-order", user.Id)
+
+	result, err := CompleteEpayTopUp(EpaySettlement{
+		TradeNo:         topUp.TradeNo,
+		ProviderTradeNo: "provider-negative",
+		PaidAmountMinor: topUp.ExpectedAmountMinor,
+		PaymentMethod:   "alipay",
+		CompletedAt:     200,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, topUp.QuotaAmount, result.QuotaAdded)
+
+	var reloadedUser User
+	require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
+	assert.Equal(t, -1_000_000, reloadedUser.Quota)
+	var reloadedTopUp TopUp
+	require.NoError(t, DB.First(&reloadedTopUp, topUp.Id).Error)
+	assert.Equal(t, common.TopUpStatusSuccess, reloadedTopUp.Status)
+	assert.Equal(t, CompletionSourceWebhook, reloadedTopUp.CompletionSource)
+}
+
+func TestCompleteEpayTopUpEnforcesFinalQuotaLimit(t *testing.T) {
+	testCases := []struct {
+		name         string
+		currentQuota int
+		wantErr      bool
+		wantQuota    int
+		wantStatus   string
+	}{
+		{
+			name:         "accepts highest representable balance",
+			currentQuota: common.MaxQuota - 1 - 5_000_000,
+			wantQuota:    common.MaxQuota - 1,
+			wantStatus:   common.TopUpStatusSuccess,
+		},
+		{
+			name:         "rejects balance above quota domain",
+			currentQuota: common.MaxQuota - 5_000_000,
+			wantErr:      true,
+			wantQuota:    common.MaxQuota - 5_000_000,
+			wantStatus:   common.TopUpStatusPending,
+		},
+	}
+
+	for index, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			user := User{Username: fmt.Sprintf("epay-limit-%d", index), AffCode: fmt.Sprintf("epay-limit-%d", index), Quota: tc.currentQuota}
+			require.NoError(t, DB.Create(&user).Error)
+			topUp := createPendingEpayTopUp(t, fmt.Sprintf("epay-limit-order-%d", index), user.Id)
+
+			_, err := CompleteEpayTopUp(EpaySettlement{
+				TradeNo:         topUp.TradeNo,
+				ProviderTradeNo: fmt.Sprintf("provider-limit-%d", index),
+				PaidAmountMinor: topUp.ExpectedAmountMinor,
+				PaymentMethod:   "alipay",
+				CompletedAt:     200,
+			})
+			if tc.wantErr {
+				require.ErrorIs(t, err, ErrTopUpQuotaLimitExceeded)
+			} else {
+				require.NoError(t, err)
+			}
+
+			var reloadedUser User
+			require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
+			assert.Equal(t, tc.wantQuota, reloadedUser.Quota)
+			var reloadedTopUp TopUp
+			require.NoError(t, DB.First(&reloadedTopUp, topUp.Id).Error)
+			assert.Equal(t, tc.wantStatus, reloadedTopUp.Status)
+		})
+	}
+}
+
+func TestEpayWebhookAndManualCompletionCreditAtMostOnce(t *testing.T) {
+	truncateTables(t)
+	user := User{Username: "epay-manual-race", AffCode: "epay-manual-race", Quota: 100}
+	require.NoError(t, DB.Create(&user).Error)
+	topUp := createPendingEpayTopUp(t, "epay-manual-race-order", user.Id)
+
+	start := make(chan struct{})
+	webhookResult := make(chan error, 1)
+	manualResult := make(chan error, 1)
+	var completions sync.WaitGroup
+	completions.Add(2)
+	go func() {
+		defer completions.Done()
+		<-start
+		_, err := CompleteEpayTopUp(EpaySettlement{
+			TradeNo:         topUp.TradeNo,
+			ProviderTradeNo: "provider-manual-race",
+			PaidAmountMinor: topUp.ExpectedAmountMinor,
+			PaymentMethod:   "alipay",
+			CompletedAt:     200,
+		})
+		webhookResult <- err
+	}()
+	go func() {
+		defer completions.Done()
+		<-start
+		manualResult <- ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1")
+	}()
+	close(start)
+	completions.Wait()
+	close(webhookResult)
+	close(manualResult)
+
+	webhookErr := <-webhookResult
+	manualErr := <-manualResult
+	require.NoError(t, manualErr)
+	if webhookErr != nil {
+		require.ErrorIs(t, webhookErr, ErrEpayCompletedEvidenceMismatch)
+	}
+
+	var reloadedUser User
+	require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
+	assert.Equal(t, user.Quota+topUp.QuotaAmount, reloadedUser.Quota)
+	var reloadedTopUp TopUp
+	require.NoError(t, DB.First(&reloadedTopUp, topUp.Id).Error)
+	assert.Equal(t, common.TopUpStatusSuccess, reloadedTopUp.Status)
+	assert.Contains(t, []string{CompletionSourceWebhook, CompletionSourceAdmin}, reloadedTopUp.CompletionSource)
 }
 
 func TestCompleteEpayTopUpRejectsInvalidEvidenceWithoutMutation(t *testing.T) {
@@ -215,7 +391,7 @@ func TestManualCompleteTopUpRejectsMissingOrOverflowingUser(t *testing.T) {
 		require.NoError(t, DB.Create(&user).Error)
 		topUp := createPendingEpayTopUp(t, "manual-overflow-order", user.Id)
 
-		assert.ErrorIs(t, ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1"), ErrEpayQuotaOverflow)
+		assert.ErrorIs(t, ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1"), ErrTopUpQuotaLimitExceeded)
 		var reloaded TopUp
 		require.NoError(t, DB.First(&reloaded, topUp.Id).Error)
 		assert.Equal(t, common.TopUpStatusPending, reloaded.Status)
@@ -230,4 +406,21 @@ func TestManualCompleteTopUpRejectsMissingOrOverflowingUser(t *testing.T) {
 		require.NoError(t, DB.First(&reloaded, topUp.Id).Error)
 		assert.Equal(t, common.TopUpStatusPending, reloaded.Status)
 	})
+}
+
+func TestManualCompleteTopUpAllowsNegativeBalance(t *testing.T) {
+	truncateTables(t)
+	user := User{Username: "manual-negative", AffCode: "manual-negative", Quota: -6_000_000}
+	require.NoError(t, DB.Create(&user).Error)
+	topUp := createPendingEpayTopUp(t, "manual-negative-order", user.Id)
+
+	require.NoError(t, ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1"))
+
+	var reloadedUser User
+	require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
+	assert.Equal(t, -1_000_000, reloadedUser.Quota)
+	var reloadedTopUp TopUp
+	require.NoError(t, DB.First(&reloadedTopUp, topUp.Id).Error)
+	assert.Equal(t, common.TopUpStatusSuccess, reloadedTopUp.Status)
+	assert.Equal(t, CompletionSourceAdmin, reloadedTopUp.CompletionSource)
 }

@@ -143,16 +143,29 @@ func cacheGetUserBase(userId int) (*UserBase, error) {
 	return &userCache, nil
 }
 
-// Add atomic quota operations using hash fields
+// Add atomic quota operations using hash fields. The guarded Lua script skips
+// missing or incomplete hashes instead of creating a quota-only cache entry.
 func cacheIncrUserQuota(userId int, delta int64) error {
 	if !common.RedisEnabled {
 		return nil
 	}
-	return common.RedisHIncrBy(getUserCacheKey(userId), "Quota", delta)
+	_, err := cacheApplyUserQuotaDelta(userId, delta)
+	return err
 }
 
 func cacheDecrUserQuota(userId int, delta int64) error {
 	return cacheIncrUserQuota(userId, -delta)
+}
+
+// syncCreditUserQuotaCache applies a committed credit to an existing hydrated
+// cache. On a cache miss the next read hydrates from the committed database.
+func syncCreditUserQuotaCache(userId int, quota int, operation string) {
+	if quota <= 0 {
+		return
+	}
+	if err := cacheIncrUserQuota(userId, int64(quota)); err != nil {
+		common.SysLog(fmt.Sprintf("failed to sync %s credit to user quota cache: %s", operation, err.Error()))
+	}
 }
 
 // Helper functions to get individual fields if needed

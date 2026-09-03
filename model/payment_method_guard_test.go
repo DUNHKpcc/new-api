@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -171,4 +172,129 @@ func TestExpireSubscriptionOrder_RejectsMismatchedPaymentProvider(t *testing.T) 
 	order := GetSubscriptionOrderByTradeNo("sub-expire-guard")
 	require.NotNil(t, order)
 	assert.Equal(t, common.TopUpStatusPending, order.Status)
+}
+
+func TestValidateTopUpQuotaCapacityAllowsDebtAndEnforcesUpperLimit(t *testing.T) {
+	testCases := []struct {
+		name          string
+		currentQuota  int
+		creditedQuota int
+		wantErr       error
+	}{
+		{
+			name:          "negative balance can repay debt",
+			currentQuota:  -100,
+			creditedQuota: 50,
+		},
+		{
+			name:          "highest representable balance is accepted",
+			currentQuota:  common.MaxQuota - 1 - 50,
+			creditedQuota: 50,
+		},
+		{
+			name:          "balance above quota domain is rejected",
+			currentQuota:  common.MaxQuota - 50,
+			creditedQuota: 50,
+			wantErr:       ErrTopUpQuotaLimitExceeded,
+		},
+		{
+			name:          "single credit at saturation boundary is rejected",
+			currentQuota:  0,
+			creditedQuota: common.MaxQuota,
+			wantErr:       ErrInvalidTopUpQuota,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			insertUserForPaymentGuardTest(t, 404, tc.currentQuota)
+
+			err := ValidateTopUpQuotaCapacity(404, tc.creditedQuota)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestRechargeProvidersRollBackWhenWalletLimitWouldBeExceeded(t *testing.T) {
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 10
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	testCases := []struct {
+		name     string
+		provider string
+		method   string
+		amount   int64
+		money    float64
+		settle   func(string) error
+	}{
+		{
+			name:     "Stripe",
+			provider: PaymentProviderStripe,
+			method:   PaymentMethodStripe,
+			amount:   2,
+			money:    2,
+			settle: func(tradeNo string) error {
+				return Recharge(tradeNo, "stripe-customer", "127.0.0.1")
+			},
+		},
+		{
+			name:     "Creem",
+			provider: PaymentProviderCreem,
+			method:   PaymentMethodCreem,
+			amount:   20,
+			money:    2,
+			settle: func(tradeNo string) error {
+				return RechargeCreem(tradeNo, "", "", "127.0.0.1")
+			},
+		},
+		{
+			name:     "Waffo",
+			provider: PaymentProviderWaffo,
+			method:   PaymentMethodWaffo,
+			amount:   2,
+			money:    2,
+			settle: func(tradeNo string) error {
+				return RechargeWaffo(tradeNo, "127.0.0.1")
+			},
+		},
+		{
+			name:     "Waffo Pancake",
+			provider: PaymentProviderWaffoPancake,
+			method:   PaymentMethodWaffoPancake,
+			amount:   2,
+			money:    2,
+			settle:   RechargeWaffoPancake,
+		},
+	}
+
+	for index, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			userID := 500 + index
+			currentQuota := common.MaxQuota - 20
+			insertUserForPaymentGuardTest(t, userID, currentQuota)
+			tradeNo := fmt.Sprintf("wallet-limit-%d", index)
+			topUp := TopUp{
+				UserId:          userID,
+				Amount:          tc.amount,
+				Money:           tc.money,
+				TradeNo:         tradeNo,
+				PaymentMethod:   tc.method,
+				PaymentProvider: tc.provider,
+				Status:          common.TopUpStatusPending,
+				CreateTime:      common.GetTimestamp(),
+			}
+			require.NoError(t, topUp.Insert())
+
+			require.Error(t, tc.settle(tradeNo))
+			assert.Equal(t, currentQuota, getUserQuotaForPaymentGuardTest(t, userID))
+			assert.Equal(t, common.TopUpStatusPending, getTopUpStatusForPaymentGuardTest(t, tradeNo))
+		})
+	}
 }
