@@ -609,7 +609,7 @@ export function OverviewDashboard() {
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
   const showLeftContentPanels =
-    isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
+    showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
   const showContentPanels = showLeftContentPanels || showUptimePanel
 
   const handleSetupGuideToggle = () => {
@@ -754,6 +754,12 @@ export function OverviewDashboard() {
 
       <SummaryCards />
 
+      <CardStaggerContainer>
+        <CardStaggerItem>
+          <PerformanceHealthPanel />
+        </CardStaggerItem>
+      </CardStaggerContainer>
+
       {showContentPanels && (
         <CardStaggerContainer
           className={cn(
@@ -771,11 +777,6 @@ export function OverviewDashboard() {
                   'lg:grid-cols-2'
               )}
             >
-              {isAdmin && (
-                <CardStaggerItem className='lg:col-span-2'>
-                  <PerformanceHealthPanel />
-                </CardStaggerItem>
-              )}
               {showApiInfoPanel && (
                 <CardStaggerItem>
                   <ApiInfoPanel />
