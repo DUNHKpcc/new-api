@@ -33,7 +33,19 @@ import { I18nextProvider, initReactI18next } from 'react-i18next'
 
 import type { PlanRecord } from '@/features/subscriptions/types'
 
+import type { PricingModel } from '../../types'
 import { PricingPageTop } from '../pricing-page-top'
+
+const estimateModel: PricingModel = {
+  id: 10,
+  model_name: 'estimate-model',
+  quota_type: 0,
+  model_ratio: 1,
+  completion_ratio: 1,
+  cache_ratio: 0.5,
+  enable_groups: ['default'],
+  group_ratio: { default: 1 },
+}
 
 const plans: PlanRecord[] = [
   {
@@ -75,7 +87,12 @@ const plans: PlanRecord[] = [
 
 async function renderPricingPageTop(
   records: PlanRecord[],
-  isAuthenticated = false
+  isAuthenticated = false,
+  estimateProps?: {
+    models: PricingModel[]
+    quotaPerUnit: number
+    subscriptionDisplayModels: string
+  }
 ) {
   const i18n = createInstance()
   await i18n.use(initReactI18next).init({
@@ -92,6 +109,9 @@ async function renderPricingPageTop(
       createElement(PricingPageTop, {
         plans: records,
         isAuthenticated,
+        models: estimateProps?.models,
+        quotaPerUnit: estimateProps?.quotaPerUnit,
+        subscriptionDisplayModels: estimateProps?.subscriptionDisplayModels,
         searchInput: '',
         onSearchChange: () => undefined,
         onClearSearch: () => undefined,
@@ -161,6 +181,7 @@ describe('pricing page top', () => {
     assert.doesNotMatch(markup, /\$9\.90/)
     assert.match(markup, /href="\/sign-in\?redirect=%2Fwallet"/)
     assert.match(markup, />Subscribe Now</)
+    assert.doesNotMatch(markup, /cache hits per sample/)
     assert.match(markup, /data-subscription-plan-carousel="true"/)
     assert.match(markup, /basis-\[88%\].*sm:basis-1\/2.*xl:basis-1\/3/)
     assert.match(markup, /aria-label="Previous slide"/)
@@ -172,5 +193,18 @@ describe('pricing page top', () => {
 
     assert.match(markup, /href="\/wallet"/)
     assert.doesNotMatch(markup, /href="\/sign-in\?redirect=%2Fwallet"/)
+  })
+
+  test('shows the total validity quota and configured model estimate', async () => {
+    const markup = await renderPricingPageTop(plans, false, {
+      models: [estimateModel],
+      quotaPerUnit: 500_000,
+      subscriptionDisplayModels: '["estimate-model"]',
+    })
+
+    assert.match(markup, /data-subscription-total-budget="10"/)
+    assert.match(markup, /data-subscription-reset-count="1"/)
+    assert.match(markup, /data-subscription-estimate-model="estimate-model"/)
+    assert.match(markup, /data-subscription-token-estimates="true"/)
   })
 })

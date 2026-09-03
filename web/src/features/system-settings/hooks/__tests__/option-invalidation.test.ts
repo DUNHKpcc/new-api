@@ -47,6 +47,13 @@ describe('system option cache invalidation', () => {
     ])
   })
 
+  test('refreshes public pricing cards after estimate models change', () => {
+    assert.deepEqual(
+      getOptionInvalidationQueryKeys('SubscriptionDisplayModels'),
+      ['system-options', 'status']
+    )
+  })
+
   test('refreshes public ranking data after calibration changes', () => {
     assert.deepEqual(getOptionInvalidationQueryKeys('RankingDisplayConfig'), [
       'system-options',

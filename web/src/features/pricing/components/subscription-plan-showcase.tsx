@@ -39,15 +39,24 @@ import {
 import type { PlanRecord } from '@/features/subscriptions/types'
 import { formatQuota } from '@/lib/format'
 
+import type { PricingModel } from '../types'
+import { SubscriptionPlanEstimate } from './subscription-plan-estimate'
+
 export interface SubscriptionPlanShowcaseProps {
   plans: PlanRecord[]
   isLoading?: boolean
   isAuthenticated: boolean
+  models?: PricingModel[]
+  quotaPerUnit?: number
+  subscriptionDisplayModels?: string
 }
 
 function SubscriptionPlanCard(props: {
   record: PlanRecord
   isAuthenticated: boolean
+  models?: PricingModel[]
+  quotaPerUnit?: number
+  subscriptionDisplayModels?: string
 }) {
   const { t } = useTranslation()
   const plan = props.record.plan
@@ -96,7 +105,7 @@ function SubscriptionPlanCard(props: {
           <div className='min-w-0'>
             <span className='text-muted-foreground flex items-center gap-1 text-[11px] leading-none'>
               <Gauge className='size-3' aria-hidden='true' />
-              {t('Total Quota')}
+              {t('Quota per reset')}
             </span>
             <strong className='mt-1.5 block truncate text-xs font-semibold tabular-nums'>
               {quota}
@@ -113,9 +122,16 @@ function SubscriptionPlanCard(props: {
           </div>
         </div>
 
+        <SubscriptionPlanEstimate
+          plan={plan}
+          models={props.models}
+          quotaPerUnit={props.quotaPerUnit}
+          subscriptionDisplayModels={props.subscriptionDisplayModels}
+        />
+
         <Button
-          variant='outline'
-          className='mt-3 w-full justify-between'
+          variant='default'
+          className='bg-warning text-warning-foreground hover:bg-warning/85 border-warning mt-3 w-full justify-between font-semibold shadow-sm'
           render={subscribeLink}
         >
           <span>{t('Subscribe Now')}</span>
@@ -193,6 +209,9 @@ export function SubscriptionPlanShowcase(props: SubscriptionPlanShowcaseProps) {
                   <SubscriptionPlanCard
                     record={record}
                     isAuthenticated={props.isAuthenticated}
+                    models={props.models}
+                    quotaPerUnit={props.quotaPerUnit}
+                    subscriptionDisplayModels={props.subscriptionDisplayModels}
                   />
                 </CarouselItem>
               ))}

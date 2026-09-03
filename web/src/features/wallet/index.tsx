@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { AccountRechargeLink } from '@/components/account-recharge-link'
 import { SectionPageLayout } from '@/components/layout'
+import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -84,6 +85,11 @@ export function Wallet(props: WalletProps) {
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
+  const {
+    models: pricingModels,
+    quotaPerUnit,
+    subscriptionDisplayModels,
+  } = usePricingData()
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
   const topupSummaryQuery = useTopupSummary()
 
@@ -351,6 +357,9 @@ export function Wallet(props: WalletProps) {
 
               <SubscriptionPlansCard
                 topupInfo={topupInfo}
+                models={pricingModels}
+                quotaPerUnit={quotaPerUnit}
+                subscriptionDisplayModels={subscriptionDisplayModels}
                 onAvailabilityChange={handleSubscriptionAvailabilityChange}
                 userQuota={user?.quota}
                 onPurchaseSuccess={fetchUser}

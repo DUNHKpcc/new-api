@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
+import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
 import { getPricing } from '../api'
 
@@ -41,6 +42,16 @@ export function usePricingData() {
     () => Math.max((status?.usd_exchange_rate as number) ?? priceRate, 0.001),
     [status?.usd_exchange_rate, priceRate]
   )
+  const quotaPerUnit = useMemo(() => {
+    const configured = Number(status?.quota_per_unit)
+    return Number.isFinite(configured) && configured > 0
+      ? configured
+      : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
+  }, [status?.quota_per_unit])
+  const subscriptionDisplayModels =
+    typeof status?.subscription_display_models === 'string'
+      ? status.subscription_display_models
+      : ''
 
   const models = useMemo(() => {
     if (!data?.data || !data?.vendors) return []
@@ -74,5 +85,7 @@ export function usePricingData() {
     refetch,
     priceRate,
     usdExchangeRate,
+    quotaPerUnit,
+    subscriptionDisplayModels,
   }
 }

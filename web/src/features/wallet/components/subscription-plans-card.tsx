@@ -52,6 +52,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { SubscriptionPlanEstimate } from '@/features/pricing/components/subscription-plan-estimate'
+import type { PricingModel } from '@/features/pricing/types'
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
@@ -74,6 +76,9 @@ import type { PaymentMethod, TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
+  models?: PricingModel[]
+  quotaPerUnit?: number
+  subscriptionDisplayModels?: string
   onAvailabilityChange?: (available: boolean) => void
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
@@ -105,6 +110,9 @@ function getBillingPreferenceLabel(
 
 export function SubscriptionPlansCard({
   topupInfo,
+  models,
+  quotaPerUnit,
+  subscriptionDisplayModels,
   onAvailabilityChange,
   userQuota,
   onPurchaseSuccess,
@@ -679,6 +687,13 @@ export function SubscriptionPlansCard({
                           </div>
                         ))}
                       </div>
+
+                      <SubscriptionPlanEstimate
+                        plan={plan}
+                        models={models}
+                        quotaPerUnit={quotaPerUnit}
+                        subscriptionDisplayModels={subscriptionDisplayModels}
+                      />
 
                       <Separator className='mb-3 shrink-0' />
 

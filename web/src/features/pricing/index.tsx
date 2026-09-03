@@ -56,6 +56,8 @@ export function Pricing() {
     isLoading,
     priceRate,
     usdExchangeRate,
+    quotaPerUnit,
+    subscriptionDisplayModels,
   } = usePricingData()
   const subscriptionPlans = usePricingSubscriptionPlans()
 
@@ -162,6 +164,9 @@ export function Pricing() {
               plans={subscriptionPlans.plans}
               plansLoading={subscriptionPlans.isLoading}
               isAuthenticated={isAuthenticated}
+              models={models || []}
+              quotaPerUnit={quotaPerUnit}
+              subscriptionDisplayModels={subscriptionDisplayModels}
               searchInput={searchInput}
               onSearchChange={setSearchInput}
               onClearSearch={clearSearch}
@@ -181,6 +186,9 @@ export function Pricing() {
             plans={subscriptionPlans.plans}
             plansLoading={subscriptionPlans.isLoading}
             isAuthenticated={isAuthenticated}
+            models={models || []}
+            quotaPerUnit={quotaPerUnit}
+            subscriptionDisplayModels={subscriptionDisplayModels}
             searchInput={searchInput}
             onSearchChange={setSearchInput}
             onClearSearch={clearSearch}

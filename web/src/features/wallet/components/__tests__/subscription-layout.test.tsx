@@ -21,6 +21,8 @@ import { after, afterEach, describe, test } from 'node:test'
 
 import { Window } from 'happy-dom'
 
+import type { PricingModel } from '@/features/pricing/types'
+
 const { mock } = await import(`bun:${'test'}`)
 
 const domWindow = new Window()
@@ -51,6 +53,17 @@ for (const key of domGlobals) {
 
 const now = Math.floor(Date.now() / 1000)
 let publicPlanCount = 6
+
+const estimateModel: PricingModel = {
+  id: 10,
+  model_name: 'estimate-model',
+  quota_type: 0,
+  model_ratio: 1,
+  completion_ratio: 1,
+  cache_ratio: 0.5,
+  enable_groups: ['default'],
+  group_ratio: { default: 1 },
+}
 
 mock.module('@/features/subscriptions/api', () => ({
   getPublicPlans: async () => ({
@@ -151,7 +164,11 @@ const reactTestGlobals = globalThis as typeof globalThis & {
 }
 reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
 
-async function renderSubscriptionPlansCard() {
+async function renderSubscriptionPlansCard(options?: {
+  models?: PricingModel[]
+  quotaPerUnit?: number
+  subscriptionDisplayModels?: string
+}) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -159,7 +176,7 @@ async function renderSubscriptionPlansCard() {
   await act(async () => {
     root.render(
       <I18nextProvider i18n={i18n}>
-        <SubscriptionPlansCard topupInfo={null} />
+        <SubscriptionPlansCard topupInfo={null} {...options} />
       </I18nextProvider>
     )
     await Promise.resolve()
@@ -266,6 +283,28 @@ describe('wallet subscription layout', () => {
     assert.doesNotMatch(limitedPlan?.textContent ?? '', /\$10\.00/)
     assert.match(limitedPlan?.textContent ?? '', /Purchase Limit: 2/)
     assert.ok(limitedPlan?.querySelector('.break-words'))
+
+    await cleanupRenderedCard(container, root)
+  })
+
+  test('shows the shared token estimate in wallet plan cards', async () => {
+    const { container, root } = await renderSubscriptionPlansCard({
+      models: [estimateModel],
+      quotaPerUnit: 500_000,
+      subscriptionDisplayModels: '["estimate-model"]',
+    })
+
+    const firstPlan = container.querySelector('[data-subscription-plan-id="1"]')
+    assert.ok(firstPlan)
+    assert.match(firstPlan.textContent ?? '', /Total quota over validity/)
+    assert.match(firstPlan.textContent ?? '', /Estimated tokens/)
+    assert.match(firstPlan.textContent ?? '', /estimate-model/)
+    assert.equal(
+      firstPlan
+        .querySelector('[data-subscription-token-estimates="true"]')
+        ?.getAttribute('data-subscription-token-estimates'),
+      'true'
+    )
 
     await cleanupRenderedCard(container, root)
   })

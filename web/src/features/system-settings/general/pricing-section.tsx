@@ -54,6 +54,7 @@ import { SettingsSection } from '../components/settings-section'
 import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
+import { SubscriptionDisplayModelsField } from './subscription-display-models-field'
 
 const createPricingSchema = (t: (key: string) => string) =>
   z
@@ -64,6 +65,7 @@ const createPricingSchema = (t: (key: string) => string) =>
         .min(0.0001, t('Exchange rate must be greater than 0')),
       DisplayInCurrencyEnabled: z.boolean(),
       DisplayTokenStatEnabled: z.boolean(),
+      SubscriptionDisplayModels: z.string(),
       general_setting: z.object({
         quota_display_type: z.enum(['USD', 'CNY', 'TOKENS', 'CUSTOM']),
         custom_currency_symbol: z.string().max(8).optional(),
@@ -143,6 +145,8 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
     displayType === 'TOKENS' ||
     defaultValues.QuotaPerUnit !== DEFAULT_CURRENCY_CONFIG.quotaPerUnit
   const showDisplayInCurrencyOption = displayInCurrencyEnabled === false
+  const exchangeRateLabel =
+    displayType === 'CNY' ? t('CNY per USD') : t('USD Exchange Rate')
 
   return (
     <>
@@ -235,13 +239,7 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
                 name='USDExchangeRate'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      {displayType === 'CNY'
-                        ? t('CNY per USD')
-                        : displayType === 'USD'
-                          ? t('USD Exchange Rate')
-                          : t('USD Exchange Rate')}
-                    </FormLabel>
+                    <FormLabel>{exchangeRateLabel}</FormLabel>
                     <FormControl>
                       <Input
                         type='number'
@@ -366,6 +364,20 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
                     />
                   </FormControl>
                 </SettingsSwitchItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='SubscriptionDisplayModels'
+              render={({ field }) => (
+                <FormItem className='lg:col-span-2'>
+                  <SubscriptionDisplayModelsField
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                  <FormMessage />
+                </FormItem>
               )}
             />
           </SettingsForm>

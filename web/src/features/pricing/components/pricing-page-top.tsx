@@ -22,6 +22,7 @@ import { AccountRechargeLink } from '@/components/account-recharge-link'
 import type { PlanRecord } from '@/features/subscriptions/types'
 import { cn } from '@/lib/utils'
 
+import type { PricingModel } from '../types'
 import { SearchBar } from './search-bar'
 import { SubscriptionPlanShowcase } from './subscription-plan-showcase'
 
@@ -29,6 +30,9 @@ export interface PricingPageTopProps {
   plans: PlanRecord[]
   plansLoading?: boolean
   isAuthenticated: boolean
+  models?: PricingModel[]
+  quotaPerUnit?: number
+  subscriptionDisplayModels?: string
   searchInput: string
   onSearchChange: (value: string) => void
   onClearSearch: () => void
@@ -49,6 +53,9 @@ export function PricingPageTop(props: PricingPageTopProps) {
         plans={props.plans}
         isLoading={props.plansLoading}
         isAuthenticated={props.isAuthenticated}
+        models={props.models}
+        quotaPerUnit={props.quotaPerUnit}
+        subscriptionDisplayModels={props.subscriptionDisplayModels}
       />
       <header
         className={cn(

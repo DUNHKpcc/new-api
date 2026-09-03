@@ -24,6 +24,7 @@ export { LoadingSkeleton } from './loading-skeleton'
 export { EmptyState } from './empty-state'
 export { SearchBar } from './search-bar'
 export { PricingPageTop } from './pricing-page-top'
+export { SubscriptionPlanEstimate } from './subscription-plan-estimate'
 export { SubscriptionPlanShowcase } from './subscription-plan-showcase'
 export {
   ModelDetails,

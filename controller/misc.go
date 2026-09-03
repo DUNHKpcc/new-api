@@ -108,8 +108,9 @@ func GetStatus(c *gin.Context) {
 		"version_update_details":       common.OptionMap["VersionUpdateDetails"],
 
 		// 模块管理配置
-		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],
-		"SidebarModulesAdmin": common.OptionMap["SidebarModulesAdmin"],
+		"HeaderNavModules":            common.OptionMap["HeaderNavModules"],
+		"SidebarModulesAdmin":         common.OptionMap["SidebarModulesAdmin"],
+		"subscription_display_models": common.OptionMap["SubscriptionDisplayModels"],
 
 		"oidc_enabled":                system_setting.GetOIDCSettings().Enabled,
 		"oidc_client_id":              system_setting.GetOIDCSettings().ClientId,

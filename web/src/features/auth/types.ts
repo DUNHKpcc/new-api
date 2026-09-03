@@ -134,6 +134,7 @@ export interface SystemStatus {
     password_register_enabled?: boolean
     discount_notice?: string
     version_update_details?: string
+    subscription_display_models?: string
     custom_oauth_providers?: CustomOAuthProviderInfo[]
     [key: string]: unknown
   }
@@ -177,6 +178,7 @@ export interface SystemStatus {
   password_register_enabled?: boolean
   discount_notice?: string
   version_update_details?: string
+  subscription_display_models?: string
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   [key: string]: unknown
 }

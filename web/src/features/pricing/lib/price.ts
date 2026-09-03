@@ -103,6 +103,28 @@ function hasRatio(value: number | null | undefined): boolean {
 }
 
 /**
+ * Return the flat token prices used by the pricing table, in USD per million
+ * tokens. The estimate shown on subscription cards must use this same formula
+ * so its numbers stay aligned with the public model price display.
+ */
+export function getTokenPricesPerMillion(
+  model: PricingModel,
+  selectedGroup?: string
+): { input: number; output: number; cache: number } | null {
+  if (model.quota_type === QUOTA_TYPE_VALUES.REQUEST) return null
+  if (model.billing_mode === 'tiered_expr') return null
+
+  const displayGroupRatio = getDisplayGroupRatio(model, selectedGroup)
+  const input = calculateTokenPrice(model, 'input', displayGroupRatio)
+  const output = calculateTokenPrice(model, 'output', displayGroupRatio)
+  const cache = hasRatio(model.cache_ratio)
+    ? calculateTokenPrice(model, 'cache', displayGroupRatio)
+    : input
+
+  return { input, output, cache }
+}
+
+/**
  * Apply recharge rate to price
  *
  * priceRate represents how much users need to recharge (in the display currency)
