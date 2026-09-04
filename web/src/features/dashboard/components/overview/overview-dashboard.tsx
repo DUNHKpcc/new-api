@@ -64,8 +64,8 @@ import { DASHBOARD_PANEL_CLASS_NAME } from '../ui/panel-surface'
 import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
-import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
+import { SystemStatusPanel } from './system-status-panel'
 import { UptimePanel } from './uptime-panel'
 
 const SETUP_GUIDE_VISIBILITY_STORAGE_KEY =
@@ -608,10 +608,6 @@ export function OverviewDashboard() {
   const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
-  const showLeftContentPanels =
-    showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
-  const showContentPanels = showLeftContentPanels || showUptimePanel
-
   const handleSetupGuideToggle = () => {
     const nextExpanded = !setupGuideExpanded
     setManualSetupGuideExpanded(nextExpanded)
@@ -754,53 +750,38 @@ export function OverviewDashboard() {
 
       <SummaryCards />
 
-      <CardStaggerContainer>
-        <CardStaggerItem>
-          <PerformanceHealthPanel />
-        </CardStaggerItem>
-      </CardStaggerContainer>
-
-      {showContentPanels && (
-        <CardStaggerContainer
-          className={cn(
-            'grid grid-cols-1 gap-4',
-            showLeftContentPanels &&
-              showUptimePanel &&
-              'xl:grid-cols-[minmax(0,1fr)_22rem]'
-          )}
-        >
-          {showLeftContentPanels && (
-            <div
-              className={cn(
-                'grid min-w-0 grid-cols-1 gap-4',
-                (showApiInfoPanel || showAnnouncementsPanel || showFAQPanel) &&
-                  'lg:grid-cols-2'
-              )}
-            >
-              {showApiInfoPanel && (
-                <CardStaggerItem>
-                  <ApiInfoPanel />
-                </CardStaggerItem>
-              )}
-              {showAnnouncementsPanel && (
-                <CardStaggerItem>
-                  <AnnouncementsPanel />
-                </CardStaggerItem>
-              )}
-              {showFAQPanel && (
-                <CardStaggerItem>
-                  <FAQPanel />
-                </CardStaggerItem>
-              )}
-            </div>
-          )}
-          {showUptimePanel && (
+      <CardStaggerContainer
+        className={cn(
+          'grid grid-cols-1 gap-4',
+          showUptimePanel && 'xl:grid-cols-[minmax(0,1fr)_22rem]'
+        )}
+      >
+        <div className='grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2'>
+          <CardStaggerItem>
+            <SystemStatusPanel />
+          </CardStaggerItem>
+          {showAnnouncementsPanel && (
             <CardStaggerItem>
-              <UptimePanel />
+              <AnnouncementsPanel />
             </CardStaggerItem>
           )}
-        </CardStaggerContainer>
-      )}
+          {showApiInfoPanel && (
+            <CardStaggerItem>
+              <ApiInfoPanel />
+            </CardStaggerItem>
+          )}
+          {showFAQPanel && (
+            <CardStaggerItem>
+              <FAQPanel />
+            </CardStaggerItem>
+          )}
+        </div>
+        {showUptimePanel && (
+          <CardStaggerItem>
+            <UptimePanel />
+          </CardStaggerItem>
+        )}
+      </CardStaggerContainer>
     </div>
   )
 }
