@@ -61,7 +61,7 @@ describe('subscription token estimates', () => {
     )
 
     assert.equal(result.reason, 'ok')
-    assert.equal(result.tokens, 1_868_634_962)
+    assert.equal(result.tokens, 4_671_587_405)
   })
 
   test('normalizes configured display models to three unique names', () => {

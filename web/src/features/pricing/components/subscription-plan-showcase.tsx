@@ -73,27 +73,28 @@ function SubscriptionPlanCard(props: {
       size='sm'
       data-card-hover='false'
       data-subscription-plan-id={plan.id}
-      className='h-full min-w-0 gap-0 py-0'
+      className='bg-card/95 relative h-full min-w-0 gap-0 overflow-hidden rounded-xl border border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md'
     >
-      <CardContent className='flex min-h-[12.5rem] flex-1 flex-col p-4'>
+      <div className='bg-warning h-1 w-full' aria-hidden='true' />
+      <CardContent className='flex min-h-[12.5rem] flex-1 flex-col p-5'>
         <div className='flex min-w-0 items-start justify-between gap-3'>
           <div className='min-w-0'>
-            <h3 className='line-clamp-2 text-base leading-snug font-semibold break-words'>
+            <h3 className='line-clamp-2 text-lg leading-snug font-semibold tracking-tight break-words'>
               {plan.title || t('Subscription Plans')}
             </h3>
             {plan.subtitle && (
-              <p className='text-muted-foreground mt-1 line-clamp-2 text-xs leading-4 break-words'>
+              <p className='text-muted-foreground mt-1 line-clamp-2 text-sm leading-5 break-words'>
                 {plan.subtitle}
               </p>
             )}
           </div>
-          <span className='bg-warning/10 text-warning flex size-8 shrink-0 items-center justify-center rounded-md'>
+          <span className='bg-warning/12 text-warning flex size-9 shrink-0 items-center justify-center rounded-full'>
             <Crown className='size-4' aria-hidden='true' />
           </span>
         </div>
 
-        <div className='mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1'>
-          <span className='text-2xl leading-none font-bold tabular-nums'>
+        <div className='mt-6 flex flex-wrap items-baseline gap-x-2 gap-y-1'>
+          <span className='text-3xl leading-none font-semibold tracking-tight tabular-nums'>
             {formatSubscriptionPrice(plan.price_amount)}
           </span>
           <span className='text-muted-foreground text-xs'>
@@ -101,13 +102,13 @@ function SubscriptionPlanCard(props: {
           </span>
         </div>
 
-        <div className='border-border/60 mt-4 grid grid-cols-2 gap-3 border-y py-3'>
+        <div className='border-border/60 mt-6 grid grid-cols-2 gap-4 border-y py-4'>
           <div className='min-w-0'>
             <span className='text-muted-foreground flex items-center gap-1 text-[11px] leading-none'>
               <Gauge className='size-3' aria-hidden='true' />
               {t('Quota per reset')}
             </span>
-            <strong className='mt-1.5 block truncate text-xs font-semibold tabular-nums'>
+            <strong className='mt-2 block truncate text-sm font-semibold tabular-nums'>
               {quota}
             </strong>
           </div>
@@ -116,7 +117,7 @@ function SubscriptionPlanCard(props: {
               <RefreshCw className='size-3' aria-hidden='true' />
               {t('Quota Reset')}
             </span>
-            <strong className='mt-1.5 block truncate text-xs font-semibold'>
+            <strong className='mt-2 block truncate text-sm font-semibold'>
               {formatResetPeriod(plan, t)}
             </strong>
           </div>
@@ -131,7 +132,7 @@ function SubscriptionPlanCard(props: {
 
         <Button
           variant='default'
-          className='bg-warning text-warning-foreground hover:bg-warning/85 border-warning mt-3 w-full justify-between font-semibold shadow-sm'
+          className='bg-foreground text-background hover:bg-foreground/90 mt-5 w-full justify-between rounded-lg font-semibold shadow-sm'
           render={subscribeLink}
         >
           <span>{t('Subscribe Now')}</span>

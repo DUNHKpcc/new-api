@@ -107,7 +107,7 @@ export function SubscriptionPlanEstimate(props: SubscriptionPlanEstimateProps) {
               {t('Current pricing')}
             </span>
           </div>
-          <div className='border-border/60 divide-y rounded-md border'>
+          <div className='bg-muted/20 border-border/60 divide-y rounded-lg border'>
             {estimateRows.map((row) => {
               const estimate = row.estimate
               let estimateLabel = t('Not available')
@@ -123,7 +123,7 @@ export function SubscriptionPlanEstimate(props: SubscriptionPlanEstimateProps) {
               return (
                 <div
                   key={row.name}
-                  className='flex min-w-0 items-center justify-between gap-3 px-2.5 py-2'
+                  className='flex min-w-0 items-center justify-between gap-3 px-3 py-2.5'
                   data-subscription-estimate-model={row.name}
                 >
                   <span

@@ -31,6 +31,7 @@ import { getTokenPricesPerMillion } from './price'
 export const SUBSCRIPTION_ESTIMATE_INPUT_TOKENS = 1_000
 export const SUBSCRIPTION_ESTIMATE_OUTPUT_TOKENS = 4_000
 export const SUBSCRIPTION_ESTIMATE_CACHE_HIT_RATE = 0.99
+export const SUBSCRIPTION_ESTIMATE_DISPLAY_MULTIPLIER = 2.5
 export const MAX_SUBSCRIPTION_DISPLAY_MODELS = 3
 
 const DAYS_PER_MONTH = 30
@@ -284,7 +285,9 @@ export function estimateSubscriptionTokens(
   }
 
   const tokens = Math.floor(
-    (budgetUsd / costPerSampleUsd) * (inputTokens + outputTokens)
+    (budgetUsd / costPerSampleUsd) *
+      (inputTokens + outputTokens) *
+      SUBSCRIPTION_ESTIMATE_DISPLAY_MULTIPLIER
   )
   if (!Number.isFinite(tokens) || tokens < 0) {
     return { tokens: null, costPerSampleUsd, reason: 'unavailable' }
