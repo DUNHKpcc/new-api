@@ -16,14 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  ChevronDown,
-  ChevronUp,
-  Image as ImageIcon,
-  Trash2,
-} from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ImageCropInput } from '@/components/image-crop-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,7 +32,7 @@ type ResourceDownloadItemEditorProps = {
   total: number
   uploading: boolean
   onChange: (item: ResourceDownloadItem) => void
-  onThumbnailChange: (file: File) => void
+  onThumbnailChange: (value: string) => void
   onMove: (direction: -1 | 1) => void
   onRemove: () => void
 }
@@ -92,31 +88,13 @@ export function ResourceDownloadItemEditor(
       <div className='grid min-w-0 gap-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)]'>
         <div className='min-w-0 space-y-2'>
           <Label htmlFor={`${inputPrefix}-thumbnail`}>{t('Thumbnail')}</Label>
-          <div className='bg-muted flex aspect-video items-center justify-center overflow-hidden rounded-lg border'>
-            {props.item.thumbnail ? (
-              <img
-                src={props.item.thumbnail}
-                alt={props.item.name || t('Resource thumbnail')}
-                className='size-full object-cover'
-              />
-            ) : (
-              <ImageIcon
-                className='text-muted-foreground size-7'
-                aria-hidden='true'
-              />
-            )}
-          </div>
-          <Input
+          <ImageCropInput
             id={`${inputPrefix}-thumbnail`}
-            type='file'
-            accept='image/jpeg,image/png,image/webp'
+            value={props.item.thumbnail}
+            aspectRatio={16 / 9}
             disabled={props.uploading}
-            aria-label={t('Upload thumbnail')}
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) props.onThumbnailChange(file)
-              event.target.value = ''
-            }}
+            label={t('Upload thumbnail')}
+            onChange={props.onThumbnailChange}
           />
         </div>
 

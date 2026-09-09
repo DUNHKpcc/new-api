@@ -24,7 +24,6 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
-import { compressResourceThumbnail } from '@/features/resource-downloads/lib/compress-thumbnail'
 import {
   MAX_RESOURCE_DOWNLOAD_ITEMS,
   isHttpDownloadUrl,
@@ -79,13 +78,12 @@ export function ResourceDownloadsSection(props: ResourceDownloadsSectionProps) {
     })
   }
 
-  const uploadThumbnail = async (index: number, file: File) => {
+  const uploadThumbnail = async (index: number, thumbnail: string) => {
     const item = items[index]
     if (!item) return
 
     setUploadingId(item.id)
     try {
-      const thumbnail = await compressResourceThumbnail(file)
       setItems((current) =>
         current.map((existing) =>
           existing.id === item.id ? { ...existing, thumbnail } : existing

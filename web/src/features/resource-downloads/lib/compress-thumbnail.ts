@@ -52,7 +52,17 @@ function blobToDataUrl(blob: Blob) {
   })
 }
 
-export async function compressImageToWebP(file: File): Promise<string> {
+export async function compressImageToWebP(
+  file: File,
+  aspectRatio?: number,
+  crop?: { x: number; y: number; width: number; height: number }
+): Promise<string> {
+  if (
+    aspectRatio !== undefined &&
+    (!Number.isFinite(aspectRatio) || aspectRatio <= 0)
+  ) {
+    throw new Error('Invalid crop')
+  }
   if (
     !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ||
     file.size === 0 ||
@@ -63,21 +73,72 @@ export async function compressImageToWebP(file: File): Promise<string> {
 
   const source = await createImageBitmap(file)
   try {
+    if (
+      crop &&
+      (!Object.values(crop).every(Number.isFinite) ||
+        crop.x < 0 ||
+        crop.y < 0 ||
+        crop.width <= 0 ||
+        crop.height <= 0 ||
+        crop.x + crop.width > source.width + 1 ||
+        crop.y + crop.height > source.height + 1)
+    ) {
+      throw new Error('Invalid crop')
+    }
     for (const attempt of compressionAttempts) {
       const scale = Math.min(
         1,
         attempt.maxWidth / source.width,
         attempt.maxHeight / source.height
       )
-      const width = Math.max(1, Math.round(source.width * scale))
-      const height = Math.max(1, Math.round(source.height * scale))
+      let width = Math.max(1, Math.round(source.width * scale))
+      let height = Math.max(1, Math.round(source.height * scale))
+      if (aspectRatio && aspectRatio > 0) {
+        if (width / height > aspectRatio) {
+          width = Math.round(height * aspectRatio)
+        } else {
+          height = Math.round(width / aspectRatio)
+        }
+      }
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
 
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Failed to prepare thumbnail')
-      context.drawImage(source, 0, 0, width, height)
+      const sourceRatio = source.width / source.height
+      let cropWidth = source.width
+      let cropHeight = source.height
+      let cropX = 0
+      let cropY = 0
+      if (aspectRatio && sourceRatio > aspectRatio) {
+        cropWidth = source.height * aspectRatio
+        cropX = (source.width - cropWidth) / 2
+      } else if (aspectRatio && sourceRatio < aspectRatio) {
+        cropHeight = source.width / aspectRatio
+        cropY = (source.height - cropHeight) / 2
+      }
+      if (crop) {
+        cropWidth = crop.width
+        cropHeight = crop.height
+        cropX = crop.x
+        cropY = crop.y
+      }
+      width = Math.max(1, width)
+      height = Math.max(1, height)
+      canvas.width = width
+      canvas.height = height
+      context.drawImage(
+        source,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        width,
+        height
+      )
 
       const blob = await canvasToWebP(canvas, attempt.quality)
       if (blob.size <= MAX_THUMBNAIL_BYTES) {

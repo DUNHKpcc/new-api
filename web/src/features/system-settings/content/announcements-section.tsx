@@ -28,6 +28,7 @@ import { StaticDataTable } from '@/components/data-table/static/static-data-tabl
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { Dialog } from '@/components/dialog'
+import { ImageCropInput } from '@/components/image-crop-input'
 import { StatusBadge } from '@/components/status-badge'
 import {
   AlertDialog,
@@ -60,7 +61,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { compressImageToWebP } from '@/features/resource-downloads/lib/compress-thumbnail'
 import dayjs from '@/lib/dayjs'
 
 import { SettingsSwitchField } from '../components/settings-form-layout'
@@ -165,8 +165,8 @@ export function AnnouncementsSection({
   const [editingAnnouncement, setEditingAnnouncement] =
     useState<Announcement | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<'single' | 'batch'>('single')
-  const [uploadingImage, setUploadingImage] = useState(false)
   const itemLabel = t(itemLabelKey)
+  const supportsImages = optionKey === 'console_setting.global_notifications'
 
   const form = useForm<AnnouncementFormValues>({
     resolver: zodResolver(announcementSchema),
@@ -183,9 +183,16 @@ export function AnnouncementsSection({
     try {
       const parsed = JSON.parse(data || '[]')
       if (Array.isArray(parsed)) {
+        setHasChanges(
+          !supportsImages &&
+            parsed.some(
+              (item) => item && typeof item === 'object' && 'image' in item
+            )
+        )
         setAnnouncements(
           parsed.map((item, idx) => ({
             ...item,
+            ...(supportsImages ? {} : { image: undefined }),
             id: item.id || idx + 1,
           }))
         )
@@ -193,7 +200,7 @@ export function AnnouncementsSection({
     } catch {
       setAnnouncements([])
     }
-  }, [data])
+  }, [data, supportsImages])
 
   useEffect(() => {
     setIsEnabled(enabled)
@@ -293,24 +300,16 @@ export function AnnouncementsSection({
     setShowDialog(false)
   }
 
-  const handleImageUpload = async (file: File) => {
-    setUploadingImage(true)
-    try {
-      const image = await compressImageToWebP(file)
-      form.setValue('image', image, { shouldDirty: true })
-      toast.success(t('Announcement image uploaded'))
-    } catch {
-      toast.error(t('Announcement image upload failed'))
-    } finally {
-      setUploadingImage(false)
-    }
-  }
-
   const handleSaveAll = async () => {
     try {
+      const value = supportsImages
+        ? announcements
+        : announcements.map(
+            ({ image: _image, ...announcement }) => announcement
+          )
       await updateOption.mutateAsync({
         key: optionKey,
-        value: JSON.stringify(announcements),
+        value: JSON.stringify(value),
       })
       setHasChanges(false)
       toast.success(t('Announcements saved successfully'))
@@ -460,20 +459,24 @@ export function AnnouncementsSection({
               cellClassName: 'text-muted-foreground max-w-xs truncate',
               cell: (announcement) => announcement.extra || '-',
             },
-            {
-              id: 'image',
-              header: t('Image'),
-              cell: (announcement) =>
-                announcement.image ? (
-                  <img
-                    src={announcement.image}
-                    alt={t('Announcement image')}
-                    className='size-10 rounded border object-cover'
-                  />
-                ) : (
-                  '-'
-                ),
-            },
+            ...(supportsImages
+              ? [
+                  {
+                    id: 'image',
+                    header: t('Image'),
+                    cell: (announcement: Announcement) =>
+                      announcement.image ? (
+                        <img
+                          src={announcement.image}
+                          alt={t('Announcement image')}
+                          className='size-10 rounded border object-cover'
+                        />
+                      ) : (
+                        '-'
+                      ),
+                  },
+                ]
+              : []),
             {
               id: 'actions',
               header: t('Actions'),
@@ -656,41 +659,24 @@ export function AnnouncementsSection({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name='image'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Announcement image (Optional)')}</FormLabel>
-                  <FormControl>
-                    <div className='space-y-2'>
-                      {field.value ? (
-                        <img
-                          src={field.value}
-                          alt={t('Announcement image')}
-                          className='max-h-48 w-full rounded-md border object-cover'
-                        />
-                      ) : null}
-                      <Input
-                        type='file'
-                        accept='image/jpeg,image/png,image/webp'
-                        disabled={uploadingImage}
-                        aria-label={t('Upload announcement image')}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0]
-                          if (file) void handleImageUpload(file)
-                          event.target.value = ''
-                        }}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    {t('Images are compressed to WebP before saving.')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {supportsImages ? (
+              <FormField
+                control={form.control}
+                name='image'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Announcement image (Optional)')}</FormLabel>
+                    <ImageCropInput
+                      value={field.value}
+                      aspectRatio={16 / 9}
+                      label={t('Upload announcement image')}
+                      onChange={field.onChange}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
           </form>
         </Form>
       </Dialog>

@@ -29,7 +29,6 @@ import {
   parseLotteryItems,
 } from '@/features/lottery/lib/lottery-items'
 import type { LotteryItem } from '@/features/lottery/types'
-import { compressImageToWebP } from '@/features/resource-downloads/lib/compress-thumbnail'
 
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
@@ -78,13 +77,12 @@ export function LotterySection(props: LotterySectionProps) {
     })
   }
 
-  const uploadImage = async (index: number, file: File) => {
+  const uploadImage = async (index: number, image: string) => {
     const item = items[index]
     if (!item) return
 
     setUploadingId(item.id)
     try {
-      const image = await compressImageToWebP(file)
       setItems((current) =>
         current.map((existing) =>
           existing.id === item.id ? { ...existing, image } : existing

@@ -16,22 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  ChevronDown,
-  ChevronUp,
-  Image as ImageIcon,
-  Trash2,
-} from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ImageCropInput } from '@/components/image-crop-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { LOTTERY_IMAGE_ASPECT_CLASS } from '@/features/lottery/lib/image-layout'
 import { toDateTimeLocalValue } from '@/features/lottery/lib/lottery-items'
 import type { LotteryItem } from '@/features/lottery/types'
-import { cn } from '@/lib/utils'
 
 type LotteryItemEditorProps = {
   item: LotteryItem
@@ -39,7 +33,7 @@ type LotteryItemEditorProps = {
   total: number
   uploading: boolean
   onChange: (item: LotteryItem) => void
-  onImageChange: (file: File) => void
+  onImageChange: (value: string) => void
   onMove: (direction: -1 | 1) => void
   onRemove: () => void
 }
@@ -94,36 +88,13 @@ export function LotteryItemEditor(props: LotteryItemEditorProps) {
       <div className='grid min-w-0 gap-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)]'>
         <div className='min-w-0 space-y-2'>
           <Label htmlFor={`${inputPrefix}-image`}>{t('Lottery image')}</Label>
-          <div
-            className={cn(
-              'bg-muted flex items-center justify-center overflow-hidden rounded-lg border',
-              LOTTERY_IMAGE_ASPECT_CLASS
-            )}
-          >
-            {props.item.image ? (
-              <img
-                src={props.item.image}
-                alt={props.item.title || t('Lottery image')}
-                className='size-full object-cover'
-              />
-            ) : (
-              <ImageIcon
-                className='text-muted-foreground size-7'
-                aria-hidden='true'
-              />
-            )}
-          </div>
-          <Input
+          <ImageCropInput
             id={`${inputPrefix}-image`}
-            type='file'
-            accept='image/jpeg,image/png,image/webp'
+            value={props.item.image}
+            aspectRatio={1}
             disabled={props.uploading}
-            aria-label={t('Upload lottery image')}
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) props.onImageChange(file)
-              event.target.value = ''
-            }}
+            label={t('Upload lottery image')}
+            onChange={props.onImageChange}
           />
         </div>
 
