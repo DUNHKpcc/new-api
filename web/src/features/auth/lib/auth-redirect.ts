@@ -17,18 +17,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { AuthUser } from '@/stores/auth-store'
+import { normalizeInterfaceLanguage } from '@/i18n/languages'
 
 const allowedRedirectProtocols = new Set(['http:', 'https:'])
 
 export function getSavedLanguage(user: AuthUser): string | undefined {
+  const normalize = (value: unknown) =>
+    typeof value === 'string' ? normalizeInterfaceLanguage(value) : undefined
   if (typeof user.language === 'string') {
-    return user.language
+    return normalize(user.language)
   }
 
   if (user.setting && typeof user.setting === 'object') {
-    return typeof user.setting.language === 'string'
-      ? user.setting.language
-      : undefined
+    return normalize(user.setting.language)
   }
 
   if (typeof user.setting !== 'string') {
@@ -37,7 +38,7 @@ export function getSavedLanguage(user: AuthUser): string | undefined {
 
   try {
     const setting = JSON.parse(user.setting) as { language?: unknown }
-    return typeof setting.language === 'string' ? setting.language : undefined
+    return normalize(setting.language)
   } catch {
     return undefined
   }
