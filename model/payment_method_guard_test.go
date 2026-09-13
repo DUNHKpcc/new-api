@@ -189,19 +189,24 @@ func TestValidateTopUpQuotaCapacityAllowsDebtAndEnforcesUpperLimit(t *testing.T)
 		},
 		{
 			name:          "highest representable balance is accepted",
-			currentQuota:  common.MaxQuota - 1 - 50,
+			currentQuota:  common.MaxWalletQuota - 1 - 50,
 			creditedQuota: 50,
 		},
 		{
 			name:          "balance above quota domain is rejected",
-			currentQuota:  common.MaxQuota - 50,
+			currentQuota:  common.MaxWalletQuota - 49,
 			creditedQuota: 50,
 			wantErr:       ErrTopUpQuotaLimitExceeded,
 		},
 		{
-			name:          "single credit at saturation boundary is rejected",
+			name:          "single credit at saturation boundary is accepted",
 			currentQuota:  0,
-			creditedQuota: common.MaxQuota,
+			creditedQuota: common.MaxWalletQuota,
+		},
+		{
+			name:          "single credit beyond saturation boundary is rejected",
+			currentQuota:  0,
+			creditedQuota: common.MaxWalletQuota + 1,
 			wantErr:       ErrInvalidTopUpQuota,
 		},
 	}
@@ -278,7 +283,7 @@ func TestRechargeProvidersRollBackWhenWalletLimitWouldBeExceeded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			truncateTables(t)
 			userID := 500 + index
-			currentQuota := common.MaxQuota - 20
+			currentQuota := common.MaxWalletQuota - 19
 			insertUserForPaymentGuardTest(t, userID, currentQuota)
 			tradeNo := fmt.Sprintf("wallet-limit-%d", index)
 			topUp := TopUp{

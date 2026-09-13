@@ -162,15 +162,21 @@ func TestCompleteEpayTopUpEnforcesFinalQuotaLimit(t *testing.T) {
 	}{
 		{
 			name:         "accepts highest representable balance",
-			currentQuota: common.MaxQuota - 1 - 5_000_000,
-			wantQuota:    common.MaxQuota - 1,
+			currentQuota: common.MaxWalletQuota - 1 - 5_000_000,
+			wantQuota:    common.MaxWalletQuota - 1,
+			wantStatus:   common.TopUpStatusSuccess,
+		},
+		{
+			name:         "accepts exact quota boundary",
+			currentQuota: common.MaxWalletQuota - 5_000_000,
+			wantQuota:    common.MaxWalletQuota,
 			wantStatus:   common.TopUpStatusSuccess,
 		},
 		{
 			name:         "rejects balance above quota domain",
-			currentQuota: common.MaxQuota - 5_000_000,
+			currentQuota: common.MaxWalletQuota - 4_999_999,
 			wantErr:      true,
-			wantQuota:    common.MaxQuota - 5_000_000,
+			wantQuota:    common.MaxWalletQuota - 4_999_999,
 			wantStatus:   common.TopUpStatusPending,
 		},
 	}
@@ -387,7 +393,7 @@ func TestCompleteEpayTopUpRejectsProviderTradeReuse(t *testing.T) {
 func TestManualCompleteTopUpRejectsMissingOrOverflowingUser(t *testing.T) {
 	t.Run("quota overflow", func(t *testing.T) {
 		truncateTables(t)
-		user := User{Username: "manual-overflow-user", AffCode: "manual-overflow", Quota: common.MaxQuota}
+		user := User{Username: "manual-overflow-user", AffCode: "manual-overflow", Quota: common.MaxWalletQuota}
 		require.NoError(t, DB.Create(&user).Error)
 		topUp := createPendingEpayTopUp(t, "manual-overflow-order", user.Id)
 
