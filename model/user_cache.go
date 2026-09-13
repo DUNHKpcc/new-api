@@ -67,8 +67,8 @@ func invalidateUserCache(userId int) error {
 	return common.RedisDelKey(getUserCacheKey(userId))
 }
 
-// InvalidateUserCache is the exported version of invalidateUserCache.
-// 供 controller 等上层包在用户状态变更（如禁用、删除、角色变更）后主动清理缓存。
+// InvalidateUserCache exposes explicit cache invalidation to controllers that
+// complete a user status, role, or deletion transition.
 func InvalidateUserCache(userId int) error {
 	return invalidateUserCache(userId)
 }
@@ -209,22 +209,6 @@ func getUserSettingCache(userId int) (dto.UserSetting, error) {
 	return cache.GetSetting(), nil
 }
 
-// New functions for individual field updates
-func updateUserStatusCache(userId int, status bool) error {
-	statusInt := common.UserStatusEnabled
-	if !status {
-		statusInt = common.UserStatusDisabled
-	}
-	return updateUserCacheField(userId, "Status", statusInt)
-}
-
-func updateUserQuotaCache(userId int, quota int) error {
-	if !common.RedisEnabled {
-		return nil
-	}
-	return common.RedisHSetField(getUserCacheKey(userId), "Quota", fmt.Sprintf("%d", quota))
-}
-
 // RefreshUserGroupCache writes the database-authoritative group into an
 // existing user hash without changing the user's authentication version.
 func RefreshUserGroupCache(userId int) error {
@@ -278,10 +262,25 @@ func updateUserSettingCache(userId int, setting string) error {
 	return updateUserCacheField(userId, "Setting", setting)
 }
 
+func updateUserStatusCache(userId int, status bool) error {
+	statusInt := common.UserStatusEnabled
+	if !status {
+		statusInt = common.UserStatusDisabled
+	}
+	return updateUserCacheField(userId, "Status", statusInt)
+}
+
+func updateUserQuotaCache(userId int, quota int) error {
+	if !common.RedisEnabled {
+		return nil
+	}
+	return common.RedisHSetField(getUserCacheKey(userId), "Quota", fmt.Sprintf("%d", quota))
+}
+
 // updateUserCacheField prevents individual cache refreshes from bypassing the
 // auth-version fence. It intentionally does nothing when the complete hash is
 // absent; the next GetUserCache call will repopulate it from the database.
-func updateUserCacheField(userId int, field string, value interface{}) error {
+func updateUserCacheField(userId int, field string, value any) error {
 	if !common.RedisEnabled {
 		return nil
 	}

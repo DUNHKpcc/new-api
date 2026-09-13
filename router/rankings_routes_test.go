@@ -1,9 +1,11 @@
 package router
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -18,11 +20,15 @@ func TestLiveRankingsRouteRequiresRootRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	previousDB := model.DB
 	previousRedisEnabled := common.RedisEnabled
-	db, err := gorm.Open(sqlite.Open("file:rankings-route-auth?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:rankings-route-auth-%d?mode=memory&cache=shared", time.Now().UnixNano())), &gorm.Config{})
 	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	model.DB = db
 	common.RedisEnabled = false
 	t.Cleanup(func() {
+		_ = sqlDB.Close()
 		model.DB = previousDB
 		common.RedisEnabled = previousRedisEnabled
 	})

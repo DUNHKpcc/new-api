@@ -18,21 +18,20 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
-  BadgePercent,
   Box,
-  ChartNoAxesCombined,
+  ClipboardList,
   CreditCard,
-  Download,
   FileText,
   FlaskConical,
-  Handshake,
   Key,
   LayoutDashboard,
   ListTodo,
   MessageSquare,
+  PlugZap,
   Radio,
   ServerCog,
   Settings,
+  ShieldCheck,
   Ticket,
   User,
   Users,
@@ -41,7 +40,6 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
-import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -52,8 +50,6 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
-  const { status } = useStatus()
-  const hasPromotion = Boolean(status?.discount_notice?.trim())
 
   return {
     navGroups: [
@@ -98,16 +94,16 @@ export function useSidebarData(): SidebarData {
             icon: FileText,
           },
           {
+            title: t('Audit Logs'),
+            url: '/usage-logs/audit',
+            icon: ClipboardList,
+          },
+          {
             title: t('Task Logs'),
             url: '/usage-logs/task',
             activeUrls: ['/usage-logs/drawing'],
             configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
-          },
-          {
-            title: t('Resource Downloads'),
-            url: '/resource-downloads',
-            icon: Download,
           },
         ],
       },
@@ -119,19 +115,16 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
-            iconBadge: hasPromotion
-              ? { icon: BadgePercent, label: t('Discount') }
-              : undefined,
-          },
-          {
-            title: t('Affiliate Center'),
-            url: '/affiliate',
-            icon: Handshake,
           },
           {
             title: t('Profile'),
             url: '/profile',
             icon: User,
+          },
+          {
+            title: t('Security & Access'),
+            url: '/security',
+            icon: ShieldCheck,
           },
         ],
       },
@@ -165,15 +158,15 @@ export function useSidebarData(): SidebarData {
             icon: CreditCard,
           },
           {
-            title: t('Revenue management'),
-            url: '/revenue/overview',
-            icon: ChartNoAxesCombined,
-            requiredRole: ROLE.ADMIN,
-          },
-          {
             title: t('System Info'),
             url: '/system-info',
             icon: ServerCog,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
+            title: t('Task Plugins'),
+            url: '/task-plugins',
+            icon: PlugZap,
             requiredRole: ROLE.SUPER_ADMIN,
           },
           {

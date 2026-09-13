@@ -21,8 +21,16 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { clearAuthentication, isAuthBundle } from '@/lib/api'
+import { handleServerError } from '@/lib/handle-server-error'
+import { AuthOperationError } from '@/lib/secure-verification'
+import { createServerError } from '@/lib/server-error-message'
 
-import { createOAuthFlow, logout, telegramLogin } from '../api'
+import {
+  createOAuthAuthorization,
+  createOAuthFlow,
+  logout,
+  telegramLogin,
+} from '../api'
 import {
   buildGitHubOAuthUrl,
   buildDiscordOAuthUrl,
@@ -30,6 +38,7 @@ import {
   buildLinuxDOOAuthUrl,
   buildWeChatOAuthUrl,
 } from '../lib/oauth'
+import { rememberOAuthLoginRedirect } from '../lib/oauth-callback-mode'
 import { pickTelegramAuthorization } from '../lib/telegram-login'
 import type { SystemStatus, CustomOAuthProviderInfo } from '../types'
 import { useAuthRedirect } from './use-auth-redirect'
@@ -63,7 +72,7 @@ export function useOAuthLogin(
   const resetSession = async () => {
     const response = await logout()
     if (!response.success) {
-      throw new Error(response.message || t('Failed to sign out session'))
+      throw createServerError(response, t('Failed to sign out session'))
     }
     clearAuthentication()
   }
@@ -91,11 +100,14 @@ export function useOAuthLogin(
     try {
       await resetSession()
       const state = await createOAuthFlow('github', 'login')
+      rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildGitHubOAuthUrl(status.github_client_id, state)
       window.open(url, '_self')
-    } catch {
-      toast.error(t('Failed to start GitHub login'))
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(error, t('Failed to start GitHub login'))
+      )
       if (githubTimeoutRef.current) {
         clearTimeout(githubTimeoutRef.current)
       }
@@ -112,11 +124,14 @@ export function useOAuthLogin(
     try {
       await resetSession()
       const state = await createOAuthFlow('discord', 'login')
+      rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildDiscordOAuthUrl(status.discord_client_id, state)
       window.open(url, '_self')
-    } catch {
-      toast.error(t('Failed to start Discord login'))
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(error, t('Failed to start Discord login'))
+      )
     } finally {
       setIsLoading(false)
     }
@@ -129,6 +144,7 @@ export function useOAuthLogin(
     try {
       await resetSession()
       const state = await createOAuthFlow('oidc', 'login')
+      rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildOIDCOAuthUrl(
         status.oidc_authorization_endpoint,
@@ -136,8 +152,10 @@ export function useOAuthLogin(
         state
       )
       window.open(url, '_self')
-    } catch {
-      toast.error(t('Failed to start OIDC login'))
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(error, t('Failed to start OIDC login'))
+      )
     } finally {
       setIsLoading(false)
     }
@@ -150,16 +168,21 @@ export function useOAuthLogin(
     try {
       await resetSession()
       const state = await createOAuthFlow('linuxdo', 'login')
+      rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildLinuxDOOAuthUrl(status.linuxdo_client_id, state)
       window.open(url, '_self')
-    } catch {
-      toast.error(t('Failed to start LinuxDO login'))
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(error, t('Failed to start LinuxDO login'))
+      )
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Keep the legacy QR/app-id flow available for installations that have not
+  // enabled the newer authorization-code endpoint yet.
   const handleWeChatLogin = async () => {
     if (!status?.wechat_app_id) return
 
@@ -167,12 +190,15 @@ export function useOAuthLogin(
     try {
       await resetSession()
       const state = await createOAuthFlow('wechat', 'login')
-
+      rememberOAuthLoginRedirect(state, redirectTo)
       const url = buildWeChatOAuthUrl(status.wechat_app_id, state)
       window.open(url, '_self')
-    } catch {
-      toast.error(
-        t('Failed to start {{provider}} login', { provider: 'WeChat' })
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(
+          error,
+          t('Failed to start {{provider}} login', { provider: 'WeChat' })
+        )
       )
     } finally {
       setIsLoading(false)
@@ -180,19 +206,27 @@ export function useOAuthLogin(
   }
 
   const handleTelegramLogin = async () => {
-    if (!status?.telegram_bot_name?.trim()) {
-      toast.error(t('Login failed'))
+    // The legacy widget endpoint is retired by the upstream PKCE migration.
+    // Do not open a widget that the candidate backend will reject with 410.
+    if (!status?.telegram_oauth_configured) {
+      toast.error(
+        t(
+          'Telegram OAuth is not configured or enabled. Please contact your administrator.'
+        )
+      )
       return
     }
-
     setIsLoading(true)
     try {
+      const authorization = await createOAuthAuthorization('telegram', 'login')
+      if (!authorization.authorizationUrl) {
+        throw new AuthOperationError('Failed to initialize OAuth')
+      }
       await resetSession()
-      setIsTelegramDialogOpen(true)
-    } catch {
-      toast.error(
-        t('Failed to start {{provider}} login', { provider: 'Telegram' })
-      )
+      rememberOAuthLoginRedirect(authorization.state, redirectTo)
+      window.open(authorization.authorizationUrl, '_self')
+    } catch (error) {
+      handleServerError(AuthOperationError.from(error))
     } finally {
       setIsLoading(false)
     }
@@ -216,8 +250,8 @@ export function useOAuthLogin(
       setIsTelegramDialogOpen(false)
       await handleLoginSuccess(response.data, redirectTo)
       toast.success(t('Welcome back!'))
-    } catch {
-      toast.error(t('Login failed'))
+    } catch (error) {
+      handleServerError(AuthOperationError.from(error, t('Login failed')))
     } finally {
       setIsTelegramPending(false)
     }
@@ -230,6 +264,7 @@ export function useOAuthLogin(
     try {
       await resetSession()
       const state = await createOAuthFlow(provider.slug, 'login')
+      rememberOAuthLoginRedirect(state, redirectTo)
 
       const redirectUri = `${window.location.origin}/oauth/${provider.slug}`
       const url = new URL(provider.authorization_endpoint)
@@ -242,9 +277,12 @@ export function useOAuthLogin(
       }
 
       window.open(url.toString(), '_self')
-    } catch {
-      toast.error(
-        t('Failed to start {{provider}} login', { provider: provider.name })
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(
+          error,
+          t('Failed to start {{provider}} login', { provider: provider.name })
+        )
       )
     } finally {
       setIsLoading(false)

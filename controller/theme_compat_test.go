@@ -153,6 +153,13 @@ func TestUpdateOptionRejectsInvalidPccAgentGiftConfiguration(t *testing.T) {
 }
 
 func TestUpdateOptionRequiresPaymentComplianceForPccAgentGift(t *testing.T) {
+	// Keep this compatibility assertion independent from package-wide i18n
+	// initialization. The handler's fallback contract is the message key when
+	// no translator has been installed; other tests may initialize i18n first.
+	previousTranslate := common.TranslateMessage
+	common.TranslateMessage = func(_ *gin.Context, key string, _ ...map[string]any) string { return key }
+	t.Cleanup(func() { common.TranslateMessage = previousTranslate })
+
 	paymentSetting := operation_setting.GetPaymentSetting()
 	previousConfirmed := paymentSetting.ComplianceConfirmed
 	previousTermsVersion := paymentSetting.ComplianceTermsVersion

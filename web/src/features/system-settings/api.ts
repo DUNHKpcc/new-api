@@ -28,6 +28,8 @@ import type {
   SystemTaskResponse,
   UpdateOptionRequest,
   UpdateOptionResponse,
+  UpdatePasskeyDomainsRequest,
+  UpdatePasskeyDomainsResponse,
   UpstreamChannelsResponse,
   UpstreamRatiosResponse,
 } from './types'
@@ -42,12 +44,27 @@ export async function updateSystemOption(request: UpdateOptionRequest) {
   return res.data
 }
 
+/** Update the structured affiliate-program setting. */
 export async function updateAffiliateSetting(request: AffiliateSettingForm) {
   const res = await api.put<{
     success: boolean
     message?: string
     data?: AffiliateSettingForm
   }>('/api/option/affiliate', request)
+  return res.data
+}
+
+export async function updatePasskeyDomains(
+  request: UpdatePasskeyDomainsRequest
+) {
+  const res = await api.put<UpdatePasskeyDomainsResponse>(
+    '/api/option/passkey/domains',
+    request,
+    {
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || status === 409,
+    }
+  )
   return res.data
 }
 

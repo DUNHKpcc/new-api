@@ -43,12 +43,17 @@ export type PerformanceMetricsData = {
   }
 }
 
+export type SuccessRatePoint = { ts: number; success_rate: number }
+
 export type PerfModelSummary = {
   model_name: string
   avg_latency_ms: number
   success_rate: number
   avg_tps: number
+  /** Legacy compact series returned by older fork endpoints. */
   recent_success_rates?: number[]
+  /** Timestamped series returned by current upstream endpoints. */
+  recent_success_series?: SuccessRatePoint[]
   request_count?: number
 }
 

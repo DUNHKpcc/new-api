@@ -18,23 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
+import { requireServerSuccess } from '@/lib/server-error-message'
+
 import { getLiveRankings, getRankings } from '../api'
 import type { RankingPeriod } from '../types'
 
 export function useRankings(period: RankingPeriod) {
   return useQuery({
     queryKey: ['rankings', period],
-    queryFn: () => getRankings(period),
+    queryFn: async () => requireServerSuccess(await getRankings(period)),
     staleTime: 5 * 60 * 1000,
-    refetchInterval: 10 * 1000,
   })
 }
 
+/** Query the live ranking snapshot used by admin calibration controls. */
 export function useLiveRankings(period: RankingPeriod, date?: string) {
   return useQuery({
     queryKey: ['rankings-live', period, date],
-    queryFn: () => getLiveRankings(period, date),
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 10 * 1000,
+    queryFn: async () =>
+      requireServerSuccess(await getLiveRankings(period, date)),
+    staleTime: 60 * 1000,
   })
 }

@@ -1,6 +1,6 @@
 package oauth
 
-// OAuthToken represents the token received from OAuth provider
+// OAuthToken represents the token received from OAuth provider.
 type OAuthToken struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
@@ -10,29 +10,33 @@ type OAuthToken struct {
 	IDToken      string `json:"id_token,omitempty"`
 	OpenID       string `json:"openid,omitempty"`
 	UnionID      string `json:"unionid,omitempty"`
+
+	// ClientID is kept internally for server-owned OIDC/OAuth flows and should not
+	// be serialized in token responses.
+	ClientID string `json:"-"`
 }
 
-// OAuthUser represents the user info from OAuth provider
+// OAuthUser represents the user info from OAuth provider.
 type OAuthUser struct {
-	// ProviderUserID is the unique identifier from the OAuth provider
+	// ProviderUserID is the unique identifier from the OAuth provider.
 	ProviderUserID string
-	// Username is the username from the OAuth provider (e.g., GitHub login)
+	// Username is the username from the OAuth provider (e.g. GitHub login).
 	Username string
-	// DisplayName is the display name from the OAuth provider
+	// DisplayName is the display name from the OAuth provider.
 	DisplayName string
-	// Email is the email from the OAuth provider
+	// Email is the email from the OAuth provider.
 	Email string
-	// Extra contains any additional provider-specific data
+	// Extra contains any additional provider-specific data.
 	Extra map[string]any
 }
 
-// OAuthError represents a translatable OAuth error
+// OAuthError represents a translatable OAuth error.
 type OAuthError struct {
-	// MsgKey is the i18n message key
+	// MsgKey is the i18n message key.
 	MsgKey string
-	// Params contains optional parameters for the message template
+	// Params contains optional parameters for the message template.
 	Params map[string]any
-	// RawError is the underlying error for logging purposes
+	// RawError is the underlying error for logging purposes.
 	RawError string
 }
 
@@ -43,7 +47,7 @@ func (e *OAuthError) Error() string {
 	return e.MsgKey
 }
 
-// NewOAuthError creates a new OAuth error with the given message key
+// NewOAuthError creates a new OAuth error with the given message key.
 func NewOAuthError(msgKey string, params map[string]any) *OAuthError {
 	return &OAuthError{
 		MsgKey: msgKey,
@@ -51,7 +55,7 @@ func NewOAuthError(msgKey string, params map[string]any) *OAuthError {
 	}
 }
 
-// NewOAuthErrorWithRaw creates a new OAuth error with raw error message for logging
+// NewOAuthErrorWithRaw creates a new OAuth error with raw error message for logging.
 func NewOAuthErrorWithRaw(msgKey string, params map[string]any, rawError string) *OAuthError {
 	return &OAuthError{
 		MsgKey:   msgKey,

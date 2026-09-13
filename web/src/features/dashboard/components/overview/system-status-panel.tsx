@@ -111,9 +111,11 @@ function formatRequestCount(value: number): string {
 }
 
 function getStatusRates(model: PerfModelSummary): number[] {
-  const recentRates = (model.recent_success_rates ?? []).filter((rate) =>
-    Number.isFinite(rate)
-  )
+  const recentRates = (
+    model.recent_success_rates ??
+    model.recent_success_series?.map((point) => point.success_rate) ??
+    []
+  ).filter((rate: number) => Number.isFinite(rate))
   if (recentRates.length > 0) {
     return tileSuccessRates(recentRates, MAX_STATUS_SEGMENTS)
   }

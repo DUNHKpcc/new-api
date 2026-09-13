@@ -223,3 +223,8 @@ func (p *WeChatProvider) SetProviderUserID(user *model.User, providerUserID stri
 func (p *WeChatProvider) GetProviderPrefix() string {
 	return "wechat_"
 }
+
+// ProviderUserIDColumn returns the users-table column storing the WeChat identity.
+func (p *WeChatProvider) ProviderUserIDColumn() string {
+	return "wechat_id"
+}

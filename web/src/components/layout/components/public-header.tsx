@@ -38,6 +38,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { cn } from '@/lib/utils'
@@ -308,6 +309,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                     )}
                   </span>
                 </Link>
+                <SystemUpdateAction presentation='version' />
                 {props.leftContent}
               </div>
 
