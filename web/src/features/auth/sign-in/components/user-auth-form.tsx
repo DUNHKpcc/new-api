@@ -45,6 +45,7 @@ import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { loginFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
+import { resolveWeChatLoginMode } from '@/features/auth/lib/oauth'
 import { beginPasskeyLogin, finishPasskeyLogin } from '@/features/auth/passkey'
 import {
   requestPasskeyAssertion,
@@ -111,7 +112,9 @@ export function UserAuthForm({
     isPasskeyLoading ||
     !passkeySupported ||
     (requiresLegalConsent && !agreedToLegal)
-  const hasWeChatLogin = Boolean(status?.wechat_login)
+  const weChatLoginMode = resolveWeChatLoginMode(status)
+  const hasWeChatLogin = weChatLoginMode !== null
+  const hasWeChatCodeLogin = weChatLoginMode === 'server'
   const hasOAuthLogin = Boolean(
     status?.github_oauth ||
     status?.discord_oauth ||
@@ -336,7 +339,7 @@ export function UserAuthForm({
         status={status}
         redirectTo={redirectTo}
         disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-        onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+        onWeChatLogin={hasWeChatCodeLogin ? handleOpenWeChatDialog : undefined}
         isWeChatLoading={isWeChatSubmitting}
       />
     </>
@@ -429,7 +432,7 @@ export function UserAuthForm({
         {!hasAlternativeLogin && alternativeLoginMethods}
       </form>
 
-      {hasWeChatLogin && (
+      {hasWeChatCodeLogin && (
         <Dialog
           open={isWeChatDialogOpen}
           onOpenChange={handleWeChatDialogChange}

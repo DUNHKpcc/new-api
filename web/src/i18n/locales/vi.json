@@ -6714,6 +6714,12 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Base URL for the existing WeChat verification service.": "URL cơ sở của dịch vụ xác minh WeChat hiện có.",
+    "Configure either WeChat Open Platform OAuth or the legacy verification service. Open Platform is used for registration verification; the legacy service remains available for existing deployments.": "Cấu hình OAuth WeChat Open Platform hoặc dịch vụ xác minh cũ. Open Platform dùng để xác minh đăng ký, còn dịch vụ cũ vẫn khả dụng cho các bản cài đặt hiện có.",
+    "Shown to users of the legacy verification service.": "Hiển thị cho người dùng dịch vụ xác minh cũ.",
+    "WeChat QR Code Image URL": "URL ảnh mã QR WeChat",
+    "WeChat Server Address": "Địa chỉ máy chủ WeChat",
+    "WeChat Server Token": "Mã thông báo máy chủ WeChat"
   }
 }

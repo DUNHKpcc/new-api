@@ -92,7 +92,10 @@ export function buildWeChatOAuthUrl(
   origin = window.location.origin
 ): string {
   const url = new URL('https://open.weixin.qq.com/connect/qrconnect')
-  url.searchParams.set('appid', appId)
+  // Configuration values may be copied with surrounding whitespace. The
+  // backend trims them when checking readiness, so normalize here as well or
+  // a status-advertised direct flow would send an invalid app id.
+  url.searchParams.set('appid', appId.trim())
   url.searchParams.set('redirect_uri', `${origin}/oauth/wechat`)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', 'snsapi_login')

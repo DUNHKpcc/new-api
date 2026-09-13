@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { useOAuthLogin } from '../hooks/use-oauth-login'
+import { resolveWeChatLoginMode } from '../lib/oauth'
 import type { SystemStatus } from '../types'
 import { TelegramLoginDialog } from './telegram-login-dialog'
 
@@ -79,7 +80,7 @@ export function OAuthProviders({
 
   const providerButtons: ProviderButton[] = []
 
-  if (status?.wechat_login && (onWeChatLogin || status.wechat_app_id)) {
+  if (resolveWeChatLoginMode(status)) {
     providerButtons.push({
       key: 'wechat',
       label: t('Continue with WeChat'),

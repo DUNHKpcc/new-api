@@ -41,4 +41,16 @@ describe('WeChat website OAuth URL', () => {
     assert.equal(result.searchParams.get('state'), 'csrf-state')
     assert.equal(result.hash, '#wechat_redirect')
   })
+
+  test('trims copied whitespace from a WeChat app id', () => {
+    const result = new URL(
+      buildWeChatOAuthUrl(
+        '  wx-app-id  ',
+        'csrf-state',
+        'https://api.example.com'
+      )
+    )
+
+    assert.equal(result.searchParams.get('appid'), 'wx-app-id')
+  })
 })

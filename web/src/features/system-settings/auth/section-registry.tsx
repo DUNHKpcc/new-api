@@ -42,7 +42,9 @@ const AUTH_SECTIONS = [
           EmailDomainWhitelist: settings.EmailDomainWhitelist,
         }}
         weChatOAuthReady={
-          settings.WeChatAuthEnabled && Boolean(settings.WeChatAppId.trim())
+          settings.WeChatAuthEnabled &&
+          Boolean(settings.WeChatAppId.trim()) &&
+          Boolean(settings.WeChatAppSecret.trim())
         }
       />
     ),
@@ -79,6 +81,9 @@ const AUTH_SECTIONS = [
           WeChatAuthEnabled: settings.WeChatAuthEnabled,
           WeChatAppId: settings.WeChatAppId,
           WeChatAppSecret: settings.WeChatAppSecret,
+          WeChatServerAddress: settings.WeChatServerAddress,
+          WeChatServerToken: settings.WeChatServerToken,
+          WeChatAccountQRCodeImageURL: settings.WeChatAccountQRCodeImageURL,
         }}
       />
     ),

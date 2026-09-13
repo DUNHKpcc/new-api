@@ -49,6 +49,7 @@ import { registerFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
+import { resolveWeChatLoginMode } from '@/features/auth/lib/oauth'
 import {
   getAffiliateCode,
   saveAffiliateCode,
@@ -135,8 +136,10 @@ export function SignUpForm({
   const weChatLoginEnabled = Boolean(
     status?.wechat_login ?? status?.data?.wechat_login
   )
+  const weChatLoginMode = resolveWeChatLoginMode(status)
   const weChatAppId = status?.wechat_app_id ?? status?.data?.wechat_app_id ?? ''
-  const weChatVerificationAvailable = weChatLoginEnabled && Boolean(weChatAppId)
+  const weChatVerificationAvailable =
+    weChatLoginEnabled && weChatLoginMode === 'direct' && Boolean(weChatAppId)
   const weChatVerificationState = resolveWeChatRegistrationVerificationState(
     weChatVerificationRequired,
     weChatVerificationAvailable,
@@ -151,7 +154,7 @@ export function SignUpForm({
     status?.oauth_register_enabled ??
     status?.data?.oauth_register_enabled ??
     true
-  const hasWeChatLogin = weChatLoginEnabled
+  const hasWeChatCodeLogin = weChatLoginMode === 'server'
   const turnstileReady = !isTurnstileEnabled || Boolean(turnstileToken)
 
   const wechatQrCodeUrl = useMemo(() => {
@@ -512,7 +515,9 @@ export function SignUpForm({
           <OAuthProviders
             status={status}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-            onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+            onWeChatLogin={
+              hasWeChatCodeLogin ? handleOpenWeChatDialog : undefined
+            }
             isWeChatLoading={isWeChatSubmitting}
             redirectTo={redirectTo}
             className='pt-2'
@@ -520,7 +525,7 @@ export function SignUpForm({
         )}
       </form>
 
-      {hasWeChatLogin && (
+      {hasWeChatCodeLogin && (
         <Dialog
           open={isWeChatDialogOpen}
           onOpenChange={handleWeChatDialogChange}

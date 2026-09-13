@@ -181,8 +181,9 @@ export function useOAuthLogin(
     }
   }
 
-  // Keep the legacy QR/app-id flow available for installations that have not
-  // enabled the newer authorization-code endpoint yet.
+  // Start the direct Open Platform authorization-code flow. Legacy
+  // verification-service deployments are routed through the host form's
+  // explicit code dialog instead of this redirect.
   const handleWeChatLogin = async () => {
     if (!status?.wechat_app_id) return
 

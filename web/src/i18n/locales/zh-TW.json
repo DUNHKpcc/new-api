@@ -6714,6 +6714,12 @@
     "Zhipu": "智譜",
     "Zhipu GLM": "智譜GLM",
     "Zhipu V4": "智譜 V4",
-    "Zoom": "縮放"
+    "Zoom": "縮放",
+    "Base URL for the existing WeChat verification service.": "現有微信驗證服務的基礎位址。",
+    "Configure either WeChat Open Platform OAuth or the legacy verification service. Open Platform is used for registration verification; the legacy service remains available for existing deployments.": "可設定微信開放平台 OAuth 或舊版驗證服務。新使用者註冊驗證使用開放平台，現有部署仍可繼續使用舊版服務。",
+    "Shown to users of the legacy verification service.": "顯示給使用舊版驗證服務的使用者。",
+    "WeChat QR Code Image URL": "微信 QR Code 圖片 URL",
+    "WeChat Server Address": "微信服務位址",
+    "WeChat Server Token": "微信服務權杖"
   }
 }

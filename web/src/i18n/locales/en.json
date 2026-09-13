@@ -6714,6 +6714,12 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Base URL for the existing WeChat verification service.": "Base URL for the existing WeChat verification service.",
+    "Configure either WeChat Open Platform OAuth or the legacy verification service. Open Platform is used for registration verification; the legacy service remains available for existing deployments.": "Configure either WeChat Open Platform OAuth or the legacy verification service. Open Platform is used for registration verification; the legacy service remains available for existing deployments.",
+    "Shown to users of the legacy verification service.": "Shown to users of the legacy verification service.",
+    "WeChat QR Code Image URL": "WeChat QR Code Image URL",
+    "WeChat Server Address": "WeChat Server Address",
+    "WeChat Server Token": "WeChat Server Token"
   }
 }

@@ -27,6 +27,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { createOAuthAuthorization } from '@/features/auth/api'
+import { resolveWeChatLoginMode } from '@/features/auth/lib/oauth'
 import {
   openOAuthPopup,
   type OAuthPopupExchange,
@@ -225,6 +226,16 @@ export function AccountBindings({ profile, onUpdate }: AccountBindingsProps) {
 
   if (!profile || !status || loading) return null
 
+  const weChatLoginMode = resolveWeChatLoginMode(status)
+  const wechatQrCodeUrl =
+    status.wechat_qrcode ||
+    status.wechat_qr_code ||
+    status.wechat_qrcode_image_url ||
+    status.wechat_qr_code_image_url ||
+    status.wechat_account_qrcode_image_url ||
+    status.WeChatAccountQRCodeImageURL ||
+    ''
+
   const bindings: BindingItem[] = [
     {
       id: 'email',
@@ -243,8 +254,11 @@ export function AccountBindings({ profile, onUpdate }: AccountBindingsProps) {
       isBound: Boolean(
         (profile as unknown as Record<string, unknown>).wechat_id
       ),
-      isEnabled: status?.wechat_login || false,
-      onBind: () => dialogs.open('wechat'),
+      isEnabled: weChatLoginMode !== null,
+      onBind: () =>
+        weChatLoginMode === 'direct'
+          ? void startOAuthBinding('wechat')
+          : dialogs.open('wechat'),
     },
     {
       id: 'github',
@@ -481,9 +495,7 @@ export function AccountBindings({ profile, onUpdate }: AccountBindingsProps) {
       {/* WeChat Bind Dialog */}
       <WeChatBindDialog
         open={dialogs.isOpen('wechat')}
-        qrCodeUrl={
-          typeof status?.wechat_qrcode === 'string' ? status.wechat_qrcode : ''
-        }
+        qrCodeUrl={typeof wechatQrCodeUrl === 'string' ? wechatQrCodeUrl : ''}
         onOpenChange={(open) =>
           open ? dialogs.open('wechat') : dialogs.close('wechat')
         }

@@ -90,6 +90,9 @@ const oauthSchema = z.object({
   WeChatAuthEnabled: z.boolean(),
   WeChatAppId: z.string(),
   WeChatAppSecret: z.string(),
+  WeChatServerAddress: z.string(),
+  WeChatServerToken: z.string(),
+  WeChatAccountQRCodeImageURL: z.string(),
 })
 
 type OAuthFormValues = z.infer<typeof oauthSchema>
@@ -119,6 +122,9 @@ type FlatOAuthDefaults = {
   WeChatAuthEnabled: boolean
   WeChatAppId: string
   WeChatAppSecret: string
+  WeChatServerAddress: string
+  WeChatServerToken: string
+  WeChatAccountQRCodeImageURL: string
 }
 
 const oauthTabContentClassName =
@@ -204,6 +210,9 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatAppId: defaults.WeChatAppId ?? '',
   WeChatAppSecret: defaults.WeChatAppSecret ?? '',
+  WeChatServerAddress: defaults.WeChatServerAddress ?? '',
+  WeChatServerToken: defaults.WeChatServerToken ?? '',
+  WeChatAccountQRCodeImageURL: defaults.WeChatAccountQRCodeImageURL ?? '',
 })
 
 const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
@@ -228,6 +237,11 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   LinuxDOClientId: values.LinuxDOClientId,
   LinuxDOClientSecret: values.LinuxDOClientSecret,
   LinuxDOMinimumTrustLevel: values.LinuxDOMinimumTrustLevel,
+  // Persist credentials before the enable switch. The backend validates the
+  // complete contract when `WeChatAuthEnabled` is turned on in the same save.
+  WeChatServerAddress: values.WeChatServerAddress,
+  WeChatServerToken: values.WeChatServerToken,
+  WeChatAccountQRCodeImageURL: values.WeChatAccountQRCodeImageURL,
   WeChatAppId: values.WeChatAppId,
   WeChatAppSecret: values.WeChatAppSecret,
   WeChatAuthEnabled: values.WeChatAuthEnabled,
@@ -1029,7 +1043,7 @@ export function OAuthSection(props: OAuthSectionProps) {
                 <OAuthSetupGuide
                   title={t('Setup guide')}
                   description={t(
-                    'Create and approve a website application in WeChat Open Platform before enabling login.'
+                    'Configure either WeChat Open Platform OAuth or the legacy verification service. Open Platform is used for registration verification; the legacy service remains available for existing deployments.'
                   )}
                   rows={[
                     {
@@ -1116,6 +1130,89 @@ export function OAuthSection(props: OAuthSectionProps) {
                           ref={field.ref}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='WeChatServerAddress'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('WeChat Server Address')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('https://wechat-server.example.com')}
+                          autoComplete='off'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Base URL for the existing WeChat verification service.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='WeChatServerToken'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('WeChat Server Token')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='password'
+                          placeholder={t('WeChat Server Token')}
+                          autoComplete='new-password'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='WeChatAccountQRCodeImageURL'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('WeChat QR Code Image URL')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('https://example.com/qr-code.png')}
+                          autoComplete='off'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Shown to users of the legacy verification service.'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
