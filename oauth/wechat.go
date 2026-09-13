@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -68,7 +69,7 @@ func (p *WeChatProvider) GetName() string {
 }
 
 func (p *WeChatProvider) IsEnabled() bool {
-	return common.WeChatAuthEnabled && common.WeChatAppId != "" && common.WeChatAppSecret != ""
+	return common.WeChatAuthEnabled && common.WeChatDirectOAuthConfigured()
 }
 
 func (p *WeChatProvider) ExchangeToken(ctx context.Context, code string, _ *gin.Context) (*OAuthToken, error) {
@@ -85,8 +86,8 @@ func (p *WeChatProvider) ExchangeToken(ctx context.Context, code string, _ *gin.
 		return nil, err
 	}
 	query := tokenURL.Query()
-	query.Set("appid", common.WeChatAppId)
-	query.Set("secret", common.WeChatAppSecret)
+	query.Set("appid", strings.TrimSpace(common.WeChatAppId))
+	query.Set("secret", strings.TrimSpace(common.WeChatAppSecret))
 	query.Set("code", code)
 	query.Set("grant_type", "authorization_code")
 	tokenURL.RawQuery = query.Encode()

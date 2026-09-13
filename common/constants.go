@@ -72,6 +72,7 @@ var WeChatAuthEnabled = false
 // verification service used by the compatibility OAuth endpoints.
 var WeChatServerAddress = ""
 var WeChatServerToken = ""
+var WeChatAccountQRCodeImageURL = ""
 var TelegramOAuthEnabled = false
 var TurnstileCheckEnabled = false
 var RegisterEnabled = true

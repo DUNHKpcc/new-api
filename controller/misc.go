@@ -50,6 +50,8 @@ func GetStatus(c *gin.Context) {
 	defer common.OptionMapRWMutex.RUnlock()
 
 	legalSetting := system_setting.GetLegalSettings()
+	wechatDirectOAuth := common.WeChatAuthEnabled && common.WeChatDirectOAuthConfigured()
+	wechatServerBridge := common.WeChatAuthEnabled && common.WeChatServerBridgeConfigured()
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -69,13 +71,19 @@ func GetStatus(c *gin.Context) {
 		"system_name":                 common.SystemName,
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
-		"wechat_login":                common.WeChatAuthEnabled && common.WeChatAppId != "" && common.WeChatAppSecret != "",
-		"wechat_app_id":               common.WeChatAppId,
-		"server_address":              system_setting.ServerAddress,
-		"turnstile_check":             common.TurnstileCheckEnabled,
-		"turnstile_site_key":          common.TurnstileSiteKey,
-		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
-		"quota_per_unit":              common.QuotaPerUnit,
+		// Advertise only a contract that has all of the credentials needed by
+		// its handler. The two contracts remain independently discoverable so
+		// legacy bridge clients and Open Platform OAuth can coexist safely.
+		"wechat_login":         wechatDirectOAuth || wechatServerBridge,
+		"wechat_direct_oauth":  wechatDirectOAuth,
+		"wechat_server_bridge": wechatServerBridge,
+		"wechat_app_id":        common.WeChatAppId,
+		"wechat_qrcode":        common.WeChatAccountQRCodeImageURL,
+		"server_address":       system_setting.ServerAddress,
+		"turnstile_check":      common.TurnstileCheckEnabled,
+		"turnstile_site_key":   common.TurnstileSiteKey,
+		"docs_link":            operation_setting.GetGeneralSetting().DocsLink,
+		"quota_per_unit":       common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":           operation_setting.IsCurrencyDisplay(),
 		"quota_display_type":            operation_setting.GetQuotaDisplayType(),

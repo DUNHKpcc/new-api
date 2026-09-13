@@ -1,8 +1,8 @@
 package controller
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,15 +24,37 @@ type wechatLoginResponse struct {
 	Data    string `json:"data"`
 }
 
+var errWeChatServerBridgeUnavailable = errors.New("微信登录服务未完整配置")
+
 func getWeChatIdByCode(code string) (string, error) {
+	return getWeChatIdByCodeWithContext(context.Background(), code)
+}
+
+func getWeChatIdByCodeWithContext(ctx context.Context, code string) (string, error) {
 	if code == "" {
 		return "", errors.New("无效的参数")
 	}
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/wechat/user?code=%s", common.WeChatServerAddress, url.QueryEscape(code)), nil)
-	if err != nil {
-		return "", err
+	if !common.WeChatServerBridgeConfigured() {
+		return "", errWeChatServerBridgeUnavailable
 	}
-	req.Header.Set("Authorization", common.WeChatServerToken)
+	baseURL := strings.TrimSpace(common.WeChatServerAddress)
+	endpoint, err := url.JoinPath(baseURL, "api/wechat/user")
+	if err != nil {
+		return "", errWeChatServerBridgeUnavailable
+	}
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return "", errWeChatServerBridgeUnavailable
+	}
+	query := endpointURL.Query()
+	query.Set("code", code)
+	endpointURL.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL.String(), nil)
+	if err != nil {
+		return "", errWeChatServerBridgeUnavailable
+	}
+	req.Header.Set("Authorization", strings.TrimSpace(common.WeChatServerToken))
+	req.Header.Set("Accept", "application/json")
 	client := http.Client{
 		Timeout: 5 * time.Second,
 	}
@@ -41,6 +63,9 @@ func getWeChatIdByCode(code string) (string, error) {
 		return "", err
 	}
 	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return "", errors.New("微信登录服务请求失败")
+	}
 	var res wechatLoginResponse
 	err = common.DecodeJson(httpResponse.Body, &res)
 	if err != nil {
@@ -55,7 +80,19 @@ func getWeChatIdByCode(code string) (string, error) {
 	return res.Data, nil
 }
 
+// WeChatAuth dispatches the two supported WeChat contracts without allowing a
+// code from one contract to be interpreted by the other. A state-bearing
+// callback is the Open Platform OAuth flow; a state-less request is the
+// administrator-configured verification bridge used by existing deployments.
 func WeChatAuth(c *gin.Context) {
+	if strings.TrimSpace(c.Query("state")) != "" {
+		if c.Param("provider") == "" {
+			c.Params = append(c.Params, gin.Param{Key: "provider", Value: "wechat"})
+		}
+		HandleOAuth(c)
+		return
+	}
+
 	if !common.WeChatAuthEnabled {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "管理员未开启通过微信登录以及注册",
@@ -63,8 +100,16 @@ func WeChatAuth(c *gin.Context) {
 		})
 		return
 	}
+	if !common.WeChatServerBridgeConfigured() {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "微信登录服务未完整配置，请联系管理员",
+			"success": false,
+			"code":    "WECHAT_SERVER_BRIDGE_NOT_CONFIGURED",
+		})
+		return
+	}
 	code := c.Query("code")
-	wechatId, err := getWeChatIdByCode(code)
+	wechatId, err := getWeChatIdByCodeWithContext(c.Request.Context(), code)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"message": err.Error(),
@@ -145,6 +190,14 @@ func WeChatBind(c *gin.Context) {
 		})
 		return
 	}
+	if !common.WeChatServerBridgeConfigured() {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "微信登录服务未完整配置，请联系管理员",
+			"success": false,
+			"code":    "WECHAT_SERVER_BRIDGE_NOT_CONFIGURED",
+		})
+		return
+	}
 	var req wechatBindRequest
 	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -162,7 +215,7 @@ func WeChatBind(c *gin.Context) {
 	if middleware.RequireSecurityProof(c, service.VerificationOperation{Scope: service.VerificationScopeAccountBind, Context: context}) == nil {
 		return
 	}
-	wechatId, err := getWeChatIdByCode(code)
+	wechatId, err := getWeChatIdByCodeWithContext(c.Request.Context(), code)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"message": err.Error(),

@@ -356,9 +356,11 @@ func TestSecurityLoginAllPrimaryTransportsRequireAdditionalVerification(t *testi
 					_, _ = w.Write([]byte(`{"success":true,"data":"bound-wechat"}`))
 				}))
 				t.Cleanup(upstream.Close)
-				previousEnabled, previousAddress := common.WeChatAuthEnabled, common.WeChatServerAddress
-				common.WeChatAuthEnabled, common.WeChatServerAddress = true, upstream.URL
-				t.Cleanup(func() { common.WeChatAuthEnabled, common.WeChatServerAddress = previousEnabled, previousAddress })
+				previousEnabled, previousAddress, previousToken := common.WeChatAuthEnabled, common.WeChatServerAddress, common.WeChatServerToken
+				common.WeChatAuthEnabled, common.WeChatServerAddress, common.WeChatServerToken = true, upstream.URL, "bridge-token"
+				t.Cleanup(func() {
+					common.WeChatAuthEnabled, common.WeChatServerAddress, common.WeChatServerToken = previousEnabled, previousAddress, previousToken
+				})
 				response = securityEnrollmentRequest("GET", "/api/oauth/wechat?code=wechat-code", "", "", service.AuthIdentity{}, WeChatAuth)
 			default:
 				const slug = "unified-login-test"

@@ -184,6 +184,9 @@ func InitOptionMap() error {
 	common.OptionMap["TelegramBotName"] = ""
 	common.OptionMap["WeChatAppId"] = ""
 	common.OptionMap["WeChatAppSecret"] = ""
+	common.OptionMap["WeChatServerAddress"] = ""
+	common.OptionMap["WeChatServerToken"] = ""
+	common.OptionMap["WeChatAccountQRCodeImageURL"] = ""
 	common.OptionMap["TurnstileSiteKey"] = ""
 	common.OptionMap["TurnstileSecretKey"] = ""
 	common.OptionMap["QuotaForNewUser"] = strconv.Itoa(common.QuotaForNewUser)
@@ -972,6 +975,12 @@ func updateOptionMap(key string, value string) (err error) {
 		common.WeChatAppId = value
 	case "WeChatAppSecret":
 		common.WeChatAppSecret = value
+	case "WeChatServerAddress":
+		common.WeChatServerAddress = value
+	case "WeChatServerToken":
+		common.WeChatServerToken = value
+	case "WeChatAccountQRCodeImageURL":
+		common.WeChatAccountQRCodeImageURL = value
 	case "TelegramBotToken":
 		common.TelegramBotToken = value
 	case "TelegramBotName":

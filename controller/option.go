@@ -226,7 +226,7 @@ func UpdateOption(c *gin.Context) {
 				common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
 				return
 			}
-			if !common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "" {
+			if !common.WeChatAuthEnabled || !common.WeChatDirectOAuthConfigured() {
 				common.ApiErrorMsg(c, "启用 PccAgent 赠送订阅前必须完整配置并启用微信 OAuth")
 				return
 			}
@@ -281,10 +281,10 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	case "WeChatAuthEnabled":
-		if option.Value == "true" && (common.WeChatAppId == "" || common.WeChatAppSecret == "") {
+		if option.Value == "true" && !common.WeChatAuthConfigured() {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "无法启用微信登录，请先填入微信开放平台 App ID 和 App Secret！",
+				"message": "无法启用微信登录，请先完整配置微信开放平台或微信登录服务！",
 			})
 			return
 		}
@@ -294,7 +294,7 @@ func UpdateOption(c *gin.Context) {
 		}
 	case "WeChatRegistrationVerificationEnabled":
 		if option.Value == "true" &&
-			(!common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "") {
+			(!common.WeChatAuthEnabled || !common.WeChatDirectOAuthConfigured()) {
 			common.ApiErrorMsg(c, "无法启用新用户微信验证，请先完整配置并启用微信 OAuth")
 			return
 		}

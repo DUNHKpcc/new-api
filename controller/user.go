@@ -233,7 +233,7 @@ func Register(c *gin.Context) {
 		return
 	}
 	if common.WeChatRegistrationVerificationEnabled &&
-		(!common.WeChatAuthEnabled || common.WeChatAppId == "" || common.WeChatAppSecret == "") {
+		(!common.WeChatAuthEnabled || !common.WeChatDirectOAuthConfigured()) {
 		writeWeChatRegistrationError(
 			c,
 			weChatRegistrationErrorUnavailable,
