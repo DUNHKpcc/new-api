@@ -242,6 +242,30 @@ it.each([
   expect(getServerErrorMessage(error, 'Operation failed')).toBe(expected)
 })
 
+it.each([
+  [429, 'Too many requests. Please try again later.'],
+  [500, 'Server error. Please try again later.'],
+  [503, 'Server error. Please try again later.'],
+])(
+  'replaces a generic HTTP %i message with a stable translated fallback',
+  (status, expected) => {
+    const error = new AxiosError(
+      `Request failed with status code ${status}`,
+      status >= 500 ? 'ERR_BAD_RESPONSE' : 'ERR_BAD_REQUEST',
+      undefined,
+      undefined,
+      {
+        data: {},
+        status,
+        statusText: 'Error',
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+      }
+    )
+    expect(getServerErrorMessage(error)).toBe(expected)
+  }
+)
+
 it('preserves safe authentication messages and recognizes their original failure without exposing its payload', () => {
   const notify = vi.spyOn(toast, 'error').mockReturnValue('error')
   const original = new AxiosError(

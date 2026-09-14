@@ -144,7 +144,7 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
     })
 
   const formatDate = (timestamp: number) => {
-    if (!timestamp) return 'Never'
+    if (!timestamp) return t('Never')
     return formatTimestampToDate(timestamp)
   }
 

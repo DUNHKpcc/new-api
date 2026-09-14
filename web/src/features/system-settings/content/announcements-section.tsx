@@ -345,9 +345,9 @@ export function AnnouncementsSection({
     const diffHours = Math.floor(diffMins / 60)
     const diffDays = Math.floor(diffHours / 24)
 
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    return `${diffDays}d ago`
+    if (diffMins < 60) return t('{{count}}m ago', { count: diffMins })
+    if (diffHours < 24) return t('{{count}}h ago', { count: diffHours })
+    return t('{{count}}d ago', { count: diffDays })
   }
 
   return (
@@ -442,10 +442,12 @@ export function AnnouncementsSection({
               header: t('Type'),
               cell: (announcement) => (
                 <StatusBadge
-                  label={
-                    typeOptions.find((opt) => opt.value === announcement.type)
-                      ?.label
-                  }
+                  label={(() => {
+                    const option = typeOptions.find(
+                      (opt) => opt.value === announcement.type
+                    )
+                    return option ? t(option.label) : undefined
+                  })()}
                   variant={
                     typeOptions.find((opt) => opt.value === announcement.type)
                       ?.badgeVariant ?? 'neutral'
@@ -606,7 +608,7 @@ export function AnnouncementsSection({
                           <div
                             className={`h-3 w-3 rounded-full ${option.color}`}
                           />
-                          {option.label}
+                          {t(option.label)}
                         </div>
                       ),
                     }))}
@@ -628,7 +630,7 @@ export function AnnouncementsSection({
                               <div
                                 className={`h-3 w-3 rounded-full ${option.color}`}
                               />
-                              {option.label}
+                              {t(option.label)}
                             </div>
                           </SelectItem>
                         ))}

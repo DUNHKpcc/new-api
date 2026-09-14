@@ -20,7 +20,11 @@ import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
-import { convertDetectedLanguage } from './languages'
+import {
+  convertDetectedLanguage,
+  normalizeInterfaceLanguage,
+  toIntlLocale,
+} from './languages'
 import en from './locales/en.json'
 import fr from './locales/fr.json'
 import ja from './locales/ja.json'
@@ -60,5 +64,17 @@ i18n
       convertDetectedLanguage,
     },
   })
+
+// Keep the document language in sync with the active interface locale. The
+// static HTML shell starts in English, but the detector and profile settings
+// can select Chinese before the first screen renders.
+const syncDocumentLanguage = (language?: string) => {
+  if (typeof document === 'undefined') return
+  const normalized = normalizeInterfaceLanguage(language)
+  document.documentElement.lang = toIntlLocale(normalized) ?? 'en'
+}
+
+i18n.on('languageChanged', syncDocumentLanguage)
+syncDocumentLanguage(i18n.resolvedLanguage ?? i18n.language)
 
 export default i18n

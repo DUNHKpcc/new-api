@@ -37,6 +37,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { stringToColor } from '@/lib/colors'
@@ -151,6 +152,7 @@ export function StatusBadge({
   onClick,
   ...props
 }: StatusBadgeProps) {
+  const { t } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
   const contextType = React.useContext(StatusBadgeTypeContext)
   const type = typeProp ?? contextType
@@ -174,8 +176,9 @@ export function StatusBadge({
     ) : null)
 
   const isBadge = type === 'badge'
+  const copyValue = copyText || label || ''
   const title = copyable
-    ? `Click to copy: ${copyText || label || ''}`
+    ? t('Click to copy: {{value}}', { value: copyValue })
     : label || undefined
 
   return (

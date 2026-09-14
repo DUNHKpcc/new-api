@@ -477,7 +477,7 @@ export function ApiInfoSection({ enabled, data }: ApiInfoSectionProps) {
                           <div
                             className={`h-4 w-4 rounded-full ${getBgColorClass(option.value)}`}
                           />
-                          {option.label}
+                          {t(option.label)}
                         </div>
                       ),
                     }))}
@@ -497,7 +497,7 @@ export function ApiInfoSection({ enabled, data }: ApiInfoSectionProps) {
                               <div
                                 className={`h-4 w-4 rounded-full ${getBgColorClass(option.value)}`}
                               />
-                              {option.label}
+                              {t(option.label)}
                             </div>
                           </SelectItem>
                         ))}

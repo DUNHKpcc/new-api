@@ -387,13 +387,13 @@ export function ChannelsTable() {
 
     return [
       {
-        label: 'All Types',
+        label: t('All Types'),
         value: 'all',
         count: totalTypes,
       },
       ...typeIds.map((item) => {
         return {
-          label: getChannelTypeLabel(item.type),
+          label: t(getChannelTypeLabel(item.type)),
           value: String(item.type),
           count: item.count,
           iconNode: <ChannelTypeLogo type={item.type} size={16} />,

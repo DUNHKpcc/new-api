@@ -94,6 +94,35 @@ const serverErrorMessageKeys = {
     'WeChat verification is temporarily unavailable. Please contact the administrator.',
 } as const
 
+const httpStatusMessageKeys: Record<number, string> = {
+  400: 'Invalid request.',
+  401: 'Session expired!',
+  403: 'Access denied.',
+  404: 'Resource not found.',
+  408: 'Request timed out.',
+  409: 'Conflict.',
+  413: 'Request is too large.',
+  429: 'Too many requests. Please try again later.',
+}
+
+function getHttpStatusMessageKey(status: number | undefined): string | null {
+  if (status === undefined) return null
+  return (
+    httpStatusMessageKeys[status] ||
+    (status >= 500 && status <= 599
+      ? 'Server error. Please try again later.'
+      : null)
+  )
+}
+
+function isGenericHttpMessage(message: string, status: number): boolean {
+  const normalized = message.trim()
+  return (
+    normalized === `Request failed with status code ${status}` ||
+    normalized === `HTTP ${status}`
+  )
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
 }
@@ -198,10 +227,17 @@ export function getServerErrorMessage(
   const status = getServerErrorStatus(value)
   if (status === 304) return i18next.t('Content not modified!')
   if (status === 204) return i18next.t('Content not found.')
+  const statusKey = getHttpStatusMessageKey(status)
   for (const source of sources) {
     const message = messageText(source.message)
-    if (message) return message
+    const isGenericMessage = Boolean(
+      message && status !== undefined && isGenericHttpMessage(message, status)
+    )
+    if (message && (!statusKey || !isGenericMessage)) {
+      return message
+    }
   }
+  if (statusKey) return i18next.t(statusKey)
   return messageText(value) || (fallback ?? i18next.t('Something went wrong!'))
 }
 
