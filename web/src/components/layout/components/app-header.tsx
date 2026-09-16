@@ -123,7 +123,9 @@ export function AppHeader({
           variant='ghost'
           className={appHeaderLayoutClasses.sidebarTrigger}
         />
-        <SystemUpdateAction presentation='version' />
+        <span className='hidden sm:inline-flex'>
+          <SystemUpdateAction presentation='version' />
+        </span>
         {leftContent ? (
           <div className='ms-2 flex items-center'>{leftContent}</div>
         ) : null}
@@ -141,14 +143,22 @@ export function AppHeader({
         ) : (
           <div className={appHeaderLayoutClasses.utilities}>
             {showNotifications && <NotificationPopover />}
-            <VersionUpdatePopover />
+            <span className='hidden sm:inline-flex'>
+              <VersionUpdatePopover />
+            </span>
             <LanguageSwitcher />
-            {showConfigDrawer && <ConfigDrawer />}
+            {showConfigDrawer && (
+              <span className='hidden sm:inline-flex'>
+                <ConfigDrawer />
+              </span>
+            )}
             {showSearch && (
-              <Search
-                variant='icon'
-                className={appHeaderLayoutClasses.search}
-              />
+              <span className='hidden sm:inline-flex'>
+                <Search
+                  variant='icon'
+                  className={appHeaderLayoutClasses.search}
+                />
+              </span>
             )}
             {showProfileDropdown && <ProfileDropdown />}
           </div>
