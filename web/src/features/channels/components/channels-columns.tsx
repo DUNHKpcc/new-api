@@ -53,10 +53,16 @@ import {
   getCurrencyLabel,
 } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
+import { handleServerError } from '@/lib/handle-server-error'
+import { createServerError } from '@/lib/server-error-message'
 import { truncateText } from '@/lib/utils'
 
-import { getCodexUsage } from '../api'
-import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
+import { getCodexUsage, updateChannelBalance } from '../api'
+import {
+  CHANNEL_STATUS_CONFIG,
+  CHANNEL_TYPE_TASK_PLUGIN,
+  MODEL_FETCHABLE_TYPES,
+} from '../constants'
 import {
   formatRelativeTime,
   formatResponseTime,
@@ -68,9 +74,9 @@ import {
   parseModelsList,
   parseGroupsList,
   parseChannelSettings,
+  channelsQueryKeys,
   handleUpdateChannelField,
   handleUpdateTagField,
-  handleUpdateChannelBalance,
   createChannelFieldUpdateScheduler,
   isTagAggregateRow,
   type TagRow,
@@ -78,9 +84,11 @@ import {
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
+import { TaskPluginChannelBadge } from './channel-type-badge'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
+import { BalanceQueryDialog } from './dialogs/balance-query-dialog'
 import {
   CodexUsageDialog,
   type CodexUsageDialogData,
@@ -325,15 +333,18 @@ const SENSITIVE_MASK = '••••'
 /**
  * Balance cell component with click to update
  */
-function BalanceCell({ channel }: { channel: Channel }) {
+export function BalanceCell({ channel }: { channel: Channel }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const layout = useContext(ChannelRowActionsLayoutContext)
-  const { sensitiveVisible } = useChannels()
+  const { sensitiveVisible, setCurrentRow } = useChannels()
   const isTagRow = isTagAggregateRow(channel)
   const balance = channel.balance || 0
   const usedQuota = channel.used_quota || 0
   const [isUpdating, setIsUpdating] = useState(false)
+  const [rawBalanceResponse, setRawBalanceResponse] = useState<string | null>(
+    null
+  )
   const [codexUsageOpen, setCodexUsageOpen] = useState(false)
   const [codexUsageResponse, setCodexUsageResponse] =
     useState<CodexUsageDialogData | null>(null)
@@ -428,22 +439,44 @@ function BalanceCell({ channel }: { channel: Channel }) {
       try {
         const res = await getCodexUsage(channel.id)
         if (!res.success) {
-          throw new Error(res.message || t('Failed to fetch usage'))
+          throw createServerError(res, t('Failed to fetch usage'))
         }
         setCodexUsageResponse(res)
         setCodexUsageOpen(true)
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : t('Failed to fetch usage')
-        )
+        handleServerError(error, t('Failed to fetch usage'))
       } finally {
         setIsUpdating(false)
       }
       return
     }
 
-    await handleUpdateChannelBalance(channel.id, queryClient)
-    setIsUpdating(false)
+    try {
+      const response = await updateChannelBalance(channel.id)
+      if (response.success && response.balance !== undefined) {
+        toast.success(
+          t('Balance updated: {{balance}}', {
+            balance: formatCurrencyFromUSD(response.balance, {
+              digitsLarge: 2,
+              digitsSmall: 4,
+              abbreviate: false,
+            }),
+          })
+        )
+        void queryClient.invalidateQueries({
+          queryKey: channelsQueryKeys.lists(),
+        })
+      } else if (response.success && response.raw_response !== undefined) {
+        setCurrentRow(channel)
+        setRawBalanceResponse(response.raw_response)
+      } else {
+        handleServerError(response, t('Failed to update balance'))
+      }
+    } catch (error: unknown) {
+      handleServerError(error, t('Failed to update balance'))
+    } finally {
+      setIsUpdating(false)
+    }
   }
   let remainingBadgeLabel = sensitiveVisible ? remainingDisplay : SENSITIVE_MASK
   if (sensitiveVisible && isUpdating) {
@@ -521,21 +554,28 @@ function BalanceCell({ channel }: { channel: Channel }) {
           try {
             const res = await getCodexUsage(channel.id)
             if (!res.success) {
-              throw new Error(res.message || t('Failed to fetch usage'))
+              throw createServerError(res, t('Failed to fetch usage'))
             }
             setCodexUsageResponse(res)
           } catch (error) {
-            toast.error(
-              error instanceof Error
-                ? error.message
-                : t('Failed to fetch usage')
-            )
+            handleServerError(error, t('Failed to fetch usage'))
           } finally {
             setIsUpdating(false)
           }
         }}
         isRefreshing={isUpdating}
       />
+      {rawBalanceResponse !== null && (
+        <BalanceQueryDialog
+          initialRawResponse={rawBalanceResponse}
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setRawBalanceResponse(null)
+            }
+          }}
+        />
+      )}
     </TooltipProvider>
   )
 }
@@ -638,9 +678,11 @@ export function useChannelsColumns(
                   )}
                 </Button>
                 <div className='flex items-center gap-1.5'>
-                  <span className='font-semibold'>Tag：{tag}</span>
+                  <span className='font-semibold'>
+                    {t('Tag:')} {tag}
+                  </span>
                   <StatusBadge
-                    label={`${childrenCount} channels`}
+                    label={t('{{count}} channels', { count: childrenCount })}
                     variant='blue'
                     size='sm'
                     copyable={false}
@@ -778,26 +820,34 @@ export function useChannelsColumns(
                   </Tooltip>
                 </TooltipProvider>
               )}
-              <TooltipProvider delay={300}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div className='max-w-full min-w-0 overflow-hidden' />
-                    }
-                  >
-                    <ProviderBadge
-                      iconKey={`${iconName}.Color`}
-                      iconSize={18}
-                      label={typeName}
-                      colorText={false}
-                      copyable={false}
-                      showDot={false}
-                      className='max-w-full min-w-0 overflow-hidden'
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side='top'>{typeName}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {type === CHANNEL_TYPE_TASK_PLUGIN ? (
+                <TaskPluginChannelBadge
+                  pluginKey={
+                    parseChannelSettings(channel.setting)?.task_plugin_key
+                  }
+                />
+              ) : (
+                <TooltipProvider delay={300}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <div className='max-w-full min-w-0 overflow-hidden' />
+                      }
+                    >
+                      <ProviderBadge
+                        iconKey={`${iconName}.Color`}
+                        iconSize={18}
+                        label={typeName}
+                        colorText={false}
+                        copyable={false}
+                        showDot={false}
+                        className='max-w-full min-w-0 overflow-hidden'
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side='top'>{typeName}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               {isIonet && (
                 <TooltipProvider delay={100}>
                   <Tooltip>
@@ -873,7 +923,7 @@ export function useChannelsColumns(
             if (hasEnabled) {
               return (
                 <StatusBadge
-                  label={`Active (${childrenCount})`}
+                  label={t('Active ({{count}})', { count: childrenCount })}
                   variant='success'
                   size='sm'
                   copyable={false}
@@ -883,7 +933,7 @@ export function useChannelsColumns(
             } else {
               return (
                 <StatusBadge
-                  label={`Inactive (${childrenCount})`}
+                  label={t('Inactive ({{count}})', { count: childrenCount })}
                   variant='neutral'
                   size='sm'
                   copyable={false}
@@ -1131,7 +1181,13 @@ export function useChannelsColumns(
             return <span className='text-muted-foreground text-xs'>-</span>
           }
 
-          const timeText = formatRelativeTime(testTime, locale)
+          const rawTimeText = formatRelativeTime(testTime, locale)
+          let timeText = rawTimeText
+          if (rawTimeText === 'Never') {
+            timeText = t('Never')
+          } else if (rawTimeText === 'Unknown') {
+            timeText = t('Unknown')
+          }
           const fullDate = formatTimestampToDate(testTime)
 
           // For valid timestamps, show tooltip with full date

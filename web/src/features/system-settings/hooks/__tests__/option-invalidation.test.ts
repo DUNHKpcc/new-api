@@ -47,6 +47,23 @@ describe('system option cache invalidation', () => {
     ])
   })
 
+  test('refreshes status after either WeChat login contract changes', () => {
+    for (const key of [
+      'WeChatAuthEnabled',
+      'WeChatAppId',
+      'WeChatAppSecret',
+      'WeChatServerAddress',
+      'WeChatServerToken',
+      'WeChatAccountQRCodeImageURL',
+      'WeChatRegistrationVerificationEnabled',
+    ]) {
+      assert.deepEqual(getOptionInvalidationQueryKeys(key), [
+        'system-options',
+        'status',
+      ])
+    }
+  })
+
   test('refreshes public pricing cards after estimate models change', () => {
     assert.deepEqual(
       getOptionInvalidationQueryKeys('SubscriptionDisplayModels'),

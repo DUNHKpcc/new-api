@@ -30,6 +30,7 @@ const OBFUSCATED_KEYS = [
 ]
 
 const BRAND_AND_LITERAL_KEYS = new Set([
+  '1M token',
   'AI Proxy',
   'AIGC2D',
   'Alipay',
@@ -47,6 +48,7 @@ const BRAND_AND_LITERAL_KEYS = new Set([
   'Client Secret',
   'Cloudflare',
   'Cohere',
+  'credit',
   'DeepSeek',
   'Discord',
   'DoubaoVideo',
@@ -242,7 +244,9 @@ async function main() {
     .map((e) => e.name)
     .sort((a, b) => a.localeCompare(b))
 
-  // Auto-pick base locale as the one with the most leaf keys under translation (most "rich").
+  // English is the source-of-truth key set. A richer non-English locale can
+  // contain custom additions and must not silently become the base, otherwise
+  // untranslated Chinese values are skipped from detection.
   const parsedByLocale = {}
   for (const filename of localeFiles) {
     const locale = filename.replace(/\.json$/i, '')
@@ -250,15 +254,17 @@ async function main() {
     parsedByLocale[locale] = JSON.parse(raw)
   }
 
-  const baseLocale = Object.keys(parsedByLocale)
-    .map((locale) => {
-      const json = parsedByLocale[locale]
-      const trans = json?.translation ?? {}
-      return { locale, score: countLeafKeys(trans) }
-    })
-    .sort(
-      (a, b) => b.score - a.score || a.locale.localeCompare(b.locale)
-    )[0]?.locale
+  const baseLocale = parsedByLocale.en
+    ? 'en'
+    : Object.keys(parsedByLocale)
+        .map((locale) => {
+          const json = parsedByLocale[locale]
+          const trans = json?.translation ?? {}
+          return { locale, score: countLeafKeys(trans) }
+        })
+        .sort(
+          (a, b) => b.score - a.score || a.locale.localeCompare(b.locale)
+        )[0]?.locale
 
   if (!baseLocale) throw new Error('No locale files found.')
 

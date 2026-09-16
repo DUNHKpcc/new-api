@@ -16,9 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { SystemStatus } from '@/features/auth/types'
+
 // ============================================================================
 // OAuth URL Builders
 // ============================================================================
+
+export interface CustomOAuthBinding {
+  provider_id: number
+  provider_name: string
+  provider_slug: string
+  provider_icon: string
+  provider_user_id: string
+}
+
+export function indexCustomOAuthBindings(
+  bindings: CustomOAuthBinding[]
+): Map<number, CustomOAuthBinding> {
+  return new Map(bindings.map((binding) => [binding.provider_id, binding]))
+}
 
 /**
  * Build GitHub OAuth URL
@@ -76,11 +92,75 @@ export function buildWeChatOAuthUrl(
   origin = window.location.origin
 ): string {
   const url = new URL('https://open.weixin.qq.com/connect/qrconnect')
-  url.searchParams.set('appid', appId)
+  // Configuration values may be copied with surrounding whitespace. The
+  // backend trims them when checking readiness, so normalize here as well or
+  // a status-advertised direct flow would send an invalid app id.
+  url.searchParams.set('appid', appId.trim())
   url.searchParams.set('redirect_uri', `${origin}/oauth/wechat`)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', 'snsapi_login')
   url.searchParams.set('state', state)
   url.hash = 'wechat_redirect'
   return url.toString()
+}
+
+export function buildOAuthAuthorizationUrl(
+  provider: string,
+  state: string,
+  status: SystemStatus
+): string {
+  switch (provider) {
+    case 'github':
+      if (status.github_client_id) {
+        return buildGitHubOAuthUrl(status.github_client_id, state)
+      }
+      break
+    case 'discord':
+      if (status.discord_client_id) {
+        return buildDiscordOAuthUrl(status.discord_client_id, state)
+      }
+      break
+    case 'oidc':
+      if (status.oidc_authorization_endpoint && status.oidc_client_id) {
+        return buildOIDCOAuthUrl(
+          status.oidc_authorization_endpoint,
+          status.oidc_client_id,
+          state
+        )
+      }
+      break
+    case 'linuxdo':
+      if (status.linuxdo_client_id) {
+        return buildLinuxDOOAuthUrl(status.linuxdo_client_id, state)
+      }
+      break
+    case 'wechat':
+      {
+        const legacyAppId = status.wechat_appid
+        const appId =
+          typeof legacyAppId === 'string' ? legacyAppId : status.wechat_app_id
+        if (appId) {
+          return buildWeChatOAuthUrl(appId, state)
+        }
+      }
+      break
+    default: {
+      const custom = status.custom_oauth_providers?.find(
+        (candidate) => candidate.slug === provider
+      )
+      if (custom) {
+        const url = new URL(custom.authorization_endpoint)
+        url.searchParams.set('client_id', custom.client_id)
+        url.searchParams.set(
+          'redirect_uri',
+          `${window.location.origin}/oauth/${provider}`
+        )
+        url.searchParams.set('response_type', 'code')
+        url.searchParams.set('state', state)
+        if (custom.scopes) url.searchParams.set('scope', custom.scopes)
+        return url.toString()
+      }
+    }
+  }
+  throw new Error('No linked OAuth provider is available.')
 }

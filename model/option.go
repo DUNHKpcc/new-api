@@ -3,13 +3,17 @@ package model
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -93,6 +97,11 @@ func InitOptionMap() error {
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
 	common.OptionMap["DrawingEnabled"] = strconv.FormatBool(common.DrawingEnabled)
 	common.OptionMap["TaskEnabled"] = strconv.FormatBool(common.TaskEnabled)
+	common.OptionMap["TaskPluginEnabled"] = strconv.FormatBool(constant.TaskPluginEnabled)
+	jsplugin.DefaultRegistry.SetEnabled(constant.TaskPluginEnabled)
+	common.OptionMap[setting.TaskPluginMarketplaceSourcesKey] = setting.TaskPluginMarketplaceSources2JsonString()
+	common.OptionMap[setting.TaskPluginDisabledFactoryKeysKey] = "[]"
+	jsplugin.DefaultRegistry.SetDisabledFactoryKeys(nil)
 	common.OptionMap["DataExportEnabled"] = strconv.FormatBool(common.DataExportEnabled)
 	common.OptionMap["ChannelDisableThreshold"] = strconv.FormatFloat(common.ChannelDisableThreshold, 'f', -1, 64)
 	common.OptionMap["EmailDomainRestrictionEnabled"] = strconv.FormatBool(common.EmailDomainRestrictionEnabled)
@@ -119,6 +128,7 @@ func InitOptionMap() error {
 	common.OptionMap["SystemName"] = common.SystemName
 	common.OptionMap["Logo"] = common.Logo
 	common.OptionMap["ServerAddress"] = ""
+	common.OptionMap["TaskPublicAddress"] = system_setting.TaskPublicAddress
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
 	common.OptionMap["WorkerAllowHttpImageRequestEnabled"] = strconv.FormatBool(system_setting.WorkerAllowHttpImageRequestEnabled)
@@ -174,6 +184,9 @@ func InitOptionMap() error {
 	common.OptionMap["TelegramBotName"] = ""
 	common.OptionMap["WeChatAppId"] = ""
 	common.OptionMap["WeChatAppSecret"] = ""
+	common.OptionMap["WeChatServerAddress"] = ""
+	common.OptionMap["WeChatServerToken"] = ""
+	common.OptionMap["WeChatAccountQRCodeImageURL"] = ""
 	common.OptionMap["TurnstileSiteKey"] = ""
 	common.OptionMap["TurnstileSecretKey"] = ""
 	common.OptionMap["QuotaForNewUser"] = strconv.Itoa(common.QuotaForNewUser)
@@ -230,9 +243,7 @@ func InitOptionMap() error {
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
-	for k, v := range modelConfigs {
-		common.OptionMap[k] = v
-	}
+	maps.Copy(common.OptionMap, modelConfigs)
 
 	common.OptionMapRWMutex.Unlock()
 	if err := loadOptionsFromDatabase(); err != nil {
@@ -253,13 +264,20 @@ func InitOptionMap() error {
 }
 
 func loadOptionsFromDatabase() error {
+	passkeyOptionMutex.Lock()
+	defer passkeyOptionMutex.Unlock()
 	options, err := AllOption()
 	if err != nil {
 		return fmt.Errorf("query options: %w", err)
 	}
 	affiliateSettingJSON := ""
 	hasAffiliateSetting := false
+	passkeyOptions := make(map[string]string)
 	for _, option := range options {
+		if IsPasskeyDomainOption(option.Key) {
+			passkeyOptions[option.Key] = option.Value
+			continue
+		}
 		if option.Key == operation_setting.AffiliateSettingOptionKey {
 			affiliateSettingJSON = option.Value
 			hasAffiliateSetting = true
@@ -270,6 +288,7 @@ func loadOptionsFromDatabase() error {
 			common.SysLog("failed to update option map: " + err.Error())
 		}
 	}
+	applyPasskeyDomainOptions(passkeyOptions)
 	if hasAffiliateSetting {
 		if err := updateOptionMap(operation_setting.AffiliateSettingOptionKey, affiliateSettingJSON); err != nil {
 			return fmt.Errorf("load affiliate setting: %w", err)
@@ -312,6 +331,12 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == "console_setting.announcements" {
+		return console_setting.ValidateConsoleSettings(value, "Announcements")
+	}
+	if key == "console_setting.global_notifications" {
+		return console_setting.ValidateConsoleSettings(value, "GlobalNotifications")
+	}
 	if key == operation_setting.RankingDisplayOptionKey {
 		_, err := operation_setting.ParseRankingDisplayConfig(value)
 		return err
@@ -326,10 +351,20 @@ func validateOptionValue(key string, value string) error {
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
 	}
+	if key == operation_setting.ChannelTestConcurrencyOptionKey {
+		return operation_setting.ValidateChannelTestConcurrency(value)
+	}
 	if key == "MaxTokenAutoGroups" {
 		return setting.ValidateMaxTokenAutoGroups(value)
 	}
 	return nil
+}
+
+func normalizeOptionValue(key, value string) (string, error) {
+	if key == "console_setting.announcements" {
+		return console_setting.NormalizeAnnouncements(value)
+	}
+	return value, nil
 }
 
 func validateProtectedOptionKey(key string, allowCompliance bool) error {
@@ -353,9 +388,21 @@ func validateProtectedOptionKey(key string, allowCompliance bool) error {
 }
 
 func UpdateOption(key string, value string) error {
+	if IsPasskeyDomainOption(key) {
+		_, err := UpdatePasskeyDomainOptions(map[string]string{key: value}, false, "")
+		return err
+	}
+	if IsModelPricingOption(key) {
+		return UpdateModelPricingOptions(map[string]string{key: value})
+	}
 	if err := validateProtectedOptionKey(key, false); err != nil {
 		return err
 	}
+	normalizedValue, err := normalizeOptionValue(key, value)
+	if err != nil {
+		return err
+	}
+	value = normalizedValue
 	if err := validateOptionValue(key, value); err != nil {
 		return err
 	}
@@ -608,7 +655,21 @@ func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
 	}
-	for key, value := range values {
+	for key := range values {
+		if IsPasskeyDomainOption(key) {
+			_, err := UpdatePasskeyDomainOptions(values, false, "")
+			return err
+		}
+	}
+	normalizedValues := maps.Clone(values)
+	for key, value := range normalizedValues {
+		normalizedValue, err := normalizeOptionValue(key, value)
+		if err != nil {
+			return err
+		}
+		normalizedValues[key] = normalizedValue
+	}
+	for key, value := range normalizedValues {
 		if err := validateProtectedOptionKey(key, true); err != nil {
 			return err
 		}
@@ -617,7 +678,7 @@ func UpdateOptionsBulk(values map[string]string) error {
 		}
 	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		for k, v := range values {
+		for k, v := range normalizedValues {
 			option := Option{Key: k}
 			if err := tx.FirstOrCreate(&option, Option{Key: k}).Error; err != nil {
 				return err
@@ -633,7 +694,7 @@ func UpdateOptionsBulk(values map[string]string) error {
 		return err
 	}
 	confirmedValue, hasConfirmedValue := values[PaymentComplianceConfirmedOptionKey]
-	for k, v := range values {
+	for k, v := range normalizedValues {
 		if k == PaymentComplianceConfirmedOptionKey {
 			continue
 		}
@@ -738,6 +799,9 @@ func updateOptionMap(key string, value string) (err error) {
 			common.DrawingEnabled = boolValue
 		case "TaskEnabled":
 			common.TaskEnabled = boolValue
+		case "TaskPluginEnabled":
+			constant.TaskPluginEnabled = boolValue
+			jsplugin.DefaultRegistry.SetEnabled(boolValue)
 		case "DataExportEnabled":
 			common.DataExportEnabled = boolValue
 		case "DefaultCollapseSidebar":
@@ -780,6 +844,9 @@ func updateOptionMap(key string, value string) (err error) {
 			ratio_setting.SetExposeRatioEnabled(boolValue)
 		}
 	}
+	if key == setting.TaskPluginDisabledFactoryKeysKey {
+		jsplugin.DefaultRegistry.SetDisabledFactoryKeys(setting.ParseTaskPluginDisabledFactoryKeys(value))
+	}
 	switch key {
 	case "EmailDomainWhitelist":
 		common.EmailDomainWhitelist = strings.Split(value, ",")
@@ -796,6 +863,8 @@ func updateOptionMap(key string, value string) (err error) {
 		common.SMTPToken = value
 	case "ServerAddress":
 		system_setting.ServerAddress = value
+	case "TaskPublicAddress":
+		system_setting.TaskPublicAddress = value
 	case "WorkerUrl":
 		system_setting.WorkerUrl = value
 	case "WorkerValidKey":
@@ -906,6 +975,12 @@ func updateOptionMap(key string, value string) (err error) {
 		common.WeChatAppId = value
 	case "WeChatAppSecret":
 		common.WeChatAppSecret = value
+	case "WeChatServerAddress":
+		common.WeChatServerAddress = value
+	case "WeChatServerToken":
+		common.WeChatServerToken = value
+	case "WeChatAccountQRCodeImageURL":
+		common.WeChatAccountQRCodeImageURL = value
 	case "TelegramBotToken":
 		common.TelegramBotToken = value
 	case "TelegramBotName":

@@ -42,7 +42,9 @@ const AUTH_SECTIONS = [
           EmailDomainWhitelist: settings.EmailDomainWhitelist,
         }}
         weChatOAuthReady={
-          settings.WeChatAuthEnabled && Boolean(settings.WeChatAppId.trim())
+          settings.WeChatAuthEnabled &&
+          Boolean(settings.WeChatAppId.trim()) &&
+          Boolean(settings.WeChatAppSecret.trim())
         }
       />
     ),
@@ -70,8 +72,8 @@ const AUTH_SECTIONS = [
           'oidc.token_endpoint': settings['oidc.token_endpoint'],
           'oidc.user_info_endpoint': settings['oidc.user_info_endpoint'],
           TelegramOAuthEnabled: settings.TelegramOAuthEnabled,
-          TelegramBotToken: settings.TelegramBotToken,
-          TelegramBotName: settings.TelegramBotName,
+          'telegram.client_id': settings['telegram.client_id'],
+          'telegram.client_secret': settings['telegram.client_secret'],
           LinuxDOOAuthEnabled: settings.LinuxDOOAuthEnabled,
           LinuxDOClientId: settings.LinuxDOClientId,
           LinuxDOClientSecret: settings.LinuxDOClientSecret,
@@ -79,6 +81,9 @@ const AUTH_SECTIONS = [
           WeChatAuthEnabled: settings.WeChatAuthEnabled,
           WeChatAppId: settings.WeChatAppId,
           WeChatAppSecret: settings.WeChatAppSecret,
+          WeChatServerAddress: settings.WeChatServerAddress,
+          WeChatServerToken: settings.WeChatServerToken,
+          WeChatAccountQRCodeImageURL: settings.WeChatAccountQRCodeImageURL,
         }}
       />
     ),

@@ -27,6 +27,7 @@ import {
 } from './dynamic-price'
 import { getDisplayGroupRatio, isTokenBasedModel } from './model-helpers'
 import { getTokenPricesPerMillion } from './price'
+import type { ParsedTier } from './billing-expr'
 
 export const SUBSCRIPTION_ESTIMATE_INPUT_TOKENS = 1_000
 export const SUBSCRIPTION_ESTIMATE_OUTPUT_TOKENS = 4_000
@@ -188,7 +189,10 @@ function getDynamicTokenPrices(
   const uncachedInputTokens =
     SUBSCRIPTION_ESTIMATE_INPUT_TOKENS *
     (1 - SUBSCRIPTION_ESTIMATE_CACHE_HIT_RATE)
+  // Task-usage tiers expose `unitPrices` instead of token-unit fields and are
+  // intentionally not estimated by this token-only preview.
   const tier = tiers.find((candidate) => {
+    if ('unitPrices' in candidate) return false
     if (!candidate.conditions.length) return true
     return conditionsMatch(candidate.conditions, {
       p: uncachedInputTokens,
@@ -197,14 +201,15 @@ function getDynamicTokenPrices(
     })
   })
   if (!tier) return null
+  const tokenTier = tier as ParsedTier
 
   const groupRatio = getDisplayGroupRatio(model, selectedGroup)
-  const input = Number(tier.input_unit_cost) * groupRatio
-  const output = Number(tier.output_unit_cost) * groupRatio
+  const input = Number(tokenTier.input_unit_cost) * groupRatio
+  const output = Number(tokenTier.output_unit_cost) * groupRatio
   const expression = model.billing_expr || ''
   const includesCacheRead = /\bcr\s*\*/.test(expression)
   const cache = includesCacheRead
-    ? Number(tier.cache_read_unit_cost) * groupRatio
+    ? Number(tokenTier.cache_read_unit_cost) * groupRatio
     : input
 
   if (![input, output, cache].every((value) => Number.isFinite(value))) {

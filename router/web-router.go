@@ -19,7 +19,7 @@ type WebAssets struct {
 	IndexPage []byte
 }
 
-func SetWebRouter(router *gin.Engine, assets WebAssets) {
+func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.HandlerFunc) {
 	frontendFS := common.EmbedFolder(assets.BuildFS, "web/dist")
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
@@ -27,17 +27,21 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 	router.Use(middleware.Cache())
 	router.Use(middleware.DesktopPageSecurityHeaders())
 	router.Use(static.Serve("/", frontendFS))
-	router.NoRoute(func(c *gin.Context) {
-		c.Set(middleware.RouteTagKey, "web")
-		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
-			controller.RelayNotFound(c)
-			return
-		}
-		if c.Request.URL.Path == "/desktop/authorize" || strings.HasPrefix(c.Request.URL.Path, "/desktop/authorize/") {
-			c.Header("Cache-Control", "no-store")
-		} else {
-			c.Header("Cache-Control", "no-cache")
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
-	})
+	router.NoRoute(
+		pluginDispatcher,
+		middleware.RouteTag("web"),
+		middleware.AccessTokenAudit(),
+		func(c *gin.Context) {
+			if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
+				controller.RelayNotFound(c)
+				return
+			}
+			if c.Request.URL.Path == "/desktop/authorize" || strings.HasPrefix(c.Request.URL.Path, "/desktop/authorize/") {
+				c.Header("Cache-Control", "no-store")
+			} else {
+				c.Header("Cache-Control", "no-cache")
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
+		},
+	)
 }

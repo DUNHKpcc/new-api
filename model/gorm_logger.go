@@ -52,7 +52,7 @@ type sanitizedLogWriter struct {
 	delegate *log.Logger
 }
 
-func (s *sanitizedLogWriter) Printf(format string, args ...interface{}) {
+func (s *sanitizedLogWriter) Printf(format string, args ...any) {
 	if !common.DebugEnabled {
 		for i, arg := range args {
 			if err, ok := arg.(error); ok {
@@ -72,6 +72,11 @@ func sanitizeDBError(err error) error {
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
+		// 08P01 是 PgBouncer 对同连接重名 Parse 的 FATAL,42P05 是原生 PostgreSQL 的
+		// duplicate_prepared_statement;都指向预处理语句与事务池代理不兼容。
+		if pgErr.Code == "08P01" || pgErr.Code == "42P05" {
+			return fmt.Errorf("postgres error SQLSTATE %s: prepared statement conflict with a transaction-pooling proxy (PgBouncer/Neon/Supabase); other clients sharing this database must disable prepared statements, or upgrade PgBouncer to >=1.21 with max_prepared_statements enabled", pgErr.Code)
+		}
 		return fmt.Errorf("postgres error SQLSTATE %s", pgErr.Code)
 	}
 	var chErr *proto.Exception
@@ -83,4 +88,23 @@ func sanitizeDBError(err error) error {
 		return fmt.Errorf("sqlite error %d", sqliteErr.Code())
 	}
 	return err
+}
+
+// isSQLiteBusyError identifies transient writer contention. SQLite can still
+// return BUSY when a pooled connection starts a deferred transaction from a
+// stale read snapshot, even when a busy timeout is configured. Callers that
+// can safely replay an entire transaction may use a bounded retry.
+func isSQLiteBusyError(err error) bool {
+	var sqliteErr *sqlitedriver.Error
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+	switch sqliteErr.Code() {
+	case 5, // SQLITE_BUSY
+		261, // SQLITE_BUSY_RECOVERY
+		517: // SQLITE_BUSY_SNAPSHOT
+		return true
+	default:
+		return false
+	}
 }

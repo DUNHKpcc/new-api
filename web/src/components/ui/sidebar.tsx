@@ -24,6 +24,7 @@ import { SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -183,6 +184,7 @@ function Sidebar({
   collapsible?: 'offcanvas' | 'icon' | 'none'
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { t } = useTranslation()
 
   if (collapsible === 'none') {
     return (
@@ -207,7 +209,7 @@ function Sidebar({
           data-sidebar='sidebar'
           data-slot='sidebar'
           data-mobile='true'
-          className='bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden'
+          className='bg-sidebar text-sidebar-foreground pointer-events-auto z-60 w-(--sidebar-width) p-0 [&>button]:hidden'
           style={
             {
               '--sidebar-width': `var(--app-sidebar-width-mobile, ${SIDEBAR_WIDTH_MOBILE})`,
@@ -216,8 +218,10 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className='sr-only'>
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{t('Sidebar')}</SheetTitle>
+            <SheetDescription>
+              {t('Displays the mobile sidebar.')}
+            </SheetDescription>
           </SheetHeader>
           <div className='flex h-full w-full flex-col'>{children}</div>
         </SheetContent>
@@ -277,6 +281,7 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar()
+  const { t } = useTranslation()
 
   return (
     <Button
@@ -292,22 +297,23 @@ function SidebarTrigger({
       {...props}
     >
       <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} />
-      <span className='sr-only'>Toggle Sidebar</span>
+      <span className='sr-only'>{t('Toggle Sidebar')}</span>
     </Button>
   )
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
   const { toggleSidebar } = useSidebar()
+  const { t } = useTranslation()
 
   return (
     <button
       data-sidebar='rail'
       data-slot='sidebar-rail'
-      aria-label='Toggle Sidebar'
+      aria-label={t('Toggle Sidebar')}
       tabIndex={-1}
       onClick={toggleSidebar}
-      title='Toggle Sidebar'
+      title={t('Toggle Sidebar')}
       className={cn(
         'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2',
         'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',
@@ -530,6 +536,7 @@ function SidebarMenuButton({
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebar()
+  const tooltipEnabled = Boolean(tooltip) && !isMobile && state === 'collapsed'
   const comp = useRender({
     defaultTagName: 'button',
     props: mergeProps<'button'>(
@@ -538,7 +545,7 @@ function SidebarMenuButton({
       },
       props
     ),
-    render: !tooltip ? render : <TooltipTrigger render={render} />,
+    render: tooltipEnabled ? <TooltipTrigger render={render} /> : render,
     state: {
       slot: 'sidebar-menu-button',
       sidebar: 'menu-button',
@@ -547,7 +554,7 @@ function SidebarMenuButton({
     },
   })
 
-  if (!tooltip) {
+  if (!tooltipEnabled || !tooltip) {
     return comp
   }
 
@@ -561,12 +568,7 @@ function SidebarMenuButton({
     <TooltipProvider delay={0}>
       <Tooltip>
         {comp}
-        <TooltipContent
-          side='right'
-          align='center'
-          hidden={state !== 'collapsed' || isMobile}
-          {...tooltip}
-        />
+        <TooltipContent side='right' align='center' {...tooltip} />
       </Tooltip>
     </TooltipProvider>
   )

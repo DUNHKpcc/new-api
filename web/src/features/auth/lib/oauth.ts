@@ -26,6 +26,44 @@ export {
   buildWeChatOAuthUrl,
 } from '@/lib/oauth'
 
+export type WeChatLoginMode = 'direct' | 'server' | null
+
+/**
+ * Resolve the login contract advertised by the backend. Explicit mode flags
+ * take precedence; legacy responses infer direct mode from an app id and
+ * otherwise retain the server-bridge behavior.
+ */
+export function resolveWeChatLoginMode(
+  status: SystemStatus | null
+): WeChatLoginMode {
+  if (!status) return null
+
+  // `useStatus` normally unwraps the response, while a few embedded callers
+  // still pass the raw `{ data }` envelope. Resolve both without weakening the
+  // explicit readiness flags returned by the backend.
+  const source = status.data ?? status
+  const enabled =
+    (source.wechat_login as boolean | undefined) ?? status.wechat_login
+  if (!enabled) return null
+
+  const appId = (source.wechat_app_id ?? status.wechat_app_id)?.trim()
+
+  const directReady =
+    (source.wechat_direct_oauth as boolean | undefined) ??
+    status.wechat_direct_oauth ??
+    Boolean(appId)
+  const serverReady =
+    (source.wechat_server_bridge as boolean | undefined) ??
+    status.wechat_server_bridge ??
+    !directReady
+
+  if (directReady && appId) {
+    return 'direct'
+  }
+  if (serverReady) return 'server'
+  return null
+}
+
 // ============================================================================
 // OAuth Providers Utilities
 // ============================================================================
@@ -77,12 +115,13 @@ export function getAvailableOAuthProviders(
     })
   }
 
-  if (status.wechat_login && status.wechat_app_id) {
+  const weChatMode = resolveWeChatLoginMode(status)
+  if (weChatMode) {
     providers.push({
       name: 'WeChat',
       type: 'wechat',
       enabled: true,
-      clientId: status.wechat_app_id,
+      clientId: weChatMode === 'direct' ? status.wechat_app_id : undefined,
     })
   }
 
@@ -108,6 +147,6 @@ export function hasOAuthProviders(status: SystemStatus | null): boolean {
     status.oidc_enabled ||
     status.linuxdo_oauth ||
     status.telegram_oauth ||
-    (status.wechat_login && status.wechat_app_id)
+    resolveWeChatLoginMode(status) !== null
   )
 }

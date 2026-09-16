@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,4 +47,31 @@ func TestGetGlobalNotificationsLimitsPublicItems(t *testing.T) {
 	require.Len(t, result, maxPublicNotificationItems)
 	require.Equal(t, float64(24), result[0]["id"])
 	require.Equal(t, float64(5), result[len(result)-1]["id"])
+}
+
+func TestAnnouncementImagePolicySeparatesOrdinaryAndGlobalNotifications(t *testing.T) {
+	ordinary := `[{"id":1,"content":"Maintenance","publishDate":"2026-08-01T00:00:00Z","type":"warning","image":"data:image/webp;base64,AAAA"}]`
+	normalized, err := NormalizeAnnouncements(ordinary)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[{"id":1,"content":"Maintenance","publishDate":"2026-08-01T00:00:00Z","type":"warning"}]`, normalized)
+	require.NoError(t, ValidateConsoleSettings(ordinary, "Announcements"))
+
+	global := `[{"id":2,"content":"Global notice","publishDate":"2026-08-02T00:00:00Z","type":"success","image":"data:image/webp;base64,AAAA"}]`
+	require.NoError(t, ValidateConsoleSettings(global, "GlobalNotifications"))
+
+	previous := GetConsoleSetting().Announcements
+	previousGlobal := GetConsoleSetting().GlobalNotifications
+	GetConsoleSetting().Announcements = ordinary
+	GetConsoleSetting().GlobalNotifications = global
+	t.Cleanup(func() {
+		GetConsoleSetting().Announcements = previous
+		GetConsoleSetting().GlobalNotifications = previousGlobal
+	})
+
+	announcements := GetAnnouncements()
+	require.Len(t, announcements, 1)
+	assert.NotContains(t, announcements[0], "image")
+	globalNotifications := GetGlobalNotifications()
+	require.Len(t, globalNotifications, 1)
+	assert.Equal(t, "data:image/webp;base64,AAAA", globalNotifications[0]["image"])
 }

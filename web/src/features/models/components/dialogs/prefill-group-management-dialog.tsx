@@ -52,6 +52,8 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { deletePrefillGroup, getPrefillGroups } from '../../api'
@@ -93,7 +95,7 @@ export function PrefillGroupManagementDialog({
     refetch: refetchGroups,
   } = useQuery({
     queryKey: prefillGroupsQueryKeys.list(),
-    queryFn: () => getPrefillGroups(),
+    queryFn: async () => requireServerSuccess(await getPrefillGroups()),
     enabled: open,
   })
 
@@ -121,9 +123,9 @@ export function PrefillGroupManagementDialog({
           group.type === 'endpoint'
             ? parseEndpointKeys(group.items)
             : parseStringItems(group.items)
-        return { group, meta, parsedItems }
+        return { group, meta: { ...meta, label: t(meta.label) }, parsedItems }
       }),
-    [sortedGroups]
+    [sortedGroups, t]
   )
 
   useEffect(() => {
@@ -149,10 +151,10 @@ export function PrefillGroupManagementDialog({
         })
         setDeleteState({ open: false, group: null })
       } else {
-        toast.error(response.message || t('Failed to delete group'))
+        handleServerError(response, t('Failed to delete group'))
       }
     } catch (err: unknown) {
-      toast.error((err as Error)?.message || t('Failed to delete group'))
+      handleServerError(err, t('Failed to delete group'))
     } finally {
       setIsDeleting(false)
     }
@@ -210,7 +212,7 @@ export function PrefillGroupManagementDialog({
                   </CardDescription>
                 ) : (
                   <CardDescription className='text-muted-foreground italic'>
-                    No description provided
+                    {t('No description provided')}
                   </CardDescription>
                 )}
               </div>
@@ -237,9 +239,14 @@ export function PrefillGroupManagementDialog({
             </CardHeader>
             <CardContent className='space-y-3'>
               <div className='text-muted-foreground flex flex-wrap items-center gap-2 text-xs font-medium tracking-wide uppercase'>
-                <span>Items</span>
+                <span>{t('Items')}</span>
                 <StatusBadge
-                  label={`${parsedItems.length} item${parsedItems.length === 1 ? '' : 's'}`}
+                  label={t(
+                    parsedItems.length === 1
+                      ? '{{count}} item'
+                      : '{{count}} items',
+                    { count: parsedItems.length }
+                  )}
                   variant='neutral'
                   size='sm'
                   copyable={false}
@@ -257,7 +264,9 @@ export function PrefillGroupManagementDialog({
                   ))}
                   {parsedItems.length > 6 && (
                     <StatusBadge
-                      label={`+${parsedItems.length - 6} more`}
+                      label={t('+{{count}} more', {
+                        count: parsedItems.length - 6,
+                      })}
                       variant='neutral'
                       size='sm'
                       copyable={false}
@@ -267,8 +276,8 @@ export function PrefillGroupManagementDialog({
               ) : (
                 <p className='text-muted-foreground text-sm'>
                   {group.type === 'endpoint'
-                    ? 'No endpoint mappings configured.'
-                    : 'No items configured yet.'}
+                    ? t('No endpoint mappings configured.')
+                    : t('No items configured yet.')}
                 </p>
               )}
             </CardContent>
@@ -299,7 +308,7 @@ export function PrefillGroupManagementDialog({
                   </p>
                 ) : (
                   <p className='text-muted-foreground text-xs italic'>
-                    No description provided
+                    {t('No description provided')}
                   </p>
                 )}
               </div>
@@ -338,7 +347,9 @@ export function PrefillGroupManagementDialog({
                       ))}
                       {parsedItems.length > 6 && (
                         <StatusBadge
-                          label={`+${parsedItems.length - 6} more`}
+                          label={t('+{{count}} more', {
+                            count: parsedItems.length - 6,
+                          })}
                           variant='neutral'
                           size='sm'
                           copyable={false}
@@ -348,14 +359,18 @@ export function PrefillGroupManagementDialog({
                   ) : (
                     <p className='text-muted-foreground text-sm'>
                       {group.type === 'endpoint'
-                        ? 'No endpoint mappings configured.'
-                        : 'No items configured yet.'}
+                        ? t('No endpoint mappings configured.')
+                        : t('No items configured yet.')}
                     </p>
                   )}
                 </div>
                 <div className='text-muted-foreground mt-2 text-xs font-medium tracking-wide uppercase'>
-                  {parsedItems.length} item
-                  {parsedItems.length === 1 ? '' : 's'}
+                  {t(
+                    parsedItems.length === 1
+                      ? '{{count}} item'
+                      : '{{count}} items',
+                    { count: parsedItems.length }
+                  )}
                 </div>
               </>
             ),
@@ -427,7 +442,10 @@ export function PrefillGroupManagementDialog({
             </Button>
           </div>
           <StatusBadge
-            label={`${groups.length} group${groups.length === 1 ? '' : 's'}`}
+            label={t(
+              groups.length === 1 ? '{{count}} group' : '{{count}} groups',
+              { count: groups.length }
+            )}
             variant='neutral'
             copyable={false}
           />
@@ -439,7 +457,7 @@ export function PrefillGroupManagementDialog({
               <AlertTitle>{t('Unable to load groups')}</AlertTitle>
               <AlertDescription>
                 {(error as Error).message ||
-                  'Please retry or refresh the page.'}
+                  t('Please retry or refresh the page.')}
               </AlertDescription>
             </Alert>
           )}

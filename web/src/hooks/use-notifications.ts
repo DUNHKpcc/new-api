@@ -31,20 +31,23 @@ import {
 import { getLotteryItems } from '@/features/lottery/api'
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { useNotificationStore } from '@/stores/notification-store'
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 60 * 1000
 
 /**
- * Hook to manage all notification center sources.
- * Provides unread counts and read status management
+ * Subscribe to every notification source used by the header and floating
+ * center. Keeping the feed assembly here gives each consumer identical read
+ * state and ordering semantics.
  */
 export function useNotifications() {
-  // Fetch Notice from API
   const { data: noticeResponse, isLoading: noticeLoading } = useQuery({
     queryKey: ['notice'],
-    queryFn: getNotice,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    // Business-error payloads must reject so a failed request cannot be shown
+    // as a blank, already-read notice.
+    queryFn: async () => requireServerSuccess(await getNotice()),
+    staleTime: 1000 * 60 * 5,
     refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
   })
   const { data: lotteryResponse, isLoading: lotteryLoading } = useQuery({
@@ -54,7 +57,8 @@ export function useNotifications() {
     refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
   })
 
-  // Fetch Announcements from status
+  // useStatus intentionally uses the shared status cache. The cache's stale
+  // policy avoids duplicate /api/status requests across the application.
   const { status, loading: statusLoading } = useStatus({
     refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
   })
@@ -79,7 +83,6 @@ export function useNotifications() {
     [lotteryResponse]
   )
 
-  // Notification store
   const {
     lastReadDiscountNotice,
     lastReadNotice,
@@ -94,7 +97,6 @@ export function useNotifications() {
     markLotteriesRead,
   } = useNotificationStore()
 
-  // Extract notice content
   const noticeContent = noticeResponse?.success
     ? (noticeResponse.data || '').trim()
     : ''
@@ -159,22 +161,18 @@ export function useNotifications() {
         markDiscountNoticeRead(item.content)
         return
       }
-
       if (item.source === 'notice') {
         markNoticeRead(item.content)
         return
       }
-
       if (item.source === 'lottery') {
         markLotteriesRead([item.key])
         return
       }
-
       if (item.source === 'global') {
         markGlobalNotificationsRead([item.key])
         return
       }
-
       markAnnouncementsRead([item.key])
     },
     [
@@ -200,11 +198,9 @@ export function useNotifications() {
     if (discountNoticeContent) {
       markDiscountNoticeRead(discountNoticeContent)
     }
-
     if (noticeContent) {
       markNoticeRead(noticeContent)
     }
-
     if (announcements.length > 0) {
       markAnnouncementsRead(
         announcements.map((announcement) =>

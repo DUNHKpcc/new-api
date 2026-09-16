@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -44,11 +45,13 @@ func TestStatus(c *gin.Context) {
 func GetStatus(c *gin.Context) {
 
 	cs := console_setting.GetConsoleSetting()
+	passkeySetting := system_setting.PasskeySettingsSnapshot()
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
 
-	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
+	wechatDirectOAuth := common.WeChatAuthEnabled && common.WeChatDirectOAuthConfigured()
+	wechatServerBridge := common.WeChatAuthEnabled && common.WeChatServerBridgeConfigured()
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -62,18 +65,25 @@ func GetStatus(c *gin.Context) {
 		"linuxdo_client_id":           common.LinuxDOClientId,
 		"linuxdo_minimum_trust_level": common.LinuxDOMinimumTrustLevel,
 		"telegram_oauth":              common.TelegramOAuthEnabled,
+		"telegram_oauth_configured":   oauth.TelegramConfigurationError() == nil,
 		"telegram_bot_name":           common.TelegramBotName,
 		"theme":                       "default",
 		"system_name":                 common.SystemName,
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
-		"wechat_login":                common.WeChatAuthEnabled && common.WeChatAppId != "" && common.WeChatAppSecret != "",
-		"wechat_app_id":               common.WeChatAppId,
-		"server_address":              system_setting.ServerAddress,
-		"turnstile_check":             common.TurnstileCheckEnabled,
-		"turnstile_site_key":          common.TurnstileSiteKey,
-		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
-		"quota_per_unit":              common.QuotaPerUnit,
+		// Advertise only a contract that has all of the credentials needed by
+		// its handler. The two contracts remain independently discoverable so
+		// legacy bridge clients and Open Platform OAuth can coexist safely.
+		"wechat_login":         wechatDirectOAuth || wechatServerBridge,
+		"wechat_direct_oauth":  wechatDirectOAuth,
+		"wechat_server_bridge": wechatServerBridge,
+		"wechat_app_id":        common.WeChatAppId,
+		"wechat_qrcode":        common.WeChatAccountQRCodeImageURL,
+		"server_address":       system_setting.ServerAddress,
+		"turnstile_check":      common.TurnstileCheckEnabled,
+		"turnstile_site_key":   common.TurnstileSiteKey,
+		"docs_link":            operation_setting.GetGeneralSetting().DocsLink,
+		"quota_per_unit":       common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":           operation_setting.IsCurrencyDisplay(),
 		"quota_display_type":            operation_setting.GetQuotaDisplayType(),
@@ -93,6 +103,8 @@ func GetStatus(c *gin.Context) {
 		"password_login_enabled":        common.PasswordLoginEnabled,
 		"password_register_enabled":     common.PasswordRegisterEnabled,
 		"default_use_auto_group":        setting.DefaultUseAutoGroup,
+
+		"password_login_encryption_enabled": common.PasswordLoginEncryptionEnabled,
 
 		"usd_exchange_rate": operation_setting.USDExchangeRate,
 		"price":             operation_setting.Price,
@@ -118,7 +130,8 @@ func GetStatus(c *gin.Context) {
 		"oidc_display_name":           system_setting.GetOIDCSettings().GetEffectiveDisplayName(),
 		"passkey_login":               passkeySetting.Enabled,
 		"passkey_display_name":        passkeySetting.RPDisplayName,
-		"passkey_rp_id":               passkeySetting.RPID,
+		"passkey_rp_id":               passkeySetting.EffectiveRPID(),
+		"passkey_rp_ids":              passkeySetting.RelyingPartyIDs(),
 		"passkey_origins":             passkeySetting.Origins,
 		"passkey_allow_insecure":      passkeySetting.AllowInsecureOrigin,
 		"passkey_user_verification":   passkeySetting.UserVerification,
@@ -182,42 +195,24 @@ func GetStatus(c *gin.Context) {
 
 func GetNotice(c *gin.Context) {
 	common.OptionMapRWMutex.RLock()
-	defer common.OptionMapRWMutex.RUnlock()
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    common.OptionMap["Notice"],
-	})
-	return
+	notice := common.OptionMap["Notice"]
+	common.OptionMapRWMutex.RUnlock()
+	serveRevalidatedJSON(c, notice)
 }
 
 func GetAbout(c *gin.Context) {
 	common.OptionMapRWMutex.RLock()
-	defer common.OptionMapRWMutex.RUnlock()
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    common.OptionMap["About"],
-	})
-	return
+	about := common.OptionMap["About"]
+	common.OptionMapRWMutex.RUnlock()
+	serveRevalidatedJSON(c, about)
 }
 
 func GetUserAgreement(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    system_setting.GetLegalSettings().UserAgreement,
-	})
-	return
+	serveRevalidatedJSON(c, system_setting.GetLegalSettings().UserAgreement)
 }
 
 func GetPrivacyPolicy(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    system_setting.GetLegalSettings().PrivacyPolicy,
-	})
-	return
+	serveRevalidatedJSON(c, system_setting.GetLegalSettings().PrivacyPolicy)
 }
 
 func GetMidjourney(c *gin.Context) {
@@ -233,56 +228,16 @@ func GetMidjourney(c *gin.Context) {
 
 func GetHomePageContent(c *gin.Context) {
 	common.OptionMapRWMutex.RLock()
-	defer common.OptionMapRWMutex.RUnlock()
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    common.OptionMap["HomePageContent"],
-	})
-	return
+	homePageContent := common.OptionMap["HomePageContent"]
+	common.OptionMapRWMutex.RUnlock()
+	serveRevalidatedJSON(c, homePageContent)
 }
 
 func SendEmailVerification(c *gin.Context) {
-	email := model.NormalizeEmail(c.Query("email"))
-	if err := common.Validate.Var(email, "required,email"); err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+	email, err := service.ValidateAccountEmail(c.Query("email"))
+	if err != nil {
+		writeSecurityOperationError(c, err)
 		return
-	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "无效的邮箱地址",
-		})
-		return
-	}
-	localPart := parts[0]
-	domainPart := parts[1]
-	if common.EmailDomainRestrictionEnabled {
-		allowed := false
-		for _, domain := range common.EmailDomainWhitelist {
-			if domainPart == domain {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "The administrator has enabled the email domain name whitelist, and your email address is not allowed due to special symbols or it's not in the whitelist.",
-			})
-			return
-		}
-	}
-	if common.EmailAliasRestrictionEnabled {
-		containsSpecialSymbols := strings.Contains(localPart, "+") || strings.Contains(localPart, ".")
-		if containsSpecialSymbols {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "管理员已启用邮箱地址别名限制，您的邮箱地址由于包含特殊符号而被拒绝。",
-			})
-			return
-		}
 	}
 
 	if model.IsEmailAlreadyTaken(email) {
@@ -299,7 +254,7 @@ func SendEmailVerification(c *gin.Context) {
 		logoURL,
 		common.VerificationValidMinutes,
 	)
-	err := common.SendEmail(subject, email, content)
+	err = common.SendEmail(subject, email, content)
 	if err != nil {
 		common.ApiError(c, err)
 		return

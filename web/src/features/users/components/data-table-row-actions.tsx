@@ -28,8 +28,6 @@ import {
   ShieldAlert,
   Link2,
   CreditCard,
-  Handshake,
-  BadgeDollarSign,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -49,8 +47,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
-import { ROLE } from '@/lib/roles'
-import { useAuthStore } from '@/stores/auth-store'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import { manageUser, resetUserPasskey, resetUserTwoFA } from '../api'
 import {
@@ -61,8 +58,6 @@ import {
 } from '../constants'
 import { getUserActionMessage } from '../lib'
 import type { User, ManageUserAction } from '../types'
-import { AffiliateAccessDialog } from './dialogs/affiliate-access-dialog'
-import { AffiliateCommissionsDialog } from './dialogs/affiliate-commissions-dialog'
 import { UserBindingDialog } from './dialogs/user-binding-dialog'
 import { useUsers } from './users-provider'
 
@@ -78,11 +73,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
   const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
-  const [affiliateAccessDialogOpen, setAffiliateAccessDialogOpen] =
-    useState(false)
-  const [affiliateCommissionsDialogOpen, setAffiliateCommissionsDialogOpen] =
-    useState(false)
-  const currentUser = useAuthStore((state) => state.auth.user)
 
   const handleEdit = () => {
     setCurrentRow(user)
@@ -101,12 +91,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         toast.success(t(getUserActionMessage(action)))
         triggerRefresh()
       } else {
-        toast.error(
-          result.message || t('Failed to {{action}} user', { action })
-        )
+        handleServerError(result, t('Failed to {{action}} user', { action }))
       }
-    } catch {
-      toast.error(t(ERROR_MESSAGES.UNEXPECTED))
+    } catch (error) {
+      handleServerError(error, t(ERROR_MESSAGES.UNEXPECTED))
     }
   }
 
@@ -117,10 +105,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         toast.success(t('Passkey reset successfully'))
         triggerRefresh()
       } else {
-        toast.error(result.message || t('Failed to reset Passkey'))
+        handleServerError(result, t('Failed to reset Passkey'))
       }
-    } catch {
-      toast.error(t(ERROR_MESSAGES.UNEXPECTED))
+    } catch (error) {
+      handleServerError(error, t(ERROR_MESSAGES.UNEXPECTED))
     } finally {
       setResetPasskeyOpen(false)
     }
@@ -133,10 +121,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         toast.success(t('Two-factor authentication reset'))
         triggerRefresh()
       } else {
-        toast.error(result.message || t('Failed to reset 2FA'))
+        handleServerError(result, t('Failed to reset 2FA'))
       }
-    } catch {
-      toast.error(t(ERROR_MESSAGES.UNEXPECTED))
+    } catch (error) {
+      handleServerError(error, t(ERROR_MESSAGES.UNEXPECTED))
     } finally {
       setResetTwoFAOpen(false)
     }
@@ -220,33 +208,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             <Link2 size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
-
-        {currentUser?.role === ROLE.SUPER_ADMIN && (
-          <>
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setAffiliateAccessDialogOpen(true)
-              }}
-            >
-              {t('Affiliate access')}
-              <DropdownMenuShortcut>
-                <Handshake size={16} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setAffiliateCommissionsDialogOpen(true)
-              }}
-            >
-              {t('Affiliate commissions')}
-              <DropdownMenuShortcut>
-                <BadgeDollarSign size={16} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-          </>
-        )}
 
         <DropdownMenuItem
           onSelect={(event) => {
@@ -339,23 +300,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         user={{ id: user.id, username: user.username }}
         onSuccess={triggerRefresh}
       />
-
-      {currentUser?.role === ROLE.SUPER_ADMIN ? (
-        <>
-          <AffiliateAccessDialog
-            open={affiliateAccessDialogOpen}
-            onOpenChange={setAffiliateAccessDialogOpen}
-            user={user}
-            onSuccess={triggerRefresh}
-          />
-          <AffiliateCommissionsDialog
-            open={affiliateCommissionsDialogOpen}
-            onOpenChange={setAffiliateCommissionsDialogOpen}
-            user={user}
-            onSuccess={triggerRefresh}
-          />
-        </>
-      ) : null}
     </div>
   )
 }

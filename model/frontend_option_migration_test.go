@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +71,43 @@ func TestMigrateRetiredFrontendOptionsMigratesValidValuesIdempotently(t *testing
 	after, err := AllOption()
 	require.NoError(t, err)
 	assert.ElementsMatch(t, before, after)
+}
+
+func TestMigrateRetiredFrontendOptionsStripsExistingAnnouncementImages(t *testing.T) {
+	db := useFrontendOptionMigrationDB(t)
+	ordinary := `[{"id":7,"content":"legacy image","publishDate":"2026-08-01T00:00:00Z","type":"warning","image":"data:image/webp;base64,AAAA"}]`
+	global := `[{"id":8,"content":"global image","publishDate":"2026-08-02T00:00:00Z","type":"success","image":"data:image/webp;base64,BBBB"}]`
+	require.NoError(t, db.Create(&[]Option{
+		{Key: "console_setting.announcements", Value: ordinary},
+		{Key: "console_setting.global_notifications", Value: global},
+	}).Error)
+
+	require.NoError(t, MigrateRetiredFrontendOptions())
+	assert.JSONEq(t, `[{"id":7,"content":"legacy image","publishDate":"2026-08-01T00:00:00Z","type":"warning"}]`, requireOptionValue(t, db, "console_setting.announcements"))
+	assert.JSONEq(t, global, requireOptionValue(t, db, "console_setting.global_notifications"))
+}
+
+func TestAnnouncementImagePolicyAppliesToSingleAndBulkOptionWrites(t *testing.T) {
+	db := useFrontendOptionMigrationDB(t)
+	previousMap := common.OptionMap
+	common.OptionMap = map[string]string{}
+	previousConsoleSetting := *console_setting.GetConsoleSetting()
+	t.Cleanup(func() {
+		common.OptionMap = previousMap
+		*console_setting.GetConsoleSetting() = previousConsoleSetting
+	})
+
+	ordinary := `[{"id":11,"content":"ordinary","publishDate":"2026-08-01T00:00:00Z","type":"default","image":"data:image/webp;base64,AAAA"}]`
+	require.NoError(t, UpdateOption("console_setting.announcements", ordinary))
+	assert.JSONEq(t, `[{"id":11,"content":"ordinary","publishDate":"2026-08-01T00:00:00Z","type":"default"}]`, requireOptionValue(t, db, "console_setting.announcements"))
+
+	global := `[{"id":12,"content":"global","publishDate":"2026-08-02T00:00:00Z","type":"success","image":"data:image/webp;base64,BBBB"}]`
+	require.NoError(t, UpdateOptionsBulk(map[string]string{
+		"console_setting.announcements":        ordinary,
+		"console_setting.global_notifications": global,
+	}))
+	assert.JSONEq(t, `[{"id":11,"content":"ordinary","publishDate":"2026-08-01T00:00:00Z","type":"default"}]`, requireOptionValue(t, db, "console_setting.announcements"))
+	assert.JSONEq(t, global, requireOptionValue(t, db, "console_setting.global_notifications"))
 }
 
 func TestLegacyConsoleListMigrationCapsAPIInfoAndFAQ(t *testing.T) {

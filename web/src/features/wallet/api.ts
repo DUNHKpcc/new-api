@@ -22,12 +22,15 @@ import type {
   RedemptionRequest,
   PaymentRequest,
   AmountRequest,
+  AffiliateTransferRequest,
   ApiResponse,
   TopupInfoResponse,
   RedemptionResponse,
   AmountResponse,
   PaymentResponse,
   StripePaymentResponse,
+  AffiliateCodeResponse,
+  AffiliateTransferResponse,
   BillingHistoryResponse,
   CompleteOrderRequest,
   CreemPaymentRequest,
@@ -106,6 +109,24 @@ export async function calculateWaffoAmount(
   const res = await api.post('/api/user/waffo/amount', request, {
     skipBusinessError: true,
   } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Get the current user's affiliate code.
+ */
+export async function getAffiliateCode(): Promise<AffiliateCodeResponse> {
+  const res = await api.get('/api/user/aff')
+  return res.data
+}
+
+/**
+ * Transfer pending affiliate quota into the wallet balance.
+ */
+export async function transferAffiliateQuota(
+  request: AffiliateTransferRequest
+): Promise<AffiliateTransferResponse> {
+  const res = await api.post('/api/user/aff_transfer', request)
   return res.data
 }
 

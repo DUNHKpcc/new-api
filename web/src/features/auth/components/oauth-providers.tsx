@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { useOAuthLogin } from '../hooks/use-oauth-login'
+import { resolveWeChatLoginMode } from '../lib/oauth'
 import type { SystemStatus } from '../types'
 import { TelegramLoginDialog } from './telegram-login-dialog'
 
@@ -37,6 +38,9 @@ type OAuthProvidersProps = {
   status: SystemStatus | null
   disabled?: boolean
   className?: string
+  /** Optional host-controlled WeChat flow (used by code-verification forms). */
+  onWeChatLogin?: () => void
+  isWeChatLoading?: boolean
   redirectTo?: string
 }
 
@@ -52,6 +56,8 @@ export function OAuthProviders({
   status,
   disabled = false,
   className,
+  onWeChatLogin,
+  isWeChatLoading = false,
   redirectTo,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
@@ -74,12 +80,13 @@ export function OAuthProviders({
 
   const providerButtons: ProviderButton[] = []
 
-  if (status?.wechat_login && status.wechat_app_id) {
+  if (resolveWeChatLoginMode(status)) {
     providerButtons.push({
       key: 'wechat',
       label: t('Continue with WeChat'),
-      onClick: handleWeChatLogin,
+      onClick: onWeChatLogin ?? handleWeChatLogin,
       icon: <IconWeChat className='h-4 w-4' />,
+      disabled: isWeChatLoading,
     })
   }
 
@@ -177,7 +184,6 @@ export function OAuthProviders({
           )}
         </div>
       </div>
-
       <TelegramLoginDialog
         open={isTelegramDialogOpen}
         botName={status?.telegram_bot_name ?? ''}

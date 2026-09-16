@@ -27,17 +27,19 @@ func TestRecordConsumeLogPersistsStableCacheTokenColumns(t *testing.T) {
 	context.Request = httptest.NewRequest("POST", "/v1/messages", nil)
 	context.Set("username", user.Username)
 	context.Set(common.RequestIdKey, "cache-column-request")
+	other := NewLogOther()
+	other.MergePublic(map[string]any{
+		"cache_tokens":          float64(5),
+		"cache_creation_tokens": float64(7),
+		"cache_write_tokens":    float64(13),
+	})
 
 	RecordConsumeLog(context, user.Id, RecordConsumeLogParams{
 		PromptTokens:     2,
 		CompletionTokens: 3,
 		ModelName:        "cache-column-model",
 		Quota:            11,
-		Other: map[string]interface{}{
-			"cache_tokens":          float64(5),
-			"cache_creation_tokens": float64(7),
-			"cache_write_tokens":    float64(13),
-		},
+		Other:            other,
 	})
 
 	var stored Log

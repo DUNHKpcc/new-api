@@ -538,7 +538,7 @@ func TestAffiliateTransfersUsePersistedPaymentCompliance(t *testing.T) {
 
 func TestEpayTopUpQuotaOverflowDoesNotCompleteOrder(t *testing.T) {
 	truncateTables(t)
-	user := User{Username: "epay-overflow-user", AffCode: "epay-overflow", Status: common.UserStatusEnabled, Quota: common.MaxQuota}
+	user := User{Username: "epay-overflow-user", AffCode: "epay-overflow", Status: common.UserStatusEnabled, Quota: common.MaxWalletQuota}
 	require.NoError(t, DB.Create(&user).Error)
 	order := createPendingEpayTopUp(t, "epay-overflow-order", user.Id)
 

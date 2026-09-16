@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -81,8 +82,7 @@ const oauthSchema = z.object({
     user_info_endpoint: z.string(),
   }),
   TelegramOAuthEnabled: z.boolean(),
-  TelegramBotToken: z.string(),
-  TelegramBotName: z.string(),
+  telegram: z.object({ client_id: z.string(), client_secret: z.string() }),
   LinuxDOOAuthEnabled: z.boolean(),
   LinuxDOClientId: z.string(),
   LinuxDOClientSecret: z.string(),
@@ -90,6 +90,9 @@ const oauthSchema = z.object({
   WeChatAuthEnabled: z.boolean(),
   WeChatAppId: z.string(),
   WeChatAppSecret: z.string(),
+  WeChatServerAddress: z.string(),
+  WeChatServerToken: z.string(),
+  WeChatAccountQRCodeImageURL: z.string(),
 })
 
 type OAuthFormValues = z.infer<typeof oauthSchema>
@@ -110,8 +113,8 @@ type FlatOAuthDefaults = {
   'oidc.token_endpoint': string
   'oidc.user_info_endpoint': string
   TelegramOAuthEnabled: boolean
-  TelegramBotToken: string
-  TelegramBotName: string
+  'telegram.client_id': string
+  'telegram.client_secret': string
   LinuxDOOAuthEnabled: boolean
   LinuxDOClientId: string
   LinuxDOClientSecret: string
@@ -119,6 +122,9 @@ type FlatOAuthDefaults = {
   WeChatAuthEnabled: boolean
   WeChatAppId: string
   WeChatAppSecret: string
+  WeChatServerAddress: string
+  WeChatServerToken: string
+  WeChatAccountQRCodeImageURL: string
 }
 
 const oauthTabContentClassName =
@@ -193,8 +199,10 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
     user_info_endpoint: defaults['oidc.user_info_endpoint'] ?? '',
   },
   TelegramOAuthEnabled: defaults.TelegramOAuthEnabled,
-  TelegramBotToken: defaults.TelegramBotToken ?? '',
-  TelegramBotName: defaults.TelegramBotName ?? '',
+  telegram: {
+    client_id: defaults['telegram.client_id'] ?? '',
+    client_secret: defaults['telegram.client_secret'] ?? '',
+  },
   LinuxDOOAuthEnabled: defaults.LinuxDOOAuthEnabled,
   LinuxDOClientId: defaults.LinuxDOClientId ?? '',
   LinuxDOClientSecret: defaults.LinuxDOClientSecret ?? '',
@@ -202,6 +210,9 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatAppId: defaults.WeChatAppId ?? '',
   WeChatAppSecret: defaults.WeChatAppSecret ?? '',
+  WeChatServerAddress: defaults.WeChatServerAddress ?? '',
+  WeChatServerToken: defaults.WeChatServerToken ?? '',
+  WeChatAccountQRCodeImageURL: defaults.WeChatAccountQRCodeImageURL ?? '',
 })
 
 const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
@@ -219,13 +230,18 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   'oidc.authorization_endpoint': values.oidc.authorization_endpoint,
   'oidc.token_endpoint': values.oidc.token_endpoint,
   'oidc.user_info_endpoint': values.oidc.user_info_endpoint,
+  'telegram.client_id': values.telegram.client_id,
+  'telegram.client_secret': values.telegram.client_secret,
   TelegramOAuthEnabled: values.TelegramOAuthEnabled,
-  TelegramBotToken: values.TelegramBotToken,
-  TelegramBotName: values.TelegramBotName,
   LinuxDOOAuthEnabled: values.LinuxDOOAuthEnabled,
   LinuxDOClientId: values.LinuxDOClientId,
   LinuxDOClientSecret: values.LinuxDOClientSecret,
   LinuxDOMinimumTrustLevel: values.LinuxDOMinimumTrustLevel,
+  // Persist credentials before the enable switch. The backend validates the
+  // complete contract when `WeChatAuthEnabled` is turned on in the same save.
+  WeChatServerAddress: values.WeChatServerAddress,
+  WeChatServerToken: values.WeChatServerToken,
+  WeChatAccountQRCodeImageURL: values.WeChatAccountQRCodeImageURL,
   WeChatAppId: values.WeChatAppId,
   WeChatAppSecret: values.WeChatAppSecret,
   WeChatAuthEnabled: values.WeChatAuthEnabled,
@@ -254,6 +270,11 @@ export function OAuthSection(props: OAuthSectionProps) {
   const oidcCallbackUrl = buildOAuthCallbackUrl(
     props.serverAddress,
     'oidc',
+    t('Site URL')
+  )
+  const telegramCallbackUrl = buildOAuthCallbackUrl(
+    props.serverAddress,
+    'telegram',
     t('Site URL')
   )
   const linuxDOCallbackUrl = buildOAuthCallbackUrl(
@@ -325,9 +346,8 @@ export function OAuthSection(props: OAuthSectionProps) {
 
         toast.success(t('OIDC configuration fetched successfully'))
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err)
-        toast.error(
+        handleServerError(
+          err,
           t(
             'Failed to fetch OIDC configuration. Please check the URL and network status'
           )
@@ -808,6 +828,19 @@ export function OAuthSection(props: OAuthSectionProps) {
                 value='telegram'
                 className={oauthTabContentClassName}
               >
+                <OAuthSetupGuide
+                  title={t('Setup guide')}
+                  description={t(
+                    'In BotFather, open Login Widget, register this callback URL, and copy the Client ID and Client Secret. Existing Telegram bindings will continue to work after configuration.'
+                  )}
+                  rows={[
+                    {
+                      label: t('Authorization callback URL'),
+                      value: telegramCallbackUrl,
+                      copyLabel: t('Copy callback URL'),
+                    },
+                  ]}
+                />
                 <FormField
                   control={form.control}
                   name='TelegramOAuthEnabled'
@@ -831,14 +864,16 @@ export function OAuthSection(props: OAuthSectionProps) {
 
                 <FormField
                   control={form.control}
-                  name='TelegramBotToken'
+                  name='telegram.client_secret'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Bot Token')}</FormLabel>
+                      <FormLabel>{t('Client Secret')}</FormLabel>
                       <FormControl>
                         <Input
                           type='password'
-                          placeholder={t('Your Telegram Bot Token')}
+                          placeholder={t(
+                            'Telegram OAuth Client Secret from BotFather'
+                          )}
                           autoComplete='new-password'
                           value={field.value ?? ''}
                           onChange={(event) =>
@@ -856,13 +891,15 @@ export function OAuthSection(props: OAuthSectionProps) {
 
                 <FormField
                   control={form.control}
-                  name='TelegramBotName'
+                  name='telegram.client_id'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Bot Name')}</FormLabel>
+                      <FormLabel>{t('Client ID')}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={t('Your Bot Name')}
+                          placeholder={t(
+                            'Telegram OAuth Client ID from BotFather'
+                          )}
                           autoComplete='off'
                           value={field.value ?? ''}
                           onChange={(event) =>
@@ -1006,7 +1043,7 @@ export function OAuthSection(props: OAuthSectionProps) {
                 <OAuthSetupGuide
                   title={t('Setup guide')}
                   description={t(
-                    'Create and approve a website application in WeChat Open Platform before enabling login.'
+                    'Configure either WeChat Open Platform OAuth or the legacy verification service. Open Platform is used for registration verification; the legacy service remains available for existing deployments.'
                   )}
                   rows={[
                     {
@@ -1093,6 +1130,89 @@ export function OAuthSection(props: OAuthSectionProps) {
                           ref={field.ref}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='WeChatServerAddress'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('WeChat Server Address')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('https://wechat-server.example.com')}
+                          autoComplete='off'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Base URL for the existing WeChat verification service.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='WeChatServerToken'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('WeChat Server Token')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='password'
+                          placeholder={t('WeChat Server Token')}
+                          autoComplete='new-password'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='WeChatAccountQRCodeImageURL'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('WeChat QR Code Image URL')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('https://example.com/qr-code.png')}
+                          autoComplete='off'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Shown to users of the legacy verification service.'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

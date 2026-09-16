@@ -195,7 +195,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"enable_redemption":                complianceConfirmed,
 		"payment_compliance_confirmed":     complianceConfirmed,
 		"payment_compliance_terms_version": operation_setting.CurrentComplianceTermsVersion,
-		"waffo_pay_methods": func() interface{} {
+		"waffo_pay_methods": func() any {
 			if enableWaffo {
 				return setting.GetWaffoPayMethods()
 			}
@@ -242,7 +242,11 @@ func getMinTopup() int64 {
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dMinTopup := decimal.NewFromInt(int64(minTopup))
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-		minTopup = common.QuotaFromDecimal(dMinTopup.Mul(dQuotaPerUnit))
+		quota, err := common.WalletQuotaFromDecimalStrict(dMinTopup.Mul(dQuotaPerUnit))
+		if err != nil {
+			return common.MaxWalletQuota
+		}
+		minTopup = quota
 	}
 	return int64(minTopup)
 }
@@ -258,7 +262,7 @@ func getTopUpQuota(amount int64) (int, error) {
 	} else {
 		quota = quota.Mul(decimal.NewFromFloat(common.QuotaPerUnit))
 	}
-	return common.QuotaFromDecimalStrict(quota)
+	return common.WalletQuotaFromDecimalStrict(quota)
 }
 
 func getMaxTopUpAmount() int64 {
@@ -266,7 +270,7 @@ func getMaxTopUpAmount() int64 {
 		return 0
 	}
 	quotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-	maxStoredAmount := decimal.NewFromInt(common.MaxQuota - 1).
+	maxStoredAmount := decimal.NewFromInt(common.MaxWalletQuota).
 		Div(quotaPerUnit).
 		Floor()
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
@@ -280,7 +284,7 @@ func getMaxTopUpAmount() int64 {
 }
 
 func validateCreditedQuota(quota decimal.Decimal) (int, error) {
-	value, err := common.QuotaFromDecimalStrict(quota)
+	value, err := common.WalletQuotaFromDecimalStrict(quota)
 	if err != nil {
 		return 0, errors.New("充值额度超出系统可表示范围")
 	}
@@ -340,8 +344,11 @@ func RequestEpay(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getMinTopup())})
 		return
 	}
-
 	id := c.GetInt("id")
+	if rejectInvalidTopUpQuota(c, id, req.Amount) {
+		return
+	}
+
 	group, err := model.GetUserGroup(id, true)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "获取用户分组失败"})
@@ -562,6 +569,9 @@ func RequestAmount(c *gin.Context) {
 		return
 	}
 	id := c.GetInt("id")
+	if rejectInvalidTopUpQuota(c, id, req.Amount) {
+		return
+	}
 	group, err := model.GetUserGroup(id, true)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "获取用户分组失败"})

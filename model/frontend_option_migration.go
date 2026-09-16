@@ -41,10 +41,38 @@ func MigrateRetiredFrontendOptions() error {
 			migrationErrors = append(migrationErrors, err)
 		}
 	}
+	if err := normalizeAnnouncementsOption(); err != nil {
+		migrationErrors = append(migrationErrors, fmt.Errorf("normalize console_setting.announcements: %w", err))
+	}
 	if err := migrateLegacyUptimeOptions(); err != nil {
 		migrationErrors = append(migrationErrors, err)
 	}
 	return errors.Join(migrationErrors...)
+}
+
+// normalizeAnnouncementsOption cleans image fields left by older dashboard
+// builds. Invalid values are preserved for operator review, matching the
+// migration policy for the other retired frontend options.
+func normalizeAnnouncementsOption() error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var option Option
+		err := tx.Where(commonKeyCol+" = ?", "console_setting.announcements").First(&option).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		normalized, normalizeErr := console_setting.NormalizeAnnouncements(option.Value)
+		if normalizeErr != nil {
+			common.SysError(fmt.Sprintf("console_setting.announcements was not normalized: %v", normalizeErr))
+			return nil
+		}
+		if normalized == option.Value {
+			return nil
+		}
+		return tx.Model(&option).Update("value", normalized).Error
+	})
 }
 
 func normalizeRetiredThemeOption() error {
@@ -128,10 +156,14 @@ func transformLegacyAnnouncements(value string) (string, error) {
 	if strings.TrimSpace(value) == "" {
 		return "", errors.New("value is empty")
 	}
-	if err := console_setting.ValidateConsoleSettings(value, "Announcements"); err != nil {
+	normalized, err := console_setting.NormalizeAnnouncements(value)
+	if err != nil {
 		return "", err
 	}
-	return value, nil
+	if err := console_setting.ValidateConsoleSettings(normalized, "Announcements"); err != nil {
+		return "", err
+	}
+	return normalized, nil
 }
 
 func transformLegacyFAQ(value string) (string, error) {

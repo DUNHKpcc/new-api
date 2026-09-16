@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
+import { ActivityTimeCell } from '@/components/activity-time-cell'
 import { BadgeCell } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { LongText } from '@/components/long-text'
@@ -30,7 +31,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatQuota, formatTimestamp } from '@/lib/format'
+import { getCurrencyDisplay } from '@/lib/currency'
+import { formatQuota } from '@/lib/format'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   USER_STATUS,
@@ -38,15 +41,19 @@ import {
   USER_ROLES,
   isUserDeleted,
 } from '../constants'
-import type { User, UsersView } from '../types'
+import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
-import { usePccAgentUsersColumns } from './pcc-agent-users-columns'
 import { UserQuotaCell } from './user-quota-cell'
 
-export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
+// `view` is accepted for compatibility with route-aware table callers. The
+// column definitions are shared across views, so it intentionally does not
+// alter the returned schema.
+export function useUsersColumns(_view?: string): ColumnDef<User>[] {
   const { t } = useTranslation()
-  const pccAgentColumns = usePccAgentUsersColumns()
-  const columns: ColumnDef<User>[] = [
+  useSystemConfigStore((state) => state.config.currency)
+  const { meta: currency } = getCurrencyDisplay()
+  const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
+  return [
     {
       id: 'select',
       header: ({ table }) => (
@@ -54,7 +61,7 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
           checked={table.getIsAllPageRowsSelected()}
           indeterminate={table.getIsSomePageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label='Select all'
+          aria-label={t('Select all')}
           className='translate-y-[2px]'
         />
       ),
@@ -62,7 +69,7 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label='Select row'
+          aria-label={t('Select row')}
           className='translate-y-[2px]'
         />
       ),
@@ -77,7 +84,7 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
         return (
           <TableId
             value={row.getValue('id') as number}
-            className='w-[60px] text-sm'
+            className='w-[60px] [font-family:inherit] text-sm'
           />
         )
       },
@@ -95,13 +102,19 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
         return (
           <div className='flex min-w-[160px] flex-col gap-1'>
             <div className='flex items-center gap-2'>
-              <LongText className='max-w-[140px] font-medium'>
+              <LongText className='max-w-[140px] text-sm font-normal'>
                 {username}
               </LongText>
               {remark && (
                 <Tooltip>
                   <TooltipTrigger
-                    render={<StatusBadge variant='success' copyable={false} />}
+                    render={
+                      <StatusBadge
+                        variant='success'
+                        copyable={false}
+                        className='font-normal'
+                      />
+                    }
                   >
                     <LongText className='max-w-[80px]'>{remark}</LongText>
                   </TooltipTrigger>
@@ -112,9 +125,12 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
               )}
             </div>
             {displayName && displayName !== username && (
-              <LongText className='text-muted-foreground max-w-[180px] text-xs'>
-                {displayName}
-              </LongText>
+              <div
+                data-table-text='secondary'
+                className='text-muted-foreground max-w-[180px] text-xs font-normal'
+              >
+                <LongText>{displayName}</LongText>
+              </div>
             )}
           </div>
         )
@@ -143,8 +159,9 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
             <TooltipTrigger render={<div className='-ml-1.5 cursor-help' />}>
               <StatusBadge
                 label={t(statusConfig.labelKey)}
-                variant={statusConfig.variant}
+                variant={isUserDeleted(user) ? 'neutral' : statusConfig.variant}
                 copyable={false}
+                className='font-normal'
               />
             </TooltipTrigger>
             <TooltipContent>
@@ -165,23 +182,23 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
     {
       id: 'quota',
       accessorKey: 'quota',
-      header: t('Quota'),
+      header: `${t('Available Balance')} (${quotaUnit})`,
       cell: ({ row }) => {
         const user = row.original
-        return <UserQuotaCell used={user.used_quota} remaining={user.quota} />
+        return <UserQuotaCell remaining={user.quota} used={user.used_quota} />
       },
-      size: 300,
-      minSize: 260,
+      size: 180,
+      minSize: 160,
       meta: { mobileOrder: 40 },
     },
     {
       accessorKey: 'group',
-      header: t('Group'),
+      header: t('User Group'),
       cell: ({ row }) => {
         const group = row.getValue('group') as string
         return (
           <BadgeCell>
-            <GroupBadge group={group} />
+            <GroupBadge group={group} className='font-normal' />
           </BadgeCell>
         )
       },
@@ -204,14 +221,7 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
           return null
         }
 
-        return (
-          <div className='flex items-center gap-x-2'>
-            {roleConfig.icon && (
-              <roleConfig.icon size={16} className='text-muted-foreground' />
-            )}
-            <span className='text-sm'>{t(roleConfig.labelKey)}</span>
-          </div>
-        )
+        return <span className='text-sm'>{t(roleConfig.labelKey)}</span>
       },
       filterFn: (row, id, value) => {
         return value.includes(String(row.getValue(id)))
@@ -229,63 +239,28 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
         const affHistoryQuota = user.aff_history_quota || 0
         const inviterId = user.inviter_id || 0
 
+        if (affCount === 0 && affHistoryQuota === 0 && inviterId === 0) {
+          return <span className='text-muted-foreground text-sm'>—</span>
+        }
+
         return (
-          <div className='flex max-w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden'>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <StatusBadge
-                    label={`${t('Invited')}: ${affCount}`}
-                    variant='neutral'
-                    copyable={false}
-                    className='cursor-help'
-                  />
-                }
-              />
-              <TooltipContent>
-                <p className='text-xs'>{t('Number of users invited')}</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <StatusBadge
-                    label={`${t('Revenue')}: ${formatQuota(affHistoryQuota)}`}
-                    variant='neutral'
-                    copyable={false}
-                    className='cursor-help'
-                  />
-                }
-              />
-              <TooltipContent>
-                <p className='text-xs'>{t('Total invitation revenue')}</p>
-              </TooltipContent>
-            </Tooltip>
-            {inviterId > 0 && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <StatusBadge
-                      label={`${t('Inviter')}: ${inviterId}`}
-                      variant='neutral'
-                      copyable={false}
-                      className='cursor-help'
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p className='text-xs'>
-                    {t('Invited by user ID')} {inviterId}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
+          <div
+            data-table-text='secondary'
+            className='min-w-0 space-y-1 text-xs font-normal'
+          >
+            {(affCount > 0 || affHistoryQuota !== 0) && (
+              <LongText>
+                {t('Invited {{count}} users', { count: affCount })} ·{' '}
+                {t('Earnings')}:{' '}
+                <span className='tabular-nums'>
+                  {formatQuota(affHistoryQuota)}
+                </span>
+              </LongText>
             )}
-            {inviterId === 0 && (
-              <StatusBadge
-                label={t('No Inviter')}
-                variant='neutral'
-                copyable={false}
-              />
+            {inviterId > 0 && (
+              <LongText className='text-muted-foreground'>
+                {t('Inviter')} ID: {inviterId}
+              </LongText>
             )}
           </div>
         )
@@ -295,59 +270,18 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
       meta: { mobileHidden: true },
     },
     {
-      id: 'affiliate',
-      header: t('Affiliate'),
-      cell: ({ row }) => {
-        const summary = row.original.affiliate_summary
-        if (!summary) return '-'
-        let label = 'Affiliate inactive'
-        let variant: 'success' | 'neutral' | 'danger' = 'neutral'
-        if (summary.access === 'deny') {
-          label = 'Affiliate denied'
-          variant = 'danger'
-        } else if (summary.status === 'suspended') {
-          label = 'Affiliate suspended'
-          variant = 'danger'
-        } else if (summary.status === 'active') {
-          label = 'Affiliate active'
-          variant = 'success'
-        } else if (summary.eligible) {
-          label = 'Affiliate eligible'
-        }
-        return (
-          <StatusBadge label={t(label)} variant={variant} copyable={false} />
-        )
-      },
-      size: 150,
-      enableSorting: false,
-      meta: { mobileHidden: true },
-    },
-    {
       accessorKey: 'created_at',
-      header: t('Created At'),
-      cell: ({ row }) => {
-        const ts = row.getValue('created_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
-      },
-      size: 180,
-      meta: { mobileHidden: true },
-    },
-    {
-      accessorKey: 'last_login_at',
-      header: t('Last Login'),
-      cell: ({ row }) => {
-        const ts = row.getValue('last_login_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
-      },
-      size: 180,
+      header: t('Time'),
+      cell: ({ row }) => (
+        <ActivityTimeCell
+          createdAt={row.original.created_at ?? 0}
+          lastAt={row.original.last_login_at ?? 0}
+          lastLabel={t('Last Login')}
+          format='absolute'
+        />
+      ),
+      size: 260,
+      minSize: 240,
       meta: { mobileHidden: true },
     },
     {
@@ -357,11 +291,4 @@ export function useUsersColumns(view: UsersView = 'all'): ColumnDef<User>[] {
       meta: { pinned: 'right' as const },
     },
   ]
-
-  if (view !== 'pcc_agent') {
-    return columns
-  }
-
-  columns.splice(3, 0, ...pccAgentColumns)
-  return columns
 }

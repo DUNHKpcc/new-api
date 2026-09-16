@@ -135,6 +135,8 @@ function SectionTitle(props: {
   onReset?: () => void
   className?: string
 }) {
+  const { t } = useTranslation()
+
   return (
     <div
       className={cn(
@@ -149,7 +151,7 @@ function SectionTitle(props: {
           variant='secondary'
           className='size-4'
           onClick={props.onReset}
-          aria-label='Reset'
+          aria-label={t('Reset')}
         >
           <RotateCcw className='size-3' aria-hidden='true' />
         </Button>
@@ -166,12 +168,13 @@ function RadioGroupItem(props: {
   }
   isTheme?: boolean
 }) {
+  const { t } = useTranslation()
   const isTheme = props.isTheme ?? false
   return (
     <Item
       value={props.item.value}
       className={cn('group outline-none', 'transition duration-200 ease-in')}
-      aria-label={`Select ${props.item.label.toLowerCase()}`}
+      aria-label={t('Select {{name}}', { name: props.item.label })}
       aria-describedby={`${props.item.value}-description`}
     >
       <div
@@ -182,7 +185,7 @@ function RadioGroupItem(props: {
         )}
         role='img'
         aria-hidden='false'
-        aria-label={`${props.item.label} option preview`}
+        aria-label={t('Preview')}
       >
         <CircleCheck
           className={cn(
@@ -346,7 +349,7 @@ function FontConfig() {
             value={option.value}
             className='group flex flex-col items-stretch outline-none'
             aria-label={
-              option.value === 'default' ? t('System default') : option.label
+              option.value === 'default' ? t('System default') : t(option.label)
             }
           >
             <div
@@ -378,7 +381,7 @@ function FontConfig() {
                 Aa
               </span>
             </div>
-            <div className='mt-1.5 text-center text-xs'>{option.label}</div>
+            <div className='mt-1.5 text-center text-xs'>{t(option.label)}</div>
           </Item>
         ))}
       </Radio>

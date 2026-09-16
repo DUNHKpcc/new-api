@@ -23,6 +23,7 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { VersionUpdatePopover } from '@/components/version-update-popover'
+import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
@@ -74,7 +75,7 @@ type AppHeaderProps = {
   leftContent?: React.ReactNode
   /**
    * Whether to show search box
-   * @default true, shown as a compact icon to preserve public-header continuity
+   * @default true
    */
   showSearch?: boolean
   /**
@@ -122,16 +123,19 @@ export function AppHeader({
           variant='ghost'
           className={appHeaderLayoutClasses.sidebarTrigger}
         />
+        <span className='hidden sm:inline-flex'>
+          <SystemUpdateAction presentation='version' />
+        </span>
         {leftContent ? (
           <div className='ms-2 flex items-center'>{leftContent}</div>
         ) : null}
       </div>
 
-      {showTopNav && !rightContent && (
+      {showTopNav && !rightContent ? (
         <div className={appHeaderLayoutClasses.nav}>
           <TopNav links={links} />
         </div>
-      )}
+      ) : null}
 
       <div className={appHeaderLayoutClasses.actions}>
         {rightContent ? (
@@ -139,14 +143,22 @@ export function AppHeader({
         ) : (
           <div className={appHeaderLayoutClasses.utilities}>
             {showNotifications && <NotificationPopover />}
-            <VersionUpdatePopover />
+            <span className='hidden sm:inline-flex'>
+              <VersionUpdatePopover />
+            </span>
             <LanguageSwitcher />
-            {showConfigDrawer && <ConfigDrawer />}
+            {showConfigDrawer && (
+              <span className='hidden sm:inline-flex'>
+                <ConfigDrawer />
+              </span>
+            )}
             {showSearch && (
-              <Search
-                variant='icon'
-                className={appHeaderLayoutClasses.search}
-              />
+              <span className='hidden sm:inline-flex'>
+                <Search
+                  variant='icon'
+                  className={appHeaderLayoutClasses.search}
+                />
+              </span>
             )}
             {showProfileDropdown && <ProfileDropdown />}
           </div>

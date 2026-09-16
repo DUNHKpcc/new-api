@@ -37,7 +37,6 @@ const MODEL_CATEGORY_RULES: readonly ModelCategoryRule[] = [
       'codex-',
       'dall-e-',
       'whisper-',
-      'tts-',
       'omni-moderation-',
       'text-moderation-',
       'text-embedding-ada-',
@@ -50,7 +49,7 @@ const MODEL_CATEGORY_RULES: readonly ModelCategoryRule[] = [
       'computer-use-preview',
       'sora',
     ],
-    pattern: /(?:^|[/.:])o(?:1|3|4)(?=$|[-.:])/,
+    pattern: /(?:^|[/.:])(?:o(?:1|3|4)(?=$|[-.:])|tts-)/,
   },
   { name: 'Anthropic', keywords: ['anthropic', 'claude'] },
   {
