@@ -95,7 +95,7 @@ For commercial licensing, please contact support@quantumnous.com
   margin-bottom: 0.9rem;
   border: 1px solid currentColor;
   border-radius: 0.2rem;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .pcc-agent-global-overlay__extra {

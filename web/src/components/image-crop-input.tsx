@@ -1,29 +1,75 @@
 import { Check, RotateCcw, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
-import Cropper, { type Area } from 'react-easy-crop'
 import { useTranslation } from 'react-i18next'
+
+import 'react-image-crop/dist/ReactCrop.css'
+import ReactCrop, {
+  centerCrop,
+  makeAspectCrop,
+  type PercentCrop,
+  type PixelCrop,
+} from 'react-image-crop'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { compressImageToWebP } from '@/features/resource-downloads/lib/compress-thumbnail'
+import { cn } from '@/lib/utils'
 
 type ImageCropInputProps = {
   id?: string
   value?: string
-  aspectRatio: number
+  aspectRatio?: number
   disabled?: boolean
   label: string
   onChange: (value: string) => void
 }
 
+type ImageSize = {
+  width: number
+  height: number
+}
+
+const DEFAULT_CROP: PercentCrop = {
+  unit: '%',
+  x: 5,
+  y: 5,
+  width: 90,
+  height: 90,
+}
+
+function percentCropToPixels(crop: PercentCrop, size: ImageSize): PixelCrop {
+  return {
+    unit: 'px',
+    x: Math.round((crop.x / 100) * size.width),
+    y: Math.round((crop.y / 100) * size.height),
+    width: Math.round((crop.width / 100) * size.width),
+    height: Math.round((crop.height / 100) * size.height),
+  }
+}
+
+function getInitialCrop(size: ImageSize, aspectRatio?: number): PercentCrop {
+  if (!aspectRatio) return DEFAULT_CROP
+
+  return centerCrop(
+    makeAspectCrop(
+      { unit: '%', width: 90 },
+      aspectRatio,
+      size.width,
+      size.height
+    ),
+    size.width,
+    size.height
+  )
+}
+
 export function ImageCropInput(props: ImageCropInputProps) {
   const { t } = useTranslation()
-  const zoomId = useId()
+  const inputId = useId()
   const generation = useRef(0)
   const [source, setSource] = useState<{ file: File; url: string } | null>(null)
-  const [crop, setCrop] = useState({ x: 0, y: 0 })
-  const [zoom, setZoom] = useState(1)
-  const [area, setArea] = useState<Area | null>(null)
+  const [crop, setCrop] = useState<PercentCrop>(DEFAULT_CROP)
+  const [area, setArea] = useState<PercentCrop | null>(null)
+  const [sourceSize, setSourceSize] = useState<ImageSize | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(false)
 
@@ -43,114 +89,140 @@ export function ImageCropInput(props: ImageCropInputProps) {
   return (
     <div className='min-w-0 space-y-2'>
       {source ? (
-        <div className='relative h-64 w-full overflow-hidden rounded-md bg-black sm:h-80'>
-          <Cropper
-            image={source.url}
+        <div className='relative max-h-64 w-full overflow-auto rounded-md bg-black p-2 sm:max-h-80'>
+          <ReactCrop
             crop={crop}
-            zoom={zoom}
             aspect={props.aspectRatio}
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
-            onCropComplete={(_, pixels) => setArea(pixels)}
-            zoomWithScroll={false}
-            mediaProps={{
-              onError: () => {
+            disabled={busy || props.disabled}
+            keepSelection
+            minWidth={1}
+            minHeight={1}
+            onChange={(_, percentageCrop) => {
+              setCrop(percentageCrop)
+              setArea(percentageCrop)
+            }}
+            onComplete={(_, percentageCrop) => setArea(percentageCrop)}
+          >
+            <img
+              src={source.url}
+              alt={props.label}
+              className='block max-h-60 max-w-full object-contain sm:max-h-72'
+              onLoad={(event) => {
+                const image = event.currentTarget
+                setSourceSize({
+                  width: image.naturalWidth,
+                  height: image.naturalHeight,
+                })
+                const initialCrop = getInitialCrop(
+                  {
+                    width: image.naturalWidth,
+                    height: image.naturalHeight,
+                  },
+                  props.aspectRatio
+                )
+                setCrop(initialCrop)
+                setArea(initialCrop)
+                setError(false)
+              }}
+              onError={() => {
                 setError(true)
                 setArea(null)
-              },
-            }}
-          />
+                setSourceSize(null)
+              }}
+            />
+          </ReactCrop>
         </div>
       ) : (
         <div
-          className='bg-muted overflow-hidden rounded-md border'
-          style={{ aspectRatio: props.aspectRatio }}
+          className={cn(
+            'bg-muted overflow-hidden rounded-md border',
+            props.aspectRatio ? undefined : 'min-h-32'
+          )}
+          style={
+            props.aspectRatio ? { aspectRatio: props.aspectRatio } : undefined
+          }
         >
           {props.value ? (
             <img
               src={props.value}
               alt={props.label}
-              className='size-full object-cover'
+              className={
+                props.aspectRatio
+                  ? 'size-full object-cover'
+                  : 'block h-auto max-h-64 w-full object-contain'
+              }
             />
           ) : null}
         </div>
       )}
       {source ? (
-        <>
-          <label htmlFor={zoomId} className='text-sm'>
-            {t('Zoom')}
-          </label>
-          <input
-            id={zoomId}
-            type='range'
-            min={1}
-            max={3}
-            step={0.01}
-            value={zoom}
+        <div className='flex flex-wrap gap-2'>
+          <Button
+            type='button'
+            size='icon-sm'
+            variant='outline'
+            title={t('Reset')}
+            aria-label={t('Reset')}
             disabled={busy || props.disabled}
-            className='w-full'
-            onChange={(event) => setZoom(Number(event.currentTarget.value))}
-          />
-          <div className='flex flex-wrap gap-2'>
-            <Button
-              type='button'
-              size='icon-sm'
-              variant='outline'
-              title={t('Reset')}
-              aria-label={t('Reset')}
-              disabled={busy || props.disabled}
-              onClick={() => {
-                setCrop({ x: 0, y: 0 })
-                setZoom(1)
-              }}
-            >
-              <RotateCcw />
-            </Button>
-            <Button
-              type='button'
-              variant='outline'
-              disabled={busy || props.disabled}
-              onClick={() => {
-                generation.current += 1
+            onClick={() => {
+              const initialCrop = sourceSize
+                ? getInitialCrop(sourceSize, props.aspectRatio)
+                : DEFAULT_CROP
+              setCrop(initialCrop)
+              setArea(initialCrop)
+            }}
+          >
+            <RotateCcw />
+          </Button>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={busy || props.disabled}
+            onClick={() => {
+              generation.current += 1
+              setSource(null)
+              setArea(null)
+              setSourceSize(null)
+              setError(false)
+            }}
+          >
+            <X />
+            {t('Cancel')}
+          </Button>
+          <Button
+            type='button'
+            disabled={busy || props.disabled || !area || !sourceSize || error}
+            onClick={async () => {
+              if (!area || !sourceSize || busy) return
+              const request = ++generation.current
+              const pixelCrop = percentCropToPixels(area, sourceSize)
+              setBusy(true)
+              setError(false)
+              try {
+                const image = await compressImageToWebP(
+                  source.file,
+                  props.aspectRatio,
+                  pixelCrop
+                )
+                if (request !== generation.current) return
+                props.onChange(image)
                 setSource(null)
-                setError(false)
-              }}
-            >
-              <X />
-              {t('Cancel')}
-            </Button>
-            <Button
-              type='button'
-              disabled={busy || props.disabled || !area || error}
-              onClick={async () => {
-                if (!area || busy) return
-                const request = ++generation.current
-                setBusy(true)
-                setError(false)
-                try {
-                  const image = await compressImageToWebP(
-                    source.file,
-                    props.aspectRatio,
-                    area
-                  )
-                  if (request !== generation.current) return
-                  props.onChange(image)
-                  setSource(null)
-                } catch {
-                  if (request === generation.current) setError(true)
-                } finally {
-                  if (request === generation.current) setBusy(false)
-                }
-              }}
-            >
-              <Check />
-              {t('Apply')}
-            </Button>
-          </div>
-        </>
+                setSourceSize(null)
+                setArea(null)
+              } catch {
+                if (request === generation.current) setError(true)
+              } finally {
+                if (request === generation.current) setBusy(false)
+              }
+            }}
+          >
+            <Check />
+            {t('Apply')}
+          </Button>
+        </div>
       ) : null}
       <Input
-        id={props.id}
+        id={props.id ?? inputId}
         type='file'
         accept='image/jpeg,image/png,image/webp'
         disabled={busy || props.disabled}
@@ -169,9 +241,9 @@ export function ImageCropInput(props: ImageCropInputProps) {
             return
           }
           generation.current += 1
-          setCrop({ x: 0, y: 0 })
-          setZoom(1)
+          setCrop(DEFAULT_CROP)
           setArea(null)
+          setSourceSize(null)
           setSource({ file, url: URL.createObjectURL(file) })
         }}
       />

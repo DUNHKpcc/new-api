@@ -52,10 +52,66 @@ function blobToDataUrl(blob: Blob) {
   })
 }
 
+type LoadedImage = {
+  source: CanvasImageSource
+  width: number
+  height: number
+  dispose: () => void
+}
+
+type CropArea = {
+  unit?: 'px'
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function loadHtmlImage(file: File): Promise<LoadedImage> {
+  const url = URL.createObjectURL(file)
+  const image = new Image()
+
+  return new Promise((resolve, reject) => {
+    const handleLoad = () => {
+      resolve({
+        source: image,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        dispose: () => URL.revokeObjectURL(url),
+      })
+    }
+    const handleError = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Failed to load thumbnail'))
+    }
+    image.addEventListener('load', handleLoad, { once: true })
+    image.addEventListener('error', handleError, { once: true })
+    image.src = url
+  })
+}
+
+async function loadImage(file: File): Promise<LoadedImage> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file)
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        dispose: () => bitmap.close(),
+      }
+    } catch {
+      // Fall back to an HTML image for browsers with partial bitmap support.
+    }
+  }
+
+  return loadHtmlImage(file)
+}
+
 export async function compressImageToWebP(
   file: File,
   aspectRatio?: number,
-  crop?: { x: number; y: number; width: number; height: number }
+  crop?: CropArea
 ): Promise<string> {
   if (
     aspectRatio !== undefined &&
@@ -71,11 +127,12 @@ export async function compressImageToWebP(
     throw new Error('Invalid thumbnail file')
   }
 
-  const source = await createImageBitmap(file)
+  const source = await loadImage(file)
   try {
     if (
       crop &&
-      (!Object.values(crop).every(Number.isFinite) ||
+      (![crop.x, crop.y, crop.width, crop.height].every(Number.isFinite) ||
+        (crop.unit !== undefined && crop.unit !== 'px') ||
         crop.x < 0 ||
         crop.y < 0 ||
         crop.width <= 0 ||
@@ -85,51 +142,43 @@ export async function compressImageToWebP(
     ) {
       throw new Error('Invalid crop')
     }
+
+    let cropWidth = source.width
+    let cropHeight = source.height
+    let cropX = 0
+    let cropY = 0
+    if (crop) {
+      cropWidth = crop.width
+      cropHeight = crop.height
+      cropX = crop.x
+      cropY = crop.y
+    } else if (aspectRatio) {
+      const sourceRatio = source.width / source.height
+      if (sourceRatio > aspectRatio) {
+        cropWidth = source.height * aspectRatio
+        cropX = (source.width - cropWidth) / 2
+      } else if (sourceRatio < aspectRatio) {
+        cropHeight = source.width / aspectRatio
+        cropY = (source.height - cropHeight) / 2
+      }
+    }
+
     for (const attempt of compressionAttempts) {
       const scale = Math.min(
         1,
-        attempt.maxWidth / source.width,
-        attempt.maxHeight / source.height
+        attempt.maxWidth / cropWidth,
+        attempt.maxHeight / cropHeight
       )
-      let width = Math.max(1, Math.round(source.width * scale))
-      let height = Math.max(1, Math.round(source.height * scale))
-      if (aspectRatio && aspectRatio > 0) {
-        if (width / height > aspectRatio) {
-          width = Math.round(height * aspectRatio)
-        } else {
-          height = Math.round(width / aspectRatio)
-        }
-      }
+      const width = Math.max(1, Math.round(cropWidth * scale))
+      const height = Math.max(1, Math.round(cropHeight * scale))
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
 
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Failed to prepare thumbnail')
-      const sourceRatio = source.width / source.height
-      let cropWidth = source.width
-      let cropHeight = source.height
-      let cropX = 0
-      let cropY = 0
-      if (aspectRatio && sourceRatio > aspectRatio) {
-        cropWidth = source.height * aspectRatio
-        cropX = (source.width - cropWidth) / 2
-      } else if (aspectRatio && sourceRatio < aspectRatio) {
-        cropHeight = source.width / aspectRatio
-        cropY = (source.height - cropHeight) / 2
-      }
-      if (crop) {
-        cropWidth = crop.width
-        cropHeight = crop.height
-        cropX = crop.x
-        cropY = crop.y
-      }
-      width = Math.max(1, width)
-      height = Math.max(1, height)
-      canvas.width = width
-      canvas.height = height
       context.drawImage(
-        source,
+        source.source,
         cropX,
         cropY,
         cropWidth,
@@ -146,7 +195,7 @@ export async function compressImageToWebP(
       }
     }
   } finally {
-    source.close()
+    source.dispose()
   }
 
   throw new Error('Thumbnail is too large')

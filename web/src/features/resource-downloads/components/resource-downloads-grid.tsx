@@ -43,11 +43,11 @@ export function ResourceDownloadsGrid(props: ResourceDownloadsGridProps) {
           key={item.id}
           className='bg-card text-card-foreground grid h-full grid-rows-[auto_1fr] overflow-hidden rounded-lg border'
         >
-          <div className='bg-muted aspect-video overflow-hidden'>
+          <div className='bg-muted overflow-hidden'>
             <img
               src={item.thumbnail}
               alt={item.name}
-              className='size-full object-cover'
+              className='block h-auto w-full'
               loading='lazy'
             />
           </div>

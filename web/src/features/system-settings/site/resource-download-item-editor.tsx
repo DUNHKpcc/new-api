@@ -91,7 +91,6 @@ export function ResourceDownloadItemEditor(
           <ImageCropInput
             id={`${inputPrefix}-thumbnail`}
             value={props.item.thumbnail}
-            aspectRatio={16 / 9}
             disabled={props.uploading}
             label={t('Upload thumbnail')}
             onChange={props.onThumbnailChange}

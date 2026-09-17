@@ -39,12 +39,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { LOTTERY_IMAGE_ASPECT_CLASS } from '@/features/lottery/lib/image-layout'
 import { useNotifications } from '@/hooks/use-notifications'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+import { getNotificationImageClass } from './image-layout'
 import { globalNotificationCenterLayout } from './layout'
 import {
   getNotificationPreview,
@@ -144,10 +144,10 @@ function GlobalNotificationOverlay({
           {candidate.image ? (
             <img
               src={candidate.image}
-              alt={candidate.title || t('Lottery image')}
+              alt={candidate.title || t('Announcement image')}
               className={cn(
                 'pcc-agent-global-overlay__image',
-                LOTTERY_IMAGE_ASPECT_CLASS
+                getNotificationImageClass(candidate.source)
               )}
             />
           ) : null}
@@ -308,10 +308,17 @@ function NotificationItem(props: NotificationItemProps) {
           {props.item.image ? (
             <img
               src={props.item.image}
-              alt={props.item.title || t('Lottery image')}
+              alt={
+                props.item.title ||
+                t(
+                  props.item.source === 'lottery'
+                    ? 'Lottery image'
+                    : 'Announcement image'
+                )
+              }
               className={cn(
-                'mb-3 w-full rounded-md border object-cover',
-                LOTTERY_IMAGE_ASPECT_CLASS
+                'mb-3 w-full rounded-md border',
+                getNotificationImageClass(props.item.source)
               )}
             />
           ) : null}

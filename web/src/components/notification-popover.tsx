@@ -43,11 +43,12 @@ import {
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LOTTERY_IMAGE_ASPECT_CLASS } from '@/features/lottery/lib/image-layout'
 import { useNotifications } from '@/hooks/use-notifications'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
+
+import { getNotificationImageClass } from './notifications/image-layout'
 
 type NotificationListProps = {
   items: NotificationFeedItem[]
@@ -180,10 +181,17 @@ function NotificationList(props: NotificationListProps) {
               {item.image ? (
                 <img
                   src={item.image}
-                  alt={item.title || t('Lottery image')}
+                  alt={
+                    item.title ||
+                    t(
+                      item.source === 'lottery'
+                        ? 'Lottery image'
+                        : 'Announcement image'
+                    )
+                  }
                   className={cn(
-                    'mb-3 w-full rounded-md border object-cover',
-                    LOTTERY_IMAGE_ASPECT_CLASS
+                    'mb-3 w-full rounded-md border',
+                    getNotificationImageClass(item.source)
                   )}
                 />
               ) : null}

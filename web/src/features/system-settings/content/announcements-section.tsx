@@ -472,7 +472,7 @@ export function AnnouncementsSection({
                         <img
                           src={announcement.image}
                           alt={t('Announcement image')}
-                          className='size-10 rounded border object-cover'
+                          className='size-10 rounded border object-contain'
                         />
                       ) : (
                         '-'
@@ -671,7 +671,6 @@ export function AnnouncementsSection({
                     <FormLabel>{t('Announcement image (Optional)')}</FormLabel>
                     <ImageCropInput
                       value={field.value}
-                      aspectRatio={16 / 9}
                       label={t('Upload announcement image')}
                       onChange={field.onChange}
                     />

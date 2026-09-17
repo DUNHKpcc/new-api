@@ -67,7 +67,7 @@ describe('resource downloads grid', () => {
 
     assert.match(markup, /data-layout="responsive-resource-grid"/)
     assert.match(markup, /repeat\(auto-fill,minmax\(min\(100%,17rem\),1fr\)\)/)
-    assert.equal((markup.match(/aspect-video/g) ?? []).length, 2)
+    assert.equal((markup.match(/class="block h-auto w-full"/g) ?? []).length, 2)
     assert.equal((markup.match(/<article/g) ?? []).length, 2)
     assert.match(markup, /target="_blank"/)
     assert.match(markup, /rel="noopener noreferrer"/)
