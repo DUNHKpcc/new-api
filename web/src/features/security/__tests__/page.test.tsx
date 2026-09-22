@@ -59,6 +59,7 @@ const profile: UserProfile = {
     notify_type: 'email',
     quota_warning_threshold: 500000,
   }),
+  wechat_id: 'wechat-open-id',
 }
 
 beforeEach(() => {
@@ -225,6 +226,22 @@ describe('security page migration', () => {
       'gap-2'
     )
     expect(screen.queryByText('Custom OAuth')).not.toBeInTheDocument()
+  })
+
+  it('shows the WeChat binding identifier instead of the unbound placeholder', async () => {
+    await renderPage()
+    const bindings = await screen.findByRole('list', {
+      name: 'Account Bindings',
+    })
+    const wechat = within(bindings).getByText('WeChat').closest('li')
+
+    expect(wechat).not.toBeNull()
+    expect(
+      within(wechat as HTMLElement).getByText('wechat-open-id')
+    ).toBeVisible()
+    expect(
+      within(wechat as HTMLElement).queryByText('Not bound')
+    ).not.toBeInTheDocument()
   })
 
   it('the password action opens the existing dialog by keyboard and Escape closes it', async () => {

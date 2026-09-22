@@ -114,12 +114,14 @@ export function UsersMutateDrawer({
   const currentUser = useAuthStore((s) => s.auth.user)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
+  const canManageUsers = (currentUser?.role ?? ROLE.GUEST) >= ROLE.ADMIN
 
   // Fetch groups
   const { data: groupsData } = useQuery({
     queryKey: ['groups'],
     queryFn: async () => requireServerSuccess(await getGroups()),
     staleTime: 5 * 60 * 1000,
+    enabled: open && canManageUsers,
   })
 
   const groups = groupsData?.data || []
@@ -129,6 +131,7 @@ export function UsersMutateDrawer({
     queryKey: ['admin-permission-catalog'],
     queryFn: async () => requireServerSuccess(await getPermissionCatalog()),
     staleTime: 5 * 60 * 1000,
+    enabled: open && canManageUsers,
   })
 
   const form = useForm<UserFormValues>({
@@ -138,6 +141,7 @@ export function UsersMutateDrawer({
 
   // Load existing data when updating
   useEffect(() => {
+    if (!canManageUsers) return
     if (open && isUpdate && currentRow) {
       // For update, fetch fresh data
       getUser(currentRow.id)
@@ -153,7 +157,7 @@ export function UsersMutateDrawer({
       // For create, reset to defaults
       form.reset(USER_FORM_DEFAULT_VALUES)
     }
-  }, [open, isUpdate, currentRow, form, t])
+  }, [open, isUpdate, currentRow, form, t, canManageUsers])
 
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()

@@ -250,10 +250,8 @@ export function AccountBindings({ profile, onUpdate }: AccountBindingsProps) {
       id: 'wechat',
       label: t('WeChat'),
       icon: SiWechat as React.ComponentType<{ className?: string }>,
-      value: undefined,
-      isBound: Boolean(
-        (profile as unknown as Record<string, unknown>).wechat_id
-      ),
+      value: profile.wechat_id,
+      isBound: Boolean(profile.wechat_id),
       isEnabled: weChatLoginMode !== null,
       onBind: () =>
         weChatLoginMode === 'direct'

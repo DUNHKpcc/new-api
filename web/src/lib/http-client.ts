@@ -16,7 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import axios, { type AxiosRequestConfig } from 'axios'
+import axios, {
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { t } from 'i18next'
 
 import {
@@ -144,12 +147,15 @@ api.interceptors.response.use(
   }
 )
 
-api.interceptors.request.use(async (config) => {
+export async function prepareAuthenticatedRequest(
+  config: InternalAxiosRequestConfig,
+  refreshHeaders: typeof getFreshAuthHeaders = getFreshAuthHeaders
+): Promise<InternalAxiosRequestConfig> {
   if (config.singleUseAuthorization || config.headers.has('X-Security-Proof')) {
     // Refresh before spending a proof/flow, never by replaying its request.
     config.skipAuthRefresh = true
     try {
-      const headers = await getFreshAuthHeaders()
+      const headers = await refreshHeaders()
       for (const [name, value] of Object.entries(headers)) {
         config.headers.set(name, value)
       }
@@ -158,9 +164,38 @@ api.interceptors.request.use(async (config) => {
     }
     return config
   }
-  const accessToken = useAuthStore.getState().auth.accessToken
+
+  if (config.skipAuthRefresh) {
+    const accessToken = useAuthStore.getState().auth.accessToken
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+    return config
+  }
+
+  const auth = useAuthStore.getState().auth
+  const now = Math.floor(Date.now() / 1000)
+  const refreshBefore = now + 60
+  const accessToken = auth.accessToken
+  const accessTokenExpiresSoon =
+    Boolean(accessToken) &&
+    auth.accessExpiresAt !== null &&
+    auth.accessExpiresAt > now &&
+    auth.accessExpiresAt <= refreshBefore
+
+  if (accessTokenExpiresSoon) {
+    const headers = await refreshHeaders()
+    const refreshedToken = headers.Authorization
+    if (refreshedToken) {
+      config.headers.Authorization = refreshedToken
+    }
+    return config
+  }
+
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`
   }
   return config
-})
+}
+
+api.interceptors.request.use(prepareAuthenticatedRequest)

@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api, type ApiRequestConfig } from '@/lib/api'
+import axios from 'axios'
+
+import { api, refreshAuthentication, type ApiRequestConfig } from '@/lib/api'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { buildQueryParams } from './lib/query-params'
 import { parseTaskArtifactsResponse } from './lib/task-artifacts'
@@ -36,7 +40,72 @@ import type {
 // ============================================================================
 
 function buildApiPath(endpoint: string, isAdmin: boolean): string {
-  return isAdmin ? endpoint : `${endpoint}/self`
+  if (!isAdmin) return `${endpoint.replace(/\/$/, '')}/self`
+  if (endpoint === '/api/log' || endpoint === '/api/mj') {
+    return `${endpoint}/`
+  }
+  return endpoint
+}
+
+function isInsufficientPrivilegeError(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || error.response?.status !== 403) {
+    return false
+  }
+  const responseData = error.response.data
+  return (
+    typeof responseData === 'object' &&
+    responseData !== null &&
+    'code' in responseData &&
+    responseData.code === 'AUTH_INSUFFICIENT_PRIVILEGE'
+  )
+}
+
+/**
+ * If a stale admin role selected an admin endpoint, refresh the server-backed
+ * user role before falling back to the user's own data. A 403 is never
+ * bypassed while the refreshed role is still administrative.
+ */
+export async function fetchWithPrivilegeFallback<T>(
+  adminRequest: () => Promise<T>,
+  selfRequest: () => Promise<T>,
+  isAdmin: boolean,
+  refresh = refreshAuthentication
+): Promise<T> {
+  if (!isAdmin) return selfRequest()
+
+  try {
+    return await adminRequest()
+  } catch (error) {
+    if (!isInsufficientPrivilegeError(error)) throw error
+
+    const refreshOutcome = await refresh()
+    const currentRole = useAuthStore.getState().auth.user?.role
+    if (
+      refreshOutcome.kind === 'authenticated' &&
+      typeof currentRole === 'number' &&
+      currentRole < ROLE.ADMIN
+    ) {
+      return selfRequest()
+    }
+
+    throw error
+  }
+}
+
+function buildQueryParamsForScope(
+  params: Record<string, unknown>,
+  includeAdminFilters: boolean
+): URLSearchParams {
+  const scopedParams = { ...params }
+  if (!includeAdminFilters) {
+    delete scopedParams.username
+    delete scopedParams.channel
+  }
+  return buildQueryParams({
+    p: scopedParams.p || 1,
+    page_size: scopedParams.page_size || 20,
+    ...scopedParams,
+  })
 }
 
 async function fetchLogs<T>(
@@ -45,14 +114,23 @@ async function fetchLogs<T>(
   isAdmin: boolean
 ): Promise<GetLogsResponse> {
   const paramRecord = params as unknown as Record<string, unknown>
-  const queryParams = buildQueryParams({
-    p: paramRecord.p || 1,
-    page_size: paramRecord.page_size || 20,
-    ...params,
-  })
-  const path = buildApiPath(endpoint, isAdmin)
-  const res = await api.get(`${path}?${queryParams}`)
-  return res.data
+  const adminQueryParams = buildQueryParamsForScope(paramRecord, true)
+  const selfQueryParams = buildQueryParamsForScope(paramRecord, false)
+  return fetchWithPrivilegeFallback(
+    async () => {
+      const res = await api.get(
+        `${buildApiPath(endpoint, true)}?${adminQueryParams}`
+      )
+      return res.data
+    },
+    async () => {
+      const res = await api.get(
+        `${buildApiPath(endpoint, false)}?${selfQueryParams}`
+      )
+      return res.data
+    },
+    isAdmin
+  )
 }
 
 async function fetchLogStats<T>(
@@ -60,12 +138,22 @@ async function fetchLogStats<T>(
   params: T,
   isAdmin: boolean
 ): Promise<GetLogStatsResponse> {
-  const queryParams = buildQueryParams(
-    params as unknown as Record<string, unknown>
+  const paramRecord = params as unknown as Record<string, unknown>
+  const adminQueryParams = buildQueryParamsForScope(paramRecord, true)
+  const selfQueryParams = buildQueryParamsForScope(paramRecord, false)
+  const buildStatsPath = (scope: boolean) =>
+    `${buildApiPath(endpoint, scope).replace(/\/$/, '')}/stat`
+  return fetchWithPrivilegeFallback(
+    async () => {
+      const res = await api.get(`${buildStatsPath(true)}?${adminQueryParams}`)
+      return res.data
+    },
+    async () => {
+      const res = await api.get(`${buildStatsPath(false)}?${selfQueryParams}`)
+      return res.data
+    },
+    isAdmin
   )
-  const path = buildApiPath(endpoint, isAdmin)
-  const res = await api.get(`${path}/stat?${queryParams}`)
-  return res.data
 }
 
 // ============================================================================

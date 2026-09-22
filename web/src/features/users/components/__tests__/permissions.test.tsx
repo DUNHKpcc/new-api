@@ -143,3 +143,53 @@ it('admin cannot edit the audit permission even when the catalog is available', 
     screen.queryByRole('checkbox', { name: new RegExp(label) })
   ).not.toBeInTheDocument()
 })
+
+it('does not load admin-only drawer data while the drawer is closed', async () => {
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'operator', role: 10 })
+  const get = vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: [] },
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  render(
+    <QueryClientProvider client={client}>
+      <UsersProvider>
+        <UsersMutateDrawer
+          open={false}
+          onOpenChange={() => undefined}
+          currentRow={target}
+        />
+      </UsersProvider>
+    </QueryClientProvider>
+  )
+
+  await waitFor(() => expect(get).not.toHaveBeenCalled())
+})
+
+it('does not load admin-only drawer data for a regular user', async () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'operator', role: 1 })
+  const get = vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: [] },
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  render(
+    <QueryClientProvider client={client}>
+      <UsersProvider>
+        <UsersMutateDrawer
+          open
+          onOpenChange={() => undefined}
+          currentRow={target}
+        />
+      </UsersProvider>
+    </QueryClientProvider>
+  )
+
+  await waitFor(() => expect(get).not.toHaveBeenCalled())
+})
