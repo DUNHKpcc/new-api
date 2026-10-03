@@ -21,7 +21,8 @@ var campaignEmailTemplate = template.Must(template.New("campaign-email").Parse(`
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;background:#f5f5f5;font-family:Arial,sans-serif;color:#202020">
 <table role="presentation" width="100%"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="560" style="max-width:100%;background:white;border:1px solid #ddd"><tr><td style="padding:28px">
+<table role="presentation" width="100%" style="width:100%;max-width:560px;table-layout:fixed;background:white;border:1px solid #ddd"><tr><td style="padding:28px">
+<img src="{{.LogoURL}}" width="48" height="48" alt="{{.SystemName}}" style="display:block;width:48px;height:48px;border:0">
 <p style="color:#666;font-size:14px">{{.SystemName}} · {{.Category}}</p>
 <h1 style="font-size:24px;line-height:1.4">{{.Subject}}</h1>
 {{range .Paragraphs}}<p style="line-height:1.8;overflow-wrap:anywhere">{{.}}</p>{{end}}
@@ -62,6 +63,8 @@ func BuildEmailCampaignMessage(job *model.EmailSendJob) (common.CampaignEmailMes
 	// A fragment keeps the manual-link capability out of page access logs and
 	// referrers. The standalone API URL remains available for mail-client POSTs.
 	pageURL.Fragment = url.Values{"token": {job.UnsubscribeToken}}.Encode()
+	logoURL := *base
+	logoURL.Path = strings.TrimRight(base.Path, "/") + "/pcc-agent-logo.png"
 	category := "平台信息 / Platform updates"
 	if job.Campaign.Category == model.EmailCategoryPromotion {
 		category = "促销信息 / Promotions"
@@ -73,7 +76,8 @@ func BuildEmailCampaignMessage(job *model.EmailSendJob) (common.CampaignEmailMes
 		Subject        string
 		Paragraphs     []string
 		UnsubscribeURL string
-	}{systemName, category, job.Campaign.Subject, strings.Split(strings.ReplaceAll(job.Campaign.Body, "\r\n", "\n"), "\n"), pageURL.String()})
+		LogoURL        string
+	}{systemName, category, job.Campaign.Subject, strings.Split(strings.ReplaceAll(job.Campaign.Body, "\r\n", "\n"), "\n"), pageURL.String(), logoURL.String()})
 	if err != nil {
 		return common.CampaignEmailMessage{}, errors.New("could not render campaign email")
 	}
