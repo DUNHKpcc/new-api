@@ -12,15 +12,44 @@ type smtpAutoAuth struct {
 	username string
 	password string
 	mech     string
+	config   *smtpAuthConfig
+}
+
+type smtpAuthConfig struct {
+	hostname    string
+	forceLogin  bool
+	preferLogin bool
 }
 
 func AutoSMTPAuth(username, password string) smtp.Auth {
 	return &smtpAutoAuth{username: username, password: password}
 }
 
+// snapshotSMTPAuth is called while holding OptionMapRWMutex.RLock. Existing
+// transactional callers keep their original live-option selection behavior.
+func snapshotSMTPAuth() smtp.Auth {
+	return &smtpAutoAuth{
+		username: SMTPAccount,
+		password: SMTPToken,
+		config: &smtpAuthConfig{
+			hostname:    SMTPServer,
+			forceLogin:  SMTPForceAuthLogin,
+			preferLogin: shouldUseSMTPLoginAuth(),
+		},
+	}
+}
+
 func (a *smtpAutoAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
-	useLoginAuth := SMTPForceAuthLogin
-	if !useLoginAuth && shouldUseSMTPLoginAuth() {
+	var hostname string
+	var useLoginAuth, preferLoginAuth bool
+	if a.config != nil {
+		hostname = a.config.hostname
+		useLoginAuth, preferLoginAuth = a.config.forceLogin, a.config.preferLogin
+	} else {
+		hostname = SMTPServer
+		useLoginAuth, preferLoginAuth = SMTPForceAuthLogin, shouldUseSMTPLoginAuth()
+	}
+	if !useLoginAuth && preferLoginAuth {
 		useLoginAuth = !(server != nil && len(server.Auth) == 1 && smtpServerSupportsAuth(server, "NTLM"))
 	}
 	if useLoginAuth {
@@ -31,7 +60,7 @@ func (a *smtpAutoAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
 	switch {
 	case smtpServerSupportsAuth(server, "PLAIN"):
 		a.mech = "PLAIN"
-		return smtp.PlainAuth("", a.username, a.password, SMTPServer).Start(server)
+		return smtp.PlainAuth("", a.username, a.password, hostname).Start(server)
 	case smtpServerSupportsAuth(server, "LOGIN"):
 		a.mech = "LOGIN"
 		return "LOGIN", []byte{}, nil
@@ -44,7 +73,7 @@ func (a *smtpAutoAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
 		return "NTLM", negotiateMessage, nil
 	default:
 		a.mech = "PLAIN"
-		return smtp.PlainAuth("", a.username, a.password, SMTPServer).Start(server)
+		return smtp.PlainAuth("", a.username, a.password, hostname).Start(server)
 	}
 }
 

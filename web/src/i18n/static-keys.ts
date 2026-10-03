@@ -19,6 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  // Email campaign validation and dispatcher task label.
+  'Email dispatch',
+  'Enter an email subject',
+  'Enter an email message',
+  'Email subject must be at most 200 characters',
+  'Email message must be at most 20000 UTF-8 bytes',
   'Task usage metadata is unavailable. Pricing details cannot be displayed.',
   'This expression cannot be expanded into a price table. View the original expression below.',
   'This operation is only supported for vLLM or SGLang channels',

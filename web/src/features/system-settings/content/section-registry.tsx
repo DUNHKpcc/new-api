@@ -16,6 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { lazy, Suspense } from 'react'
+
+import { LoadingState } from '@/components/loading-state'
+
 import type { ContentSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { AnnouncementsSection } from './announcements-section'
@@ -40,6 +44,12 @@ function validateDataExportDefaultTime(value: string): 'week' | 'hour' | 'day' {
   // Default to 'hour' if value is unexpected
   return 'hour'
 }
+
+const EmailCampaigns = lazy(() =>
+  import('@/features/email-campaigns').then((module) => ({
+    default: module.EmailCampaigns,
+  }))
+)
 
 const CONTENT_SECTIONS = [
   {
@@ -149,6 +159,15 @@ const CONTENT_SECTIONS = [
           MjActionCheckSuccessEnabled: settings.MjActionCheckSuccessEnabled,
         }}
       />
+    ),
+  },
+  {
+    id: 'email-campaigns',
+    titleKey: 'Email campaigns',
+    build: () => (
+      <Suspense fallback={<LoadingState />}>
+        <EmailCampaigns />
+      </Suspense>
     ),
   },
 ] as const

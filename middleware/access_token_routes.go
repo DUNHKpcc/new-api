@@ -64,6 +64,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/user/sessions/revoke-others":        accessTokenSessionRule,
 	"GET /api/user/self/groups":                    accessTokenScopeRule("profile:read"),
 	"GET /api/user/self":                           accessTokenScopeRule("profile:read"),
+	"GET /api/user/self/email-subscriptions":       accessTokenSessionRule,
+	"PUT /api/user/self/email-subscriptions":       accessTokenSessionRule,
 	"GET /api/user/models":                         accessTokenScopeRule("profile:read"),
 	"PUT /api/user/self":                           accessTokenScopeRule("profile:write"),
 	"DELETE /api/user/self":                        accessTokenScopeRule("account_security:write"),
@@ -172,6 +174,17 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"DELETE /api/custom-oauth-provider/:id":     accessTokenScopeRule("option:write"),
 	"GET /api/ratio_sync/channels":              accessTokenScopeRule("option:read"),
 	"POST /api/ratio_sync/fetch":                accessTokenScopeRule("option:write"),
+
+	// Bulk email and subscription consent require an interactive dashboard session.
+	"GET /api/email-campaign/config":         accessTokenSessionRule,
+	"PUT /api/email-campaign/config":         accessTokenSessionRule,
+	"GET /api/email-campaign/":               accessTokenSessionRule,
+	"POST /api/email-campaign/":              accessTokenSessionRule,
+	"PUT /api/email-campaign/:id":            accessTokenSessionRule,
+	"GET /api/email-campaign/:id/preview":    accessTokenSessionRule,
+	"POST /api/email-campaign/:id/queue":     accessTokenSessionRule,
+	"POST /api/email-campaign/:id/cancel":    accessTokenSessionRule,
+	"GET /api/email-campaign/:id/deliveries": accessTokenSessionRule,
 
 	// router/api-router.go: /api/performance, /api/system-task, /api/system-info
 	"GET /api/performance/stats":                   accessTokenScopeRule("ops:read"),

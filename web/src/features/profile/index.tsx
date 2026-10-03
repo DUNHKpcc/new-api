@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { CheckinCalendarCard } from './components/checkin-calendar-card'
 import { DesktopGrantsCard } from './components/desktop-grants-card'
+import { EmailSubscriptionsCard } from './components/email-subscriptions-card'
 import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSettingsCard } from './components/profile-settings-card'
@@ -56,6 +57,7 @@ export function Profile() {
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
               <div className='space-y-4 sm:space-y-6'>
                 <DesktopGrantsCard />
+                <EmailSubscriptionsCard />
                 <ProfileSettingsCard
                   profile={profile}
                   loading={loading}

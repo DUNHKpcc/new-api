@@ -16,13 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-// Maps backend system task type constants to i18n source keys. Unknown/future
-// types fall back to their raw identifier so the panel never shows blank.
-export const SYSTEM_TASK_TYPE_LABEL: Record<string, string> = {
-  email_dispatch: 'Email dispatch',
-  log_cleanup: 'Log cleanup',
-  channel_test: 'Batch channel test',
-  model_update: 'Batch upstream model update',
-  midjourney_poll: 'Drawing task polling',
-  async_task_poll: 'Async task polling',
-}
+import { z } from 'zod'
+
+export const emailDraftSchema = z.object({
+  subject: z
+    .string()
+    .trim()
+    .min(1, 'Enter an email subject')
+    .max(200, 'Email subject must be at most 200 characters'),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Enter an email message')
+    .refine(
+      (value) => new TextEncoder().encode(value).length <= 20000,
+      'Email message must be at most 20000 UTF-8 bytes'
+    ),
+  category: z.enum(['promotion', 'platform']),
+  group: z.string().trim().max(64),
+})
+export const emailRateSchema = z.object({
+  rate_per_minute: z.number().int().min(1).max(120),
+})

@@ -34,6 +34,10 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)
 		apiRouter.GET("/privacy-policy", controller.GetPrivacyPolicy)
 		apiRouter.GET("/about", controller.GetAbout)
+		// Keep the global API limit, but do not share the login/verification quota:
+		// mail providers can proxy many recipients' unsubscribe requests from one IP.
+		apiRouter.GET("/email/unsubscribe", middleware.DisableCache(), controller.GetEmailUnsubscribe)
+		apiRouter.POST("/email/unsubscribe", middleware.DisableCache(), anonymousRequestBodyLimit, controller.UnsubscribeEmail)
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/resource-downloads", middleware.UserAuth(), controller.GetResourceDownloads)
@@ -127,6 +131,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.DELETE("/desktop-grants/:public_id/history", middleware.DisableCache(), controller.DeleteRevokedDesktopGrant)
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self", controller.GetSelf)
+				selfRoute.GET("/self/email-subscriptions", controller.GetEmailSubscriptions)
+				selfRoute.PUT("/self/email-subscriptions", middleware.CriticalRateLimit(), controller.UpdateEmailSubscriptions)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateSelf)
 				selfRoute.DELETE("/self", middleware.DisableCache(), controller.DeleteSelf)
@@ -391,6 +397,20 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
+
+		emailCampaignRoute := apiRouter.Group("/email-campaign")
+		emailCampaignRoute.Use(middleware.DisableCache(), middleware.RootAuth())
+		{
+			emailCampaignRoute.GET("/config", controller.GetEmailCampaignConfig)
+			emailCampaignRoute.PUT("/config", middleware.CriticalRateLimit(), controller.UpdateEmailCampaignConfig)
+			emailCampaignRoute.GET("/", controller.ListEmailCampaigns)
+			emailCampaignRoute.POST("/", middleware.CriticalRateLimit(), controller.CreateEmailCampaign)
+			emailCampaignRoute.PUT("/:id", middleware.CriticalRateLimit(), controller.UpdateEmailCampaign)
+			emailCampaignRoute.GET("/:id/preview", controller.PreviewEmailCampaign)
+			emailCampaignRoute.POST("/:id/queue", middleware.CriticalRateLimit(), controller.QueueEmailCampaign)
+			emailCampaignRoute.POST("/:id/cancel", middleware.CriticalRateLimit(), controller.CancelEmailCampaign)
+			emailCampaignRoute.GET("/:id/deliveries", controller.ListEmailCampaignDeliveries)
+		}
 
 		systemTaskRoute := apiRouter.Group("/system-task")
 		systemTaskRoute.Use(middleware.RootAuth())

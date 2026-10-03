@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -9,16 +10,32 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
+	"mime"
+	"mime/multipart"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fakeSMTPBehavior struct {
+	blockGreeting  bool
+	closeAfterData bool
+	blockDataReply bool
+	recipientReply int
+	dataReply      int
+	quitReply      int
+	connected      chan struct{}
+	disconnected   chan struct{}
+}
 
 type fakeSMTPServer struct {
 	listener          net.Listener
@@ -30,13 +47,14 @@ type fakeSMTPServer struct {
 	messages          chan string
 	authCommands      chan string
 	startTLSCommands  chan string
+	behavior          fakeSMTPBehavior
 }
 
 func newFakeSMTPServer(t *testing.T) *fakeSMTPServer {
 	return newFakeSMTPServerWithSTARTTLSAdvertisement(t, true)
 }
 
-func newFakeSMTPServerWithSTARTTLSAdvertisement(t *testing.T, advertiseSTARTTLS bool) *fakeSMTPServer {
+func newFakeSMTPServerWithSTARTTLSAdvertisement(t *testing.T, advertiseSTARTTLS bool, behavior ...fakeSMTPBehavior) *fakeSMTPServer {
 	t.Helper()
 
 	cert, err := newTestTLSCertificate()
@@ -60,6 +78,9 @@ func newFakeSMTPServerWithSTARTTLSAdvertisement(t *testing.T, advertiseSTARTTLS 
 		messages:          make(chan string, 1),
 		authCommands:      make(chan string, 1),
 		startTLSCommands:  make(chan string, 1),
+	}
+	if len(behavior) > 0 {
+		server.behavior = behavior[0]
 	}
 	go server.serve()
 	return server
@@ -104,7 +125,17 @@ func (s *fakeSMTPServer) serve() {
 		return
 	}
 	defer conn.Close()
+	if s.behavior.connected != nil {
+		close(s.behavior.connected)
+	}
+	if s.behavior.disconnected != nil {
+		defer close(s.behavior.disconnected)
+	}
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if s.behavior.blockGreeting {
+		_, _ = io.Copy(io.Discard, conn)
+		return
+	}
 
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	if err := writeSMTPLine(rw, "220 fake.smtp.local ESMTP"); err != nil {
@@ -171,6 +202,10 @@ func (s *fakeSMTPServer) serve() {
 				return
 			}
 		case strings.HasPrefix(upperCommand, "RCPT TO:"):
+			if s.behavior.recipientReply != 0 {
+				_ = writeSMTPLine(rw, fmt.Sprintf("%d rejected sensitive-server-detail", s.behavior.recipientReply))
+				continue
+			}
 			if err := writeSMTPLine(rw, "250 2.1.5 Recipient OK"); err != nil {
 				return
 			}
@@ -190,10 +225,25 @@ func (s *fakeSMTPServer) serve() {
 				data.WriteString(dataLine)
 			}
 			s.messages <- data.String()
+			if s.behavior.closeAfterData {
+				return
+			}
+			if s.behavior.blockDataReply {
+				_, _ = io.Copy(io.Discard, conn)
+				return
+			}
+			if s.behavior.dataReply != 0 {
+				_ = writeSMTPLine(rw, fmt.Sprintf("%d rejected sensitive-server-detail", s.behavior.dataReply))
+				continue
+			}
 			if err := writeSMTPLine(rw, "250 2.0.0 Queued"); err != nil {
 				return
 			}
 		case upperCommand == "QUIT":
+			if s.behavior.quitReply != 0 {
+				_ = writeSMTPLine(rw, fmt.Sprintf("%d sensitive-server-detail", s.behavior.quitReply))
+				return
+			}
 			_ = writeSMTPLine(rw, "221 2.0.0 Bye")
 			return
 		default:
@@ -560,4 +610,253 @@ func TestSendEmailExplicitStartTLSRejectsUntrustedCertificateByDefault(t *testin
 	err := SendEmail("Verification", "receiver@example.com", "<p>123456</p>")
 	require.Error(t, err)
 	require.Contains(t, fmt.Sprint(err), "certificate")
+}
+
+func configureCampaignSMTP(t *testing.T, server *fakeSMTPServer) CampaignEmailMessage {
+	t.Helper()
+	withSMTPSettings(t)
+	SMTPServer, SMTPPort = server.host, server.port
+	SMTPAccount, SMTPToken = "", ""
+	SMTPFrom, SystemName = "sender@example.com", "New API"
+	SMTPSSLEnabled, SMTPStartTLSEnabled = false, false
+	SMTPInsecureSkipVerify, SMTPForceAuthLogin = false, false
+	return CampaignEmailMessage{
+		Subject:        "平台通知 · Platform notice",
+		Receiver:       "Receiver <receiver@example.com>",
+		HTMLBody:       "<p>平台通知 &amp; update</p>",
+		TextBody:       "平台通知 & update",
+		MessageID:      "<campaign.42.delivery.7@example.com>",
+		UnsubscribeURL: "https://example.com/api/email/unsubscribe?token=private-token",
+	}
+}
+
+func TestSendCampaignEmailAcceptedDespiteQuitFailure(t *testing.T) {
+	server := newFakeSMTPServerWithSTARTTLSAdvertisement(t, false, fakeSMTPBehavior{quitReply: 421})
+	defer server.close()
+	message := configureCampaignSMTP(t, server)
+	require.NoError(t, SendCampaignEmail(context.Background(), message))
+	var raw string
+	select {
+	case raw = <-server.messages:
+	case <-time.After(2 * time.Second):
+		t.Fatal("missing accepted message")
+	}
+	parsed, err := mail.ReadMessage(strings.NewReader(raw))
+	require.NoError(t, err)
+	assert.Equal(t, message.MessageID, parsed.Header.Get("Message-ID"))
+	assert.Equal(t, "<"+message.UnsubscribeURL+">", parsed.Header.Get("List-Unsubscribe"))
+	assert.Equal(t, "List-Unsubscribe=One-Click", parsed.Header.Get("List-Unsubscribe-Post"))
+	assert.Empty(t, parsed.Header.Get("Bcc"))
+	assert.Empty(t, parsed.Header.Get("DKIM-Signature"))
+	subject, err := (&mime.WordDecoder{}).DecodeHeader(parsed.Header.Get("Subject"))
+	require.NoError(t, err)
+	assert.Equal(t, message.Subject, subject)
+	contentType, params, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	assert.Equal(t, "multipart/alternative", contentType)
+	parts := multipart.NewReader(parsed.Body, params["boundary"])
+	for _, expected := range []struct{ contentType, text string }{{"text/plain; charset=UTF-8", message.TextBody}, {"text/html; charset=UTF-8", message.HTMLBody}} {
+		part, err := parts.NextPart()
+		require.NoError(t, err)
+		assert.Equal(t, expected.contentType, part.Header.Get("Content-Type"))
+		decoded, err := io.ReadAll(part)
+		require.NoError(t, err)
+		assert.Equal(t, expected.text, string(decoded))
+	}
+	_, err = parts.NextPart()
+	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestSendCampaignEmailRejectsInvalidHeadersBeforeDial(t *testing.T) {
+	withSMTPSettings(t)
+	SMTPServer, SMTPPort = "127.0.0.1", 1
+	SMTPFrom = "sender@example.com"
+	for _, tc := range []struct {
+		name, subject, receiver, messageID, unsubscribe, phase string
+	}{
+		{name: "subject injection", subject: "hi\r\nBcc: victim@example.com", phase: "headers"},
+		{name: "recipient injection", receiver: "one@example.com\nBcc: victim@example.com", phase: "headers"},
+		{name: "multiple recipients", receiver: "one@example.com,two@example.com", phase: "recipient"},
+		{name: "semicolon recipients", receiver: "one@example.com;two@example.com", phase: "recipient"},
+		{name: "id injection", messageID: "<id@example.com>\r\nBcc: victim@example.com", phase: "headers"},
+		{name: "invalid id", messageID: "id@example.com", phase: "message-id"},
+		{name: "url injection", unsubscribe: "https://example.com/\r\nBcc: victim@example.com", phase: "headers"},
+		{name: "http url", unsubscribe: "http://example.com/unsubscribe", phase: "unsubscribe-url"},
+		{name: "credential url", unsubscribe: "https://user:password@example.com/unsubscribe", phase: "unsubscribe-url"},
+		{name: "url fragment", unsubscribe: "https://example.com/unsubscribe#token", phase: "unsubscribe-url"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := CampaignEmailMessage{Subject: "Notice", Receiver: "receiver@example.com", TextBody: "body", MessageID: "<id@example.com>", UnsubscribeURL: "https://example.com/unsubscribe"}
+			if tc.subject != "" {
+				message.Subject = tc.subject
+			}
+			if tc.receiver != "" {
+				message.Receiver = tc.receiver
+			}
+			if tc.messageID != "" {
+				message.MessageID = tc.messageID
+			}
+			if tc.unsubscribe != "" {
+				message.UnsubscribeURL = tc.unsubscribe
+			}
+			var deliveryError *CampaignEmailDeliveryError
+			require.ErrorAs(t, SendCampaignEmail(context.Background(), message), &deliveryError)
+			assert.Equal(t, tc.phase, deliveryError.Phase)
+			assert.False(t, deliveryError.Temporary)
+			assert.False(t, deliveryError.Uncertain)
+		})
+	}
+	SMTPServer = ""
+	var deliveryError *CampaignEmailDeliveryError
+	require.ErrorAs(t, SendCampaignEmail(context.Background(), CampaignEmailMessage{}), &deliveryError)
+	assert.Equal(t, "configuration", deliveryError.Phase)
+}
+
+func TestSendCampaignEmailDeliveryClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		behavior  fakeSMTPBehavior
+		code      int
+		temporary bool
+		uncertain bool
+	}{
+		{name: "recipient transient", behavior: fakeSMTPBehavior{recipientReply: 450}, code: 450, temporary: true},
+		{name: "recipient permanent", behavior: fakeSMTPBehavior{recipientReply: 550}, code: 550},
+		{name: "data transient", behavior: fakeSMTPBehavior{dataReply: 451}, code: 451, temporary: true},
+		{name: "data permanent", behavior: fakeSMTPBehavior{dataReply: 554}, code: 554},
+		{name: "data reply lost", behavior: fakeSMTPBehavior{closeAfterData: true}, uncertain: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newFakeSMTPServerWithSTARTTLSAdvertisement(t, false, tc.behavior)
+			defer server.close()
+			message := configureCampaignSMTP(t, server)
+			var deliveryError *CampaignEmailDeliveryError
+			require.ErrorAs(t, SendCampaignEmail(context.Background(), message), &deliveryError)
+			assert.Equal(t, tc.code, deliveryError.Code)
+			assert.Equal(t, tc.temporary, deliveryError.Temporary)
+			assert.Equal(t, tc.uncertain, deliveryError.Uncertain)
+			assert.NotContains(t, deliveryError.Error(), "sensitive-server-detail")
+			assert.NotContains(t, deliveryError.Error(), "private-token")
+		})
+	}
+}
+
+func TestSendCampaignEmailCancellationClosesSocket(t *testing.T) {
+	for _, dataStarted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("data_started_%t", dataStarted), func(t *testing.T) {
+			behavior := fakeSMTPBehavior{blockGreeting: !dataStarted, blockDataReply: dataStarted, connected: make(chan struct{}), disconnected: make(chan struct{})}
+			server := newFakeSMTPServerWithSTARTTLSAdvertisement(t, false, behavior)
+			defer server.close()
+			message := configureCampaignSMTP(t, server)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			result := make(chan error, 1)
+			go func() { result <- SendCampaignEmail(ctx, message) }()
+			if dataStarted {
+				select {
+				case <-server.messages:
+				case <-time.After(2 * time.Second):
+					t.Fatal("message did not reach DATA")
+				}
+			} else {
+				select {
+				case <-behavior.connected:
+				case <-time.After(2 * time.Second):
+					t.Fatal("client did not connect")
+				}
+			}
+			cancel()
+			select {
+			case err := <-result:
+				var deliveryError *CampaignEmailDeliveryError
+				require.ErrorAs(t, err, &deliveryError)
+				assert.Equal(t, !dataStarted, deliveryError.Temporary)
+				assert.Equal(t, dataStarted, deliveryError.Uncertain)
+			case <-time.After(2 * time.Second):
+				t.Fatal("cancellation did not interrupt SMTP")
+			}
+			select {
+			case <-behavior.disconnected:
+			case <-time.After(2 * time.Second):
+				t.Fatal("cancelled SMTP socket remained open")
+			}
+		})
+	}
+}
+
+func TestSendCampaignEmailDeadlineCoversGreeting(t *testing.T) {
+	server := newFakeSMTPServerWithSTARTTLSAdvertisement(t, false, fakeSMTPBehavior{blockGreeting: true})
+	defer server.close()
+	message := configureCampaignSMTP(t, server)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	var deliveryError *CampaignEmailDeliveryError
+	require.ErrorAs(t, SendCampaignEmail(ctx, message), &deliveryError)
+	assert.True(t, deliveryError.Temporary)
+	assert.False(t, deliveryError.Uncertain)
+}
+
+func TestSendCampaignEmailPreservesTLSConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		implicit   bool
+		skipVerify bool
+		wantPhase  string
+	}{
+		{name: "starttls", skipVerify: true},
+		{name: "implicit TLS", implicit: true, skipVerify: true},
+		{name: "verify untrusted certificate", wantPhase: "starttls"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var server *fakeSMTPServer
+			if tc.implicit {
+				server = newFakeImplicitTLSSMTPServer(t)
+			} else {
+				server = newFakeSMTPServer(t)
+			}
+			defer server.close()
+			message := configureCampaignSMTP(t, server)
+			SMTPSSLEnabled, SMTPStartTLSEnabled = tc.implicit, !tc.implicit
+			SMTPInsecureSkipVerify = tc.skipVerify
+			SMTPAccount, SMTPToken = "sender@example.com", "secret"
+			err := SendCampaignEmail(context.Background(), message)
+			if tc.wantPhase == "" {
+				require.NoError(t, err)
+			} else {
+				var deliveryError *CampaignEmailDeliveryError
+				require.ErrorAs(t, err, &deliveryError)
+				assert.Equal(t, tc.wantPhase, deliveryError.Phase)
+				assert.False(t, deliveryError.Uncertain)
+			}
+		})
+	}
+}
+
+func TestCampaignSMTPAuthUsesConfigurationSnapshot(t *testing.T) {
+	for _, forceLogin := range []bool{false, true} {
+		t.Run(fmt.Sprintf("force_login_%t", forceLogin), func(t *testing.T) {
+			withSMTPSettings(t)
+			SMTPServer = "smtp.original.example.com"
+			SMTPAccount, SMTPToken = "original@example.com", "original-secret"
+			SMTPForceAuthLogin = forceLogin
+			auth := snapshotSMTPAuth()
+			SMTPServer = "smtp.changed.example.com"
+			SMTPAccount, SMTPToken = "changed@example.com", "changed-secret"
+			SMTPForceAuthLogin = !forceLogin
+			mechanism, response, err := auth.Start(&smtp.ServerInfo{Name: "smtp.original.example.com", TLS: true, Auth: []string{"PLAIN", "LOGIN"}})
+			require.NoError(t, err)
+			if forceLogin {
+				assert.Equal(t, "LOGIN", mechanism)
+				response, err = auth.Next([]byte("Username:"), true)
+				require.NoError(t, err)
+				assert.Equal(t, "original@example.com", string(response))
+				response, err = auth.Next([]byte("Password:"), true)
+				require.NoError(t, err)
+				assert.Equal(t, "original-secret", string(response))
+			} else {
+				assert.Equal(t, "PLAIN", mechanism)
+				assert.Equal(t, "\x00original@example.com\x00original-secret", string(response))
+			}
+		})
+	}
 }
