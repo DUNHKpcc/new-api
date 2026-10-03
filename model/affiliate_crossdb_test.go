@@ -151,7 +151,7 @@ func TestAffiliateLifecycleConfiguredDatabases(t *testing.T) {
 					defer registrations.Done()
 					newUser := User{
 						Username: "affiliate-crossdb-registration-" + suffix + "-" + strconv.Itoa(registrationIndex),
-						Password: "unused",
+						Password: "valid-crossdb-password",
 						Status:   common.UserStatusEnabled,
 						Group:    "default",
 					}

@@ -19,33 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createInstance } from 'i18next'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-
-const { mock } = await import(`bun:${'test'}`)
-
-mock.module('@tanstack/react-query', () => ({
-  useQuery: () => ({
-    data: {
-      success: true,
-      data: {
-        models: [
-          {
-            model_name: 'status-model',
-            avg_latency_ms: 900,
-            success_rate: 98,
-            avg_tps: 42,
-            recent_success_rates: [100, 92, 98],
-            request_count: 100,
-          },
-        ],
-      },
-    },
-    isLoading: false,
-  }),
-}))
 
 const { SystemStatusPanel } = await import('../system-status-panel')
 
@@ -58,9 +36,33 @@ await i18n.use(initReactI18next).init({
 })
 
 function renderPanel() {
-  return renderToStaticMarkup(
-    createElement(I18nextProvider, { i18n }, createElement(SystemStatusPanel))
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity } },
+  })
+  client.setQueryData(['perf-metrics-summary', 24], {
+    success: true,
+    data: {
+      models: [
+        {
+          model_name: 'status-model',
+          avg_latency_ms: 900,
+          success_rate: 98,
+          avg_tps: 42,
+          recent_success_rates: [100, 92, 98],
+          request_count: 100,
+        },
+      ],
+    },
+  })
+  const markup = renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(I18nextProvider, { i18n }, createElement(SystemStatusPanel))
+    )
   )
+  client.clear()
+  return markup
 }
 
 describe('system status panel', () => {

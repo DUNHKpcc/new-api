@@ -21,7 +21,10 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { Dialog } from '@/components/dialog'
+
 import { Combobox } from '../combobox'
+import { Sheet, SheetContent, SheetTitle } from '../sheet'
 
 const options = [
   { value: 'openai', label: 'OpenAI' },
@@ -46,6 +49,90 @@ function Fixture() {
 }
 
 describe('searchable single selection', () => {
+  it.each(['dialog', 'sheet'] as const)(
+    'keeps the options closed when a %s autofocuses the input, then opens on click',
+    async (container) => {
+      const field = <Fixture />
+      render(
+        container === 'dialog' ? (
+          <Dialog open title='Choose a provider'>
+            {field}
+          </Dialog>
+        ) : (
+          <Sheet open>
+            <SheetContent>
+              <SheetTitle>Choose a provider</SheetTitle>
+              {field}
+            </SheetContent>
+          </Sheet>
+        )
+      )
+      const user = userEvent.setup()
+      const input = screen.getByRole('combobox', { name: 'Provider' })
+      await waitFor(() => expect(input).toHaveFocus())
+      expect(input).toHaveAttribute('aria-expanded', 'false')
+      expect(input).toHaveValue('OpenAI')
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+      await user.click(input)
+      expect(screen.getByRole('option', { name: 'Google' })).toBeVisible()
+      await user.click(screen.getByRole('option', { name: 'Google' }))
+      await waitFor(() => expect(input).toHaveValue('Google'))
+      expect(input).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('dialog')).toBeVisible()
+    }
+  )
+
+  it('keeps options closed on Tab focus and opens them with the arrow key', async () => {
+    render(<Fixture />)
+    const user = userEvent.setup()
+    const input = screen.getByRole('combobox', { name: 'Provider' })
+    await user.tab()
+    expect(input).toHaveFocus()
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('option', { name: 'Google' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    expect(input).toHaveValue('OpenAI')
+  })
+
+  it('opens and filters when typing into a focused, closed input', async () => {
+    render(<Fixture />)
+    const user = userEvent.setup()
+    const input = screen.getByRole('combobox', { name: 'Provider' })
+    await user.tab()
+    await user.keyboard('g')
+    expect(input).toHaveValue('g')
+    expect(screen.getByRole('option', { name: 'Google' })).toBeVisible()
+    expect(
+      screen.queryByRole('option', { name: 'OpenAI' })
+    ).not.toBeInTheDocument()
+  })
+
+  it.each([true, false])(
+    'honors explicit openOnFocus=%s',
+    async (openOnFocus) => {
+      render(
+        <Combobox
+          options={options}
+          value='openai'
+          aria-label='Provider'
+          openOnFocus={openOnFocus}
+        />
+      )
+      const user = userEvent.setup()
+      const input = screen.getByRole('combobox', { name: 'Provider' })
+      await user.tab()
+      expect(input).toHaveFocus()
+      expect(input).toHaveAttribute('aria-expanded', String(openOnFocus))
+      if (!openOnFocus) {
+        await user.click(screen.getByRole('button', { name: 'Provider' }))
+        expect(screen.getByRole('option', { name: 'Google' })).toBeVisible()
+      }
+    }
+  )
+
   it('searches labels and values without committing text, shows empty results, and restores the selection on Escape', async () => {
     render(<Fixture />)
     const user = userEvent.setup()
@@ -188,5 +275,55 @@ describe('selected option icons', () => {
       />
     )
     expect(screen.queryByAltText('')).not.toBeInTheDocument()
+  })
+})
+
+function CustomModelFixture() {
+  const [value, setValue] = useState<string | null>('openai')
+  return (
+    <Combobox
+      options={options}
+      value={value}
+      onValueChange={setValue}
+      allowCustomValue
+      openOnFocus={false}
+      aria-label='Mapped model'
+      emptyText='No matching model'
+    />
+  )
+}
+
+describe('custom model selection', () => {
+  it('selects a portaled option inside a sheet without dismissing the sheet', async () => {
+    const user = userEvent.setup()
+    render(
+      <Sheet open>
+        <SheetContent>
+          <SheetTitle>Model mapping</SheetTitle>
+          <CustomModelFixture />
+        </SheetContent>
+      </Sheet>
+    )
+    const input = screen.getByRole('combobox', { name: 'Mapped model' })
+    await waitFor(() => expect(input).toHaveFocus())
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    await user.click(input)
+    await user.click(screen.getByRole('option', { name: 'Google' }))
+    expect(input).toHaveValue('Google')
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('dialog')).toBeVisible()
+  })
+
+  it('preserves custom empty text and accepts a typed model with Enter', async () => {
+    const user = userEvent.setup()
+    render(<CustomModelFixture />)
+    const input = screen.getByRole('combobox', { name: 'Mapped model' })
+    await user.click(input)
+    await user.clear(input)
+    await user.type(input, 'private-model')
+    expect(screen.getByText('No matching model')).toBeVisible()
+    await user.keyboard('{Enter}')
+    expect(input).toHaveValue('private-model')
+    expect(input).toHaveAttribute('aria-expanded', 'false')
   })
 })

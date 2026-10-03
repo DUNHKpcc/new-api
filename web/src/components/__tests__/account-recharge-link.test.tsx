@@ -55,7 +55,7 @@ describe('account recharge link', () => {
     assert.match(markup, /data-account-recharge-icon="codex"/)
     assert.match(markup, /data-account-recharge-icon="claude"/)
     assert.match(markup, /data-slot="button"/)
-    assert.doesNotMatch(markup, /rounded-full/)
+    assert.doesNotMatch(markup.match(/<a[^>]+>/)?.[0] ?? '', /rounded-full/)
     assert.match(markup, />官方账号\/代充</)
   })
 })

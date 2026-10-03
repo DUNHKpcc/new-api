@@ -234,11 +234,11 @@ func TestOAuthRegistrationsPersistAffiliateLedger(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			db := setupAffiliateRegistrationControllerTest(t)
 			inviter := createAffiliateRegistrationInviter(t, db, "oauth-inviter", "oauth-old")
-			referred, err := findOrCreateOAuthUser(nil, test.provider, &oauth.OAuthUser{
+			referred, _, err := findOrCreateOAuthUser(nil, test.provider, &oauth.OAuthUser{
 				ProviderUserID: "oauth-affiliate-external",
 				Username:       "oauth-affiliate-referred",
 				DisplayName:    "OAuth Affiliate Referred",
-			}, inviter.AffCode)
+			}, nil, inviter.AffCode)
 			require.NoError(t, err)
 			require.NotNil(t, referred)
 			assertAffiliateRegistrationBalances(t, db, inviter.Id, referred.Id)

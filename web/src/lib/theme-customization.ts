@@ -128,6 +128,16 @@ export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
   contentLayout: 'full',
 }
 
+// Legacy names remain only for the fork's one-time cookie cleanup.
+// Active preferences use origin-scoped THEME_STORAGE_KEYS.
+export const THEME_COOKIE_KEYS = {
+  preset: 'theme_preset',
+  font: 'theme_font',
+  radius: 'theme_radius',
+  scale: 'theme_scale',
+  contentLayout: 'theme_content_layout',
+} as const
+
 export const THEME_PRESET_VALUES = new Set(
   THEME_PRESETS.map((p) => p.value)
 ) as ReadonlySet<ThemePreset>
@@ -158,14 +168,6 @@ export const CONTENT_LAYOUT_VALUES: ReadonlySet<ContentLayout> = new Set([
   'full',
   'centered',
 ])
-
-export const THEME_COOKIE_KEYS = {
-  preset: 'theme_preset',
-  font: 'theme_font',
-  radius: 'theme_radius',
-  scale: 'theme_scale',
-  contentLayout: 'theme_content_layout',
-} as const
 
 /**
  * Preset → default font mapping. Used by the provider to resolve the user's

@@ -32,7 +32,8 @@ func TestLiveRankingsRouteRequiresRootRole(t *testing.T) {
 		model.DB = previousDB
 		common.RedisEnabled = previousRedisEnabled
 	})
-	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Option{}))
+	require.NoError(t, model.EnsureLegacyAccessTokenRetireAt(time.Now().Unix()))
 
 	accessToken := "rankings-common-user-access-token"
 	user := model.User{

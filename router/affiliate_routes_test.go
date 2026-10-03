@@ -33,7 +33,8 @@ func TestAffiliateFinancialRoutesEnforceAuthenticationAndRootRole(t *testing.T) 
 		model.DB = previousDB
 		common.RedisEnabled = previousRedisEnabled
 	})
-	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Option{}))
+	require.NoError(t, model.EnsureLegacyAccessTokenRetireAt(time.Now().Unix()))
 
 	accessToken := "ordinary-user-access-token-000001"
 	user := model.User{

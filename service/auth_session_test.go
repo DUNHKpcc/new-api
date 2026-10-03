@@ -32,7 +32,7 @@ func setupAuthSessionTestDB(t *testing.T) *model.User {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.AuthFlow{}, &model.DesktopGrant{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.AuthFlow{}, &model.DesktopGrant{}, &model.UserAccessToken{}))
 	model.DB = db
 	common.RedisEnabled = false
 	common.UserSessionActiveLimit = common.DefaultUserSessionActiveLimit
@@ -296,6 +296,16 @@ func TestCleanupAuthArtifactsRemovesOnlyExpiredRecords(t *testing.T) {
 		CreatedTime:  now.Unix(),
 	}).Error)
 
+	retention := time.Duration(common.UserSessionRevokedRetentionDays) * 24 * time.Hour
+	for _, token := range []model.UserAccessToken{
+		{Name: "past retention", TokenHash: "past-retention", ExpiresAt: now.Add(-retention - time.Hour).Unix()},
+		{Name: "within retention", TokenHash: "within-retention", ExpiresAt: now.Add(-retention + time.Hour).Unix()},
+		{Name: "never expires", TokenHash: "never-expires"},
+	} {
+		token.UserId = 1
+		require.NoError(t, model.DB.Create(&token).Error)
+	}
+
 	cleanupAuthArtifacts()
 
 	var sessionCount int64
@@ -309,6 +319,9 @@ func TestCleanupAuthArtifactsRemovesOnlyExpiredRecords(t *testing.T) {
 	require.NoError(t, model.DB.Find(&grants).Error)
 	require.Len(t, grants, 1)
 	assert.Equal(t, "recent-pending-grant", grants[0].PublicId)
+	var kept []string
+	require.NoError(t, model.DB.Model(&model.UserAccessToken{}).Order("id").Pluck("token_hash", &kept).Error)
+	assert.Equal(t, []string{"within-retention", "never-expires"}, kept)
 }
 
 func TestCleanupAuthArtifactsContinuesWithRevokedCleanupAfterExpiredBatchFailure(t *testing.T) {

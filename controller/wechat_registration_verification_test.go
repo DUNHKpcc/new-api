@@ -265,10 +265,11 @@ func TestOtherOAuthProvidersCannotCreateAccountsWhenWeChatVerificationIsRequired
 		common.RegisterEnabled = previousRegisterEnabled
 	})
 
-	_, err := findOrCreateOAuthUser(
+	_, _, err := findOrCreateOAuthUser(
 		&gin.Context{},
 		&authFlowTestOAuthProvider{},
 		&oauth.OAuthUser{ProviderUserID: "other-oauth-new-user"},
+		nil,
 		"",
 	)
 	var requiredError *OAuthWeChatVerificationRequiredError

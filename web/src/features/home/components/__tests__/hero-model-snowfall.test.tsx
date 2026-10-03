@@ -17,15 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
 
-import { renderToStaticMarkup } from 'react-dom/server'
+import { renderToReadableStream, renderToStaticMarkup } from 'react-dom/server'
+import { describe, test } from 'vitest'
 
 import { HeroModelSnowfall } from '../hero-model-snowfall'
 
 describe('home hero model snowfall', () => {
-  test('renders a decorative loop populated by the requested model families', () => {
-    const markup = renderToStaticMarkup(<HeroModelSnowfall />)
+  test('renders a decorative loop populated by the requested model families', async () => {
+    const stream = await renderToReadableStream(<HeroModelSnowfall />)
+    await stream.allReady
+    const markup = await new Response(stream).text()
 
     assert.match(markup, /data-hero-model-snowfall="true"/)
     assert.match(markup, /aria-hidden="true"/)

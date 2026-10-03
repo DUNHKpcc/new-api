@@ -17,7 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getCookie, removeCookie, setCookie } from './cookies'
-import { THEME_COOKIE_KEYS } from './theme-customization'
+import {
+  CONTENT_LAYOUT_VALUES,
+  THEME_COOKIE_KEYS,
+  THEME_FONT_VALUES,
+  THEME_PRESET_VALUES,
+  THEME_RADIUS_VALUES,
+  THEME_SCALE_VALUES,
+} from './theme-customization'
+import { THEME_STORAGE_KEYS } from './theme-storage'
 
 export const THEME_MIGRATION_COOKIE_KEY = 'theme_default_migration'
 export const CURRENT_THEME_MIGRATION = 'operator-v1'
@@ -42,4 +50,69 @@ export function migrateThemeCustomizationCookies(): boolean {
     MIGRATION_COOKIE_MAX_AGE
   )
   return true
+}
+
+export const THEME_COOKIE_MIGRATION_STORAGE_KEY =
+  'newapi:theme:v1:cookie-migration'
+
+/**
+ * Preserve choices made after the fork's default-theme migration exactly once
+ * per origin. Unmarked legacy cookies still receive the fork's new defaults;
+ * current origin preferences always take precedence over shared cookies.
+ */
+export function migrateThemeCustomizationPreferences(): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (
+      window.localStorage.getItem(THEME_COOKIE_MIGRATION_STORAGE_KEY) ===
+      CURRENT_THEME_MIGRATION
+    ) {
+      return
+    }
+
+    if (getCookie(THEME_MIGRATION_COOKIE_KEY) === CURRENT_THEME_MIGRATION) {
+      const preferences: readonly [string, string, ReadonlySet<string>][] = [
+        [
+          'vite-ui-theme',
+          THEME_STORAGE_KEYS.mode,
+          new Set(['light', 'dark', 'system']),
+        ],
+        [
+          THEME_COOKIE_KEYS.preset,
+          THEME_STORAGE_KEYS.preset,
+          THEME_PRESET_VALUES,
+        ],
+        [THEME_COOKIE_KEYS.font, THEME_STORAGE_KEYS.font, THEME_FONT_VALUES],
+        [
+          THEME_COOKIE_KEYS.radius,
+          THEME_STORAGE_KEYS.radius,
+          THEME_RADIUS_VALUES,
+        ],
+        [THEME_COOKIE_KEYS.scale, THEME_STORAGE_KEYS.scale, THEME_SCALE_VALUES],
+        [
+          THEME_COOKIE_KEYS.contentLayout,
+          THEME_STORAGE_KEYS.contentLayout,
+          CONTENT_LAYOUT_VALUES,
+        ],
+      ]
+      for (const [cookie, storage, allowed] of preferences) {
+        const value = getCookie(cookie)
+        if (
+          value &&
+          allowed.has(value) &&
+          window.localStorage.getItem(storage) === null
+        ) {
+          window.localStorage.setItem(storage, value)
+        }
+      }
+    }
+    window.localStorage.setItem(
+      THEME_COOKIE_MIGRATION_STORAGE_KEY,
+      CURRENT_THEME_MIGRATION
+    )
+    migrateThemeCustomizationCookies()
+  } catch {
+    // Preserve cookie choices for a later attempt when storage is available.
+  }
 }
