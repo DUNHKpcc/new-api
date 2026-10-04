@@ -507,6 +507,21 @@ func HasPendingEmailDeliveries() bool {
 	return true
 }
 
+// campaignMessageIDDomain derives the Message-ID domain from the configured
+// sender address. Message-IDs on unresolvable placeholder domains (e.g.
+// .local) are treated as spam signals by Gmail, QQ Mail and NetEase, so the
+// campaign queue must reuse the same domain the SMTP envelope already uses.
+func campaignMessageIDDomain() string {
+	from := common.SMTPFrom
+	if from == "" {
+		from = common.SMTPAccount
+	}
+	if at := strings.LastIndex(from, "@"); at >= 0 && at+1 < len(from) {
+		return from[at+1:]
+	}
+	return "notifications.local"
+}
+
 // ClaimEmailDelivery persists the global pacing reservation in the same transaction
 // as the lease. A stale sending lease is ambiguous and must never auto-retry.
 // nowMS, leaseMS, NextAttemptAt and LockedUntil are milliseconds.
@@ -566,7 +581,7 @@ func ClaimEmailDelivery(workerID string, nowMS, leaseMS int64) (*EmailDelivery, 
 			if _, err := rand.Read(random[:]); err != nil {
 				return err
 			}
-			messageID = fmt.Sprintf("<new-api-%d-%s@notifications.local>", delivery.ID, hex.EncodeToString(random[:]))
+			messageID = fmt.Sprintf("<new-api-%d-%s@%s>", delivery.ID, hex.EncodeToString(random[:]), campaignMessageIDDomain())
 		}
 		result = tx.Model(&EmailDelivery{}).Where("id = ? AND status IN ?", delivery.ID, []string{EmailDeliveryPending, EmailDeliveryRetry}).Updates(map[string]any{
 			"status": EmailDeliverySending, "attempts": gorm.Expr("attempts + 1"), "locked_by": workerID, "locked_until": nowMS + leaseMS, "message_id": messageID, "updated_at": nowMS / 1000,

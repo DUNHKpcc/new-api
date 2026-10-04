@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -301,4 +303,31 @@ func TestEmailCampaignDatabaseMatrix(t *testing.T) {
 			assert.Error(t, db.Create(&dedup).Error, "category preference uniqueness survives migration")
 		})
 	}
+}
+
+func TestCampaignMessageIDDomain(t *testing.T) {
+	originalFrom, originalAccount := common.SMTPFrom, common.SMTPAccount
+	t.Cleanup(func() {
+		common.SMTPFrom, common.SMTPAccount = originalFrom, originalAccount
+	})
+
+	common.SMTPFrom, common.SMTPAccount = "noreply@mail.example.com", "acct@example.org"
+	assert.Equal(t, "mail.example.com", campaignMessageIDDomain(), "SMTPFrom takes precedence")
+
+	common.SMTPFrom, common.SMTPAccount = "", "acct@example.org"
+	assert.Equal(t, "example.org", campaignMessageIDDomain(), "falls back to SMTPAccount")
+
+	common.SMTPFrom, common.SMTPAccount = "", "no-at-sign"
+	assert.Equal(t, "notifications.local", campaignMessageIDDomain(), "unparseable sender keeps the legacy placeholder")
+
+	common.SMTPFrom, common.SMTPAccount = "bare@", "acct@example.org"
+	assert.Equal(t, "notifications.local", campaignMessageIDDomain(), "empty domain part keeps the legacy placeholder")
+
+	// The generated Message-ID must stay parseable and match the sender domain,
+	// matching the validation applied by common.SendCampaignEmail.
+	common.SMTPFrom, common.SMTPAccount = "noreply@mail.example.com", "acct@example.org"
+	messageID := fmt.Sprintf("<new-api-%d-%s@%s>", 1, strings.Repeat("a", 32), campaignMessageIDDomain())
+	parsed, err := mail.ParseAddress(strings.Trim(messageID, "<>"))
+	require.NoError(t, err)
+	assert.Equal(t, "new-api-1-"+strings.Repeat("a", 32)+"@mail.example.com", parsed.Address)
 }
