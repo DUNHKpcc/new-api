@@ -308,26 +308,44 @@ func TestEmailCampaignDatabaseMatrix(t *testing.T) {
 func TestCampaignMessageIDDomain(t *testing.T) {
 	originalFrom, originalAccount := common.SMTPFrom, common.SMTPAccount
 	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
 		common.SMTPFrom, common.SMTPAccount = originalFrom, originalAccount
+		common.OptionMapRWMutex.Unlock()
 	})
+	setSMTP := func(from, account string) {
+		common.OptionMapRWMutex.Lock()
+		common.SMTPFrom, common.SMTPAccount = from, account
+		common.OptionMapRWMutex.Unlock()
+	}
 
-	common.SMTPFrom, common.SMTPAccount = "noreply@mail.example.com", "acct@example.org"
+	setSMTP("noreply@mail.example.com", "acct@example.org")
 	assert.Equal(t, "mail.example.com", campaignMessageIDDomain(), "SMTPFrom takes precedence")
 
-	common.SMTPFrom, common.SMTPAccount = "", "acct@example.org"
+	setSMTP("", "acct@example.org")
 	assert.Equal(t, "example.org", campaignMessageIDDomain(), "falls back to SMTPAccount")
 
-	common.SMTPFrom, common.SMTPAccount = "", "no-at-sign"
-	assert.Equal(t, "notifications.local", campaignMessageIDDomain(), "unparseable sender keeps the legacy placeholder")
+	setSMTP("noreply@mail.example.com ", "acct@example.org")
+	assert.Equal(t, "mail.example.com", campaignMessageIDDomain(), "normalizes the configured sender")
 
-	common.SMTPFrom, common.SMTPAccount = "bare@", "acct@example.org"
-	assert.Equal(t, "notifications.local", campaignMessageIDDomain(), "empty domain part keeps the legacy placeholder")
+	setSMTP("Marketing <noreply@mail.example.com>", "acct@example.org")
+	assert.Equal(t, "notifications.local", campaignMessageIDDomain(), "rejects display-name sender values consistently with campaign readiness")
 
-	// The generated Message-ID must stay parseable and match the sender domain,
-	// matching the validation applied by common.SendCampaignEmail.
-	common.SMTPFrom, common.SMTPAccount = "noreply@mail.example.com", "acct@example.org"
+	setSMTP("bare@", "acct@example.org")
+	assert.Equal(t, "notifications.local", campaignMessageIDDomain(), "invalid SMTPFrom is not replaced by SMTPAccount")
+
+	setSMTP("noreply@mail.example.com", "acct@example.org")
 	messageID := fmt.Sprintf("<new-api-%d-%s@%s>", 1, strings.Repeat("a", 32), campaignMessageIDDomain())
 	parsed, err := mail.ParseAddress(strings.Trim(messageID, "<>"))
 	require.NoError(t, err)
 	assert.Equal(t, "new-api-1-"+strings.Repeat("a", 32)+"@mail.example.com", parsed.Address)
+}
+
+func TestShouldRegenerateCampaignMessageID(t *testing.T) {
+	legacyMessageID := "<new-api-1-" + strings.Repeat("a", 32) + "@" + legacyCampaignMessageIDDomain + ">"
+	currentMessageID := "<new-api-1-" + strings.Repeat("a", 32) + "@mail.example.com>"
+
+	assert.True(t, shouldRegenerateCampaignMessageID("", "mail.example.com"))
+	assert.True(t, shouldRegenerateCampaignMessageID(legacyMessageID, "mail.example.com"))
+	assert.False(t, shouldRegenerateCampaignMessageID(legacyMessageID, legacyCampaignMessageIDDomain))
+	assert.False(t, shouldRegenerateCampaignMessageID(currentMessageID, "mail.example.com"))
 }

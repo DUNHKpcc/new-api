@@ -507,19 +507,31 @@ func HasPendingEmailDeliveries() bool {
 	return true
 }
 
-// campaignMessageIDDomain derives the Message-ID domain from the configured
-// sender address. Message-IDs on unresolvable placeholder domains (e.g.
-// .local) are treated as spam signals by Gmail, QQ Mail and NetEase, so the
-// campaign queue must reuse the same domain the SMTP envelope already uses.
+// campaignMessageIDDomain derives the Message-ID domain from the effective
+// sender address. Keep the snapshot under the same lock used by the SMTP
+// sender so queue claims cannot race with SMTP configuration updates.
+const legacyCampaignMessageIDDomain = "notifications.local"
+
 func campaignMessageIDDomain() string {
+	common.OptionMapRWMutex.RLock()
 	from := common.SMTPFrom
 	if from == "" {
 		from = common.SMTPAccount
 	}
-	if at := strings.LastIndex(from, "@"); at >= 0 && at+1 < len(from) {
-		return from[at+1:]
+	common.OptionMapRWMutex.RUnlock()
+
+	address, err := NormalizeCampaignEmail(from)
+	if err != nil {
+		return legacyCampaignMessageIDDomain
 	}
-	return "notifications.local"
+	if at := strings.LastIndexByte(address, '@'); at >= 0 && at+1 < len(address) {
+		return address[at+1:]
+	}
+	return legacyCampaignMessageIDDomain
+}
+
+func shouldRegenerateCampaignMessageID(messageID, domain string) bool {
+	return messageID == "" || (domain != legacyCampaignMessageIDDomain && strings.HasSuffix(messageID, "@"+legacyCampaignMessageIDDomain+">"))
 }
 
 // ClaimEmailDelivery persists the global pacing reservation in the same transaction
@@ -576,12 +588,13 @@ func ClaimEmailDelivery(workerID string, nowMS, leaseMS int64) (*EmailDelivery, 
 			return err
 		}
 		messageID := delivery.MessageID
-		if messageID == "" {
+		domain := campaignMessageIDDomain()
+		if shouldRegenerateCampaignMessageID(messageID, domain) {
 			var random [16]byte
 			if _, err := rand.Read(random[:]); err != nil {
 				return err
 			}
-			messageID = fmt.Sprintf("<new-api-%d-%s@%s>", delivery.ID, hex.EncodeToString(random[:]), campaignMessageIDDomain())
+			messageID = fmt.Sprintf("<new-api-%d-%s@%s>", delivery.ID, hex.EncodeToString(random[:]), domain)
 		}
 		result = tx.Model(&EmailDelivery{}).Where("id = ? AND status IN ?", delivery.ID, []string{EmailDeliveryPending, EmailDeliveryRetry}).Updates(map[string]any{
 			"status": EmailDeliverySending, "attempts": gorm.Expr("attempts + 1"), "locked_by": workerID, "locked_until": nowMS + leaseMS, "message_id": messageID, "updated_at": nowMS / 1000,
