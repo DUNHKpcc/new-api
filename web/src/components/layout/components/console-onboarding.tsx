@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Download,
   HandCoins,
+  ShieldHalf,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -43,7 +44,10 @@ import {
   type ConsoleOnboardingStep,
 } from './console-onboarding-context'
 
-type ConsoleOnboardingDestination = '/affiliate' | '/resource-downloads'
+type ConsoleOnboardingDestination =
+  | '/affiliate'
+  | '/resource-downloads'
+  | '/guardian'
 
 type ConsoleOnboardingCardProps = {
   icon: LucideIcon
@@ -207,5 +211,54 @@ export function ResourceDownloadsOnboarding() {
       triggerLabel={t('Resource downloads onboarding')}
       dismissLabel={t('Dismiss resource downloads guide')}
     />
+  )
+}
+
+export function GuardianOnboardingLink(props: { className?: string }) {
+  const { t } = useTranslation()
+  const { isActive, complete } = useConsoleOnboarding('guardian')
+
+  if (!isActive) {
+    return (
+      <Link to='/guardian' className={props.className}>
+        Guardian
+      </Link>
+    )
+  }
+
+  return (
+    <Popover
+      open={isActive}
+      onOpenChange={(open) => {
+        if (!open) complete()
+      }}
+    >
+      <PopoverTrigger
+        nativeButton={false}
+        render={
+          <Link to='/guardian' className={props.className} onClick={complete} />
+        }
+      >
+        <span>Guardian</span>
+      </PopoverTrigger>
+      <PopoverContent
+        side='bottom'
+        align='center'
+        sideOffset={8}
+        collisionPadding={12}
+        className='border-foreground w-[min(18rem,calc(100vw-1.5rem))] border-2'
+      >
+        <ConsoleOnboardingPanel
+          icon={ShieldHalf}
+          title='Claude-Guardian'
+          description={t('Run Claude Code with clear safety boundaries.')}
+          actionLabel={t('Get started')}
+          destination='/guardian'
+          dismissLabel={t('Close')}
+          onAction={complete}
+          onDismiss={complete}
+        />
+      </PopoverContent>
+    </Popover>
   )
 }

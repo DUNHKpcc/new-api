@@ -21,12 +21,14 @@ import { useTranslation } from 'react-i18next'
 import { SiBilibili, SiTiktok } from 'react-icons/si'
 
 import douyinOfficialQr from '@/assets/contact/douyin-official.jpg'
+import environmentSetupQr from '@/assets/contact/qq-environment-setup.png'
 import qqIcon from '@/assets/contact/qq-icon.png'
 import qqSupportQr from '@/assets/contact/qq-support.png'
 import telegramDevelopersQr from '@/assets/contact/telegram-developers.png'
 import telegramIcon from '@/assets/contact/tg-icon.png'
 import { PublicLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 const BILIBILI_ACCOUNT_URL =
   'https://space.bilibili.com/397853169?spm_id_from=333.1007.0.0'
@@ -35,6 +37,15 @@ const DOUYIN_ACCOUNT_ID = '933648547'
 export function Support() {
   const { t } = useTranslation()
   const channels = [
+    {
+      id: 'environment-setup',
+      platform: 'QQ',
+      title: t('Environment Setup Exclusive Group'),
+      description: t('Purchasing environment setup? Join this group with QQ.'),
+      qrAlt: t('Environment setup group QR code'),
+      icon: qqIcon,
+      qrCode: environmentSetupQr,
+    },
     {
       id: 'qq',
       platform: 'QQ',
@@ -85,14 +96,19 @@ export function Support() {
         </header>
 
         <section
-          className='mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5'
+          className='mt-8 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5'
           aria-label={t('Official support channels')}
         >
           {channels.map((channel) => (
             <figure
               key={channel.id}
               data-support-channel={channel.id}
-              className='border-border bg-card flex min-w-0 flex-col rounded-md border p-5 shadow-xs sm:p-6'
+              className={cn(
+                'bg-card flex min-w-0 flex-col rounded-md border p-5 shadow-xs sm:p-6',
+                channel.id === 'environment-setup'
+                  ? 'border-primary ring-primary/20 ring-2'
+                  : 'border-border'
+              )}
             >
               <div className='flex items-center gap-2.5'>
                 <img
@@ -111,6 +127,12 @@ export function Support() {
                 </div>
               </div>
 
+              {channel.id === 'environment-setup' && (
+                <p className='bg-primary text-primary-foreground mt-4 rounded-sm px-3 py-2 text-sm leading-6 font-semibold'>
+                  {channel.description}
+                </p>
+              )}
+
               <div className='mx-auto mt-5 aspect-square w-full max-w-[280px] overflow-hidden rounded-sm bg-white p-2 ring-1 ring-black/10'>
                 <img
                   src={channel.qrCode}
@@ -120,9 +142,11 @@ export function Support() {
                 />
               </div>
 
-              <figcaption className='text-muted-foreground mx-auto mt-5 max-w-sm text-center text-sm leading-6'>
-                {channel.description}
-              </figcaption>
+              {channel.id !== 'environment-setup' && (
+                <figcaption className='text-muted-foreground mx-auto mt-5 max-w-sm text-center text-sm leading-6'>
+                  {channel.description}
+                </figcaption>
+              )}
             </figure>
           ))}
         </section>

@@ -28,6 +28,7 @@ const allSteps: ConsoleOnboardingStep[] = [
   'affiliate',
   'resource-downloads',
   'lottery',
+  'guardian',
 ]
 
 describe('console onboarding sequence', () => {
@@ -62,4 +63,16 @@ describe('console onboarding sequence', () => {
       null
     )
   })
+})
+
+test('offers Guardian after existing guides and remembers its dismissal', () => {
+  assert.equal(
+    getNextConsoleOnboardingStep(allSteps, [
+      'affiliate',
+      'resource-downloads',
+      'lottery',
+    ]),
+    'guardian'
+  )
+  assert.equal(getNextConsoleOnboardingStep(allSteps, allSteps), null)
 })

@@ -40,7 +40,7 @@ export const appHeaderLayoutClasses = {
   sidebarTrigger: 'size-10 shrink-0 rounded-sm [&_svg]:size-5',
   actions:
     'app-header-actions col-start-3 row-start-1 flex min-w-0 items-center justify-self-end',
-  nav: 'app-header-nav col-start-2 row-start-1 hidden h-full shrink-0 items-center justify-self-center lg:flex',
+  nav: 'app-header-nav col-start-2 row-start-1 flex h-full shrink-0 items-center justify-self-center',
   search: 'app-header-search-icon size-10 shrink-0 rounded-sm',
   utilities:
     'app-header-utilities flex shrink-0 items-center gap-0.5 [&>button]:size-10 [&>button]:rounded-sm [&>button_svg]:size-5 [&_[data-slot=avatar]]:size-7',
@@ -50,9 +50,9 @@ export const appHeaderLayoutClasses = {
     name: 'app-header-brand-name hidden max-w-[12rem] min-w-0 truncate text-xl leading-none font-semibold tracking-tight [font-family:var(--font-serif)] md:block',
   },
   topNav: {
-    compact: 'lg:hidden',
+    compact: 'flex items-center xl:hidden',
     compactTrigger: 'size-10 rounded-sm [&_svg]:size-5',
-    desktop: 'hidden h-full items-center lg:flex',
+    desktop: 'hidden h-full items-center xl:flex',
     // 13px editorial nav label; the active indicator is a full-bleed
     // hairline bar flush with the header's bottom edge (animated via
     // scale-x) instead of the previous small centered dash. In dark mode

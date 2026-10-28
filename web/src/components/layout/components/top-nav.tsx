@@ -28,10 +28,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 
 import type { TopNavLink } from '../types'
 import { appHeaderLayoutClasses } from './app-header-layout'
+import { GuardianOnboardingLink } from './console-onboarding'
 import { isPublicNavLinkActive } from './public-header-layout'
 
 type TopNavProps = React.HTMLAttributes<HTMLElement> & {
@@ -45,6 +47,7 @@ type TopNavProps = React.HTMLAttributes<HTMLElement> & {
 export function TopNav({ className, links, ...props }: TopNavProps) {
   const { t } = useTranslation()
   const pathname = useRouterState().location.pathname
+  const desktop = useMediaQuery('(min-width: 1280px)')
   // 规范化链接，确保所有可选属性都有默认值
   const normalizedLinks = useMemo(
     () =>
@@ -59,95 +62,113 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
   return (
     <>
       {/* Compact menu protects the enlarged console topbar at laptop widths. */}
-      <div className={appHeaderLayoutClasses.topNav.compact}>
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                size='icon'
-                variant='ghost'
-                className={appHeaderLayoutClasses.topNav.compactTrigger}
-                aria-label={t('Toggle navigation menu')}
-              />
-            }
-          >
-            <Menu aria-hidden='true' />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side='bottom' align='start'>
-            {normalizedLinks.map((link) => {
-              const isActive = isPublicNavLinkActive(pathname, link)
-
-              return (
-                <DropdownMenuItem
-                  key={`${link.title}-${link.href}`}
-                  render={
-                    link.external ? (
-                      <a
-                        href={link.href}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                        className={!isActive ? 'text-muted-foreground' : ''}
-                      >
-                        {link.title}
-                      </a>
-                    ) : (
-                      <Link
-                        to={link.href}
-                        className={!isActive ? 'text-muted-foreground' : ''}
-                        disabled={link.disabled}
-                      >
-                        {link.title}
-                      </Link>
-                    )
-                  }
+      {!desktop ? (
+        <div className={appHeaderLayoutClasses.topNav.compact}>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size='icon'
+                  variant='ghost'
+                  className={appHeaderLayoutClasses.topNav.compactTrigger}
+                  aria-label={t('Toggle navigation menu')}
                 />
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              }
+            >
+              <Menu aria-hidden='true' />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side='bottom' align='start'>
+              {normalizedLinks.map((link) => {
+                const isActive = isPublicNavLinkActive(pathname, link)
+
+                return (
+                  <DropdownMenuItem
+                    key={`${link.title}-${link.href}`}
+                    render={
+                      link.external ? (
+                        <a
+                          href={link.href}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className={!isActive ? 'text-muted-foreground' : ''}
+                        >
+                          {link.title}
+                        </a>
+                      ) : (
+                        <Link
+                          to={link.href}
+                          className={!isActive ? 'text-muted-foreground' : ''}
+                          disabled={link.disabled}
+                        >
+                          {link.title}
+                        </Link>
+                      )
+                    }
+                  />
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
 
       {/* 桌面端水平导航 */}
-      <nav
-        className={cn(appHeaderLayoutClasses.topNav.desktop, className)}
-        {...props}
-      >
-        {normalizedLinks.map((link) => {
-          const isActive = isPublicNavLinkActive(pathname, link)
+      {desktop ? (
+        <nav
+          className={cn(appHeaderLayoutClasses.topNav.desktop, className)}
+          {...props}
+        >
+          {normalizedLinks.map((link) => {
+            const isActive = isPublicNavLinkActive(pathname, link)
 
-          return link.external ? (
-            <a
-              key={`${link.title}-${link.href}`}
-              href={link.href}
-              target='_blank'
-              rel='noopener noreferrer'
-              className={cn(
-                appHeaderLayoutClasses.topNav.link,
-                isActive
-                  ? appHeaderLayoutClasses.topNav.linkActive
-                  : 'text-muted-foreground'
-              )}
-            >
-              {link.title}
-            </a>
-          ) : (
-            <Link
-              key={`${link.title}-${link.href}`}
-              to={link.href}
-              disabled={link.disabled}
-              aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                appHeaderLayoutClasses.topNav.link,
-                isActive
-                  ? appHeaderLayoutClasses.topNav.linkActive
-                  : 'text-muted-foreground'
-              )}
-            >
-              {link.title}
-            </Link>
-          )
-        })}
-      </nav>
+            if (link.href === '/guardian' && !link.external && !link.disabled) {
+              return (
+                <GuardianOnboardingLink
+                  key={link.href}
+                  className={cn(
+                    appHeaderLayoutClasses.topNav.link,
+                    isActive
+                      ? appHeaderLayoutClasses.topNav.linkActive
+                      : 'text-muted-foreground'
+                  )}
+                />
+              )
+            }
+
+            return link.external ? (
+              <a
+                key={`${link.title}-${link.href}`}
+                href={link.href}
+                target='_blank'
+                rel='noopener noreferrer'
+                className={cn(
+                  appHeaderLayoutClasses.topNav.link,
+                  isActive
+                    ? appHeaderLayoutClasses.topNav.linkActive
+                    : 'text-muted-foreground'
+                )}
+              >
+                {link.title}
+              </a>
+            ) : (
+              <Link
+                key={`${link.title}-${link.href}`}
+                to={link.href}
+                disabled={link.disabled}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  appHeaderLayoutClasses.topNav.link,
+                  isActive
+                    ? appHeaderLayoutClasses.topNav.linkActive
+                    : 'text-muted-foreground'
+                )}
+              >
+                {link.title}
+              </Link>
+            )
+          })}
+        </nav>
+      ) : null}
     </>
   )
 }

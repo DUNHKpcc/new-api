@@ -23,6 +23,7 @@ import {
   Outlet,
   redirect,
   useNavigate,
+  useRouterState,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useEffect } from 'react'
@@ -49,6 +50,11 @@ import { useAuthStore } from '@/stores/auth-store'
 function RootComponent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const isGuardianPage = useRouterState({
+    select: (state) =>
+      state.location.pathname === '/guardian' ||
+      state.location.pathname.startsWith('/guardian/'),
+  })
 
   // Load system configuration (logo, system name, etc.) from backend
   useSystemConfig({ autoLoad: true })
@@ -98,8 +104,12 @@ function RootComponent() {
     <ThemeCustomizationProvider>
       <NavigationProgress />
       <Outlet />
-      <GlobalNotificationCenter />
-      <PccAgentTicket />
+      {!isGuardianPage && (
+        <>
+          <GlobalNotificationCenter />
+          <PccAgentTicket />
+        </>
+      )}
       <Toaster closeButton duration={5000} position='top-center' richColors />
       {import.meta.env.MODE === 'development' && (
         <>

@@ -37,39 +37,13 @@ import '@/styles/guardian.css'
 import { GUARDIAN_LINKS } from '../constants'
 import { PixelField } from './pixel-field'
 
-export function GuardianMark(props: { className?: string }) {
-  return (
-    <svg
-      viewBox='0 0 24 24'
-      fill='none'
-      aria-hidden='true'
-      className={props.className}
-    >
-      <path
-        d='M4.5 20.5V11a7.5 7.5 0 0 1 15 0v9.5'
-        stroke='currentColor'
-        strokeWidth='1.8'
-        strokeLinecap='round'
-      />
-      <path
-        d='M8.5 20.5V11.5a3.5 3.5 0 0 1 7 0v9'
-        stroke='currentColor'
-        strokeWidth='1.8'
-        strokeLinecap='round'
-        opacity='0.45'
-      />
-      <circle cx='12' cy='11.5' r='1.6' fill='var(--g-accent)' />
-    </svg>
-  )
-}
-
 function useSectionLinks() {
   const { t } = useTranslation()
   return [
     { to: '/guardian', hash: 'principles', label: t('Principles') },
     { to: '/guardian', hash: 'how-it-works', label: t('How it works') },
     { to: '/guardian', hash: 'routes', label: t('Routes') },
-    { to: '/guardian/services', label: t('Services') },
+    { to: '/guardian/services', label: t('Pricing') },
     { to: '/guardian', hash: 'faq', label: t('FAQ') },
   ] as const
 }
@@ -86,7 +60,6 @@ function GuardianHeader() {
           to='/guardian'
           className='flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-[var(--g-accent)]/40'
         >
-          <GuardianMark className='size-6' />
           <span className='g-heading text-[1.0625rem]'>Claude-Guardian</span>
         </Link>
 
@@ -179,7 +152,6 @@ function GuardianFooter() {
     { href: GUARDIAN_LINKS.repo, label: 'GitHub' },
     { href: GUARDIAN_LINKS.wiki, label: t('Wiki') },
     { href: GUARDIAN_LINKS.issues, label: t('Report an issue') },
-    { href: GUARDIAN_LINKS.telegram, label: 'Telegram' },
   ]
 
   return (
@@ -187,7 +159,6 @@ function GuardianFooter() {
       <div className='mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr] 2xl:max-w-7xl'>
         <div className='space-y-4'>
           <div className='flex items-center gap-2.5'>
-            <GuardianMark className='size-6' />
             <span className='g-heading text-lg'>Claude-Guardian</span>
           </div>
           <p className='max-w-md text-sm leading-6 text-[var(--g-ink-soft)]'>
@@ -211,6 +182,15 @@ function GuardianFooter() {
                 </a>
               </li>
             ))}
+            <li>
+              <Link
+                to='/support'
+                className='g-link inline-flex items-center gap-1'
+              >
+                {t('Customer Service')}
+                <ArrowUpRight className='size-3.5' aria-hidden='true' />
+              </Link>
+            </li>
           </ul>
           <Link
             to='/'

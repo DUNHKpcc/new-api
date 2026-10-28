@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ExternalLink } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { ExternalLink, ShieldCheck, ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -69,5 +70,30 @@ export function AccountRechargeLink(props: AccountRechargeLinkProps) {
         aria-hidden='true'
       />
     </Button>
+  )
+}
+
+export function AccountServiceLinks() {
+  const { t } = useTranslation()
+  return (
+    <div className='flex min-w-0 flex-wrap items-center gap-2'>
+      <AccountRechargeLink />
+      <Button
+        variant='outline'
+        size='sm'
+        className='max-w-full'
+        render={<Link to='/guardian' />}
+      >
+        <ShieldCheck aria-hidden='true' />
+        <span className='whitespace-nowrap'>
+          {t('Claude ban-prevention environment setup')}
+        </span>
+        <ArrowRight
+          data-icon='inline-end'
+          className='text-muted-foreground'
+          aria-hidden='true'
+        />
+      </Button>
+    </div>
   )
 }

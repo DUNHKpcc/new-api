@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, Clock } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { getGuardianCatalog } from '../api'
-import { GUARDIAN_LINKS, GUARDIAN_QUERY_KEYS } from '../constants'
+import { GUARDIAN_QUERY_KEYS } from '../constants'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny } from '../lib/price'
 import type { GuardianService } from '../types'
@@ -117,15 +117,9 @@ function ServicesFallback(props: { title: string; body: string }) {
       <Button
         variant='outline'
         className='mt-6 gap-1.5'
-        render={
-          <a
-            href={GUARDIAN_LINKS.telegram}
-            target='_blank'
-            rel='noopener noreferrer'
-          />
-        }
+        render={<Link to='/support' />}
       >
-        {t('Contact us on Telegram')}
+        {t('Customer Service')}
         <ArrowUpRight aria-hidden='true' />
       </Button>
     </div>
@@ -194,7 +188,7 @@ export function ServicesSection(props: {
         <ServicesFallback
           title={t('Services are being prepared')}
           body={t(
-            'Online booking is not open yet. Reach out on Telegram and we will help you plan your setup.'
+            'Online booking is not open yet. Contact customer service and we will help you plan your setup.'
           )}
         />
       )}
@@ -207,7 +201,7 @@ export function ServicesSection(props: {
               className='mb-6 text-center text-sm text-[var(--g-ink-soft)]'
             >
               {t(
-                'Online ordering is paused right now. Contact us on Telegram to book.'
+                'Online ordering is paused right now. Contact customer service to book.'
               )}
             </p>
           )}

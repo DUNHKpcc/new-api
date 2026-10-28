@@ -23,7 +23,6 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { VersionUpdatePopover } from '@/components/version-update-popover'
-import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
@@ -123,9 +122,6 @@ export function AppHeader({
           variant='ghost'
           className={appHeaderLayoutClasses.sidebarTrigger}
         />
-        <span className='hidden sm:inline-flex'>
-          <SystemUpdateAction presentation='version' />
-        </span>
         {leftContent ? (
           <div className='ms-2 flex items-center'>{leftContent}</div>
         ) : null}

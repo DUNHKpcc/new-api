@@ -19,6 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { Download, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import {
@@ -96,7 +101,25 @@ export function HeroProductShowcase() {
                     className='text-primary size-3.5 shrink-0'
                   />
                 )}
-                <span>{labels[item.id]}</span>
+                {item.id === 'wechat-mini-program' ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span
+                          tabIndex={0}
+                          className='pointer-events-auto cursor-help'
+                        />
+                      }
+                    >
+                      {labels[item.id]}
+                    </TooltipTrigger>
+                    <TooltipContent className='max-w-56 px-2 py-1 text-[11px]'>
+                      {t('Search WeChat for the PCC API Mini Program')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <span>{labels[item.id]}</span>
+                )}
                 {storeIconSrc ? (
                   <>
                     <span aria-hidden='true' className='text-border'>

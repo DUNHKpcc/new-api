@@ -108,8 +108,8 @@ describe('authenticated app header layout', () => {
     assert.ok(actions.includes('col-start-3'))
     assert.ok(actions.includes('row-start-1'))
     assert.ok(actions.includes('justify-self-end'))
-    assert.ok(nav.includes('hidden'))
-    assert.ok(nav.includes('lg:flex'))
+    assert.ok(nav.includes('flex'))
+    assert.ok(!nav.includes('hidden'))
   })
 
   test('renders the active nav item with a full-bleed bottom bar', () => {
@@ -121,9 +121,9 @@ describe('authenticated app header layout', () => {
       tokens(appHeaderLayoutClasses.topNav.desktop).includes('items-center'),
       'centers the compact Comic Ops navigation inside the shared header height'
     )
-    assert.ok(tokens(appHeaderLayoutClasses.topNav.desktop).includes('lg:flex'))
+    assert.ok(tokens(appHeaderLayoutClasses.topNav.desktop).includes('xl:flex'))
     assert.ok(
-      tokens(appHeaderLayoutClasses.topNav.compact).includes('lg:hidden')
+      tokens(appHeaderLayoutClasses.topNav.compact).includes('xl:hidden')
     )
     assert.ok(link.includes('h-full'))
     assert.ok(link.includes('px-3.5'))

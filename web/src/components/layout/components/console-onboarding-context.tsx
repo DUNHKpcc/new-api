@@ -32,11 +32,13 @@ export type ConsoleOnboardingStep =
   | 'affiliate'
   | 'resource-downloads'
   | 'lottery'
+  | 'guardian'
 
 const CONSOLE_ONBOARDING_STEPS: ConsoleOnboardingStep[] = [
   'affiliate',
   'resource-downloads',
   'lottery',
+  'guardian',
 ]
 const CONSOLE_ONBOARDING_STORAGE_PREFIX = 'console_onboarding_seen'
 
@@ -103,7 +105,8 @@ export function ConsoleOnboardingProvider(props: { children: ReactNode }) {
   const [seenState, setSeenState] = useState<{
     key: string | null
     steps: ConsoleOnboardingStep[]
-  }>({ key: null, steps: [] })
+    activeStep: ConsoleOnboardingStep | null
+  }>({ key: null, steps: [], activeStep: null })
   const [registeredSteps, setRegisteredSteps] = useState<
     ConsoleOnboardingStep[]
   >([])
@@ -111,12 +114,16 @@ export function ConsoleOnboardingProvider(props: { children: ReactNode }) {
   useEffect(() => {
     if (userId === undefined || !storageKey) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSeenState({ key: null, steps: [] })
+      setSeenState({ key: null, steps: [], activeStep: null })
       return
     }
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSeenState({ key: storageKey, steps: readSeenSteps(userId) })
+    setSeenState({
+      key: storageKey,
+      steps: readSeenSteps(userId),
+      activeStep: null,
+    })
   }, [storageKey, userId])
 
   const registerStep = useCallback((step: ConsoleOnboardingStep) => {
@@ -133,23 +140,34 @@ export function ConsoleOnboardingProvider(props: { children: ReactNode }) {
     (step: ConsoleOnboardingStep) => {
       if (!storageKey) return
 
-      setSeenState((current) => {
-        const previous = current.key === storageKey ? current.steps : []
-        if (previous.includes(step)) return current
-
-        const steps = [...previous, step]
-        persistSeenSteps(storageKey, steps)
-        return { key: storageKey, steps }
-      })
+      setSeenState((current) =>
+        current.key === storageKey && current.activeStep === step
+          ? { ...current, activeStep: null }
+          : current
+      )
     },
     [storageKey]
   )
 
-  const activeStep = useMemo(() => {
-    if (!storageKey || seenState.key !== storageKey) return null
+  useEffect(() => {
+    if (!storageKey || seenState.key !== storageKey) return
+    if (
+      seenState.activeStep &&
+      registeredSteps.includes(seenState.activeStep)
+    ) {
+      return
+    }
 
-    return getNextConsoleOnboardingStep(registeredSteps, seenState.steps)
+    const next = getNextConsoleOnboardingStep(registeredSteps, seenState.steps)
+    if (!next && !seenState.activeStep) return
+    const steps = next ? [...seenState.steps, next] : seenState.steps
+    // Record display immediately; refresh or responsive remount must not replay it.
+    if (next) persistSeenSteps(storageKey, steps)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeenState({ key: storageKey, steps, activeStep: next })
   }, [registeredSteps, seenState, storageKey])
+
+  const activeStep = seenState.key === storageKey ? seenState.activeStep : null
 
   const value = useMemo<ConsoleOnboardingContextValue>(
     () => ({

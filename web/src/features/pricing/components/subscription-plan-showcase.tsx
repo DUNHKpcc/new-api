@@ -20,7 +20,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight, Crown, Gauge, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { AccountRechargeLink } from '@/components/account-recharge-link'
+import { AccountServiceLinks } from '@/components/account-recharge-link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -73,7 +73,7 @@ function SubscriptionPlanCard(props: {
       size='sm'
       data-card-hover='false'
       data-subscription-plan-id={plan.id}
-      className='bg-card/95 relative h-full min-w-0 gap-0 overflow-hidden rounded-xl border border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md'
+      className='bg-card/95 border-border/70 relative h-full min-w-0 gap-0 overflow-hidden rounded-xl border py-0 shadow-sm transition-shadow hover:shadow-md'
     >
       <div className='bg-warning h-1 w-full' aria-hidden='true' />
       <CardContent className='flex min-h-[12.5rem] flex-1 flex-col p-5'>
@@ -174,7 +174,7 @@ export function SubscriptionPlanShowcase(props: SubscriptionPlanShowcaseProps) {
                 />
                 {t('Subscription Plans')}
               </h2>
-              <AccountRechargeLink />
+              <AccountServiceLinks />
             </div>
             <p className='text-muted-foreground mt-1 text-xs sm:text-sm'>
               {t('Subscribe to a plan for model access')}

@@ -20,7 +20,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { AccountRechargeLink } from '@/components/account-recharge-link'
+import { AccountServiceLinks } from '@/components/account-recharge-link'
 import { SectionPageLayout } from '@/components/layout'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { useIsAdmin } from '@/hooks/use-admin'
@@ -288,7 +288,7 @@ export function Wallet(props: WalletProps) {
       <SectionPageLayout>
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
-          <AccountRechargeLink />
+          <AccountServiceLinks />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>

@@ -69,6 +69,12 @@ describe('customer support page', () => {
     const markup = await renderSupportPage()
 
     assert.match(markup, /Customer Support/)
+    assert.match(markup, /Environment Setup Exclusive Group/)
+    assert.match(markup, /Environment setup group QR code/)
+    assert.match(
+      markup,
+      /Purchasing environment setup\? Join this group with QQ\./
+    )
     assert.match(markup, /data-support-channel="qq"/)
     assert.match(markup, /QQ support group QR code/)
     assert.match(markup, /data-support-channel="telegram"/)
