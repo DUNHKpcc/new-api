@@ -26,9 +26,9 @@ import {
 } from '../theme-customization'
 
 describe('default UI customization', () => {
-  test('uses the Comic Ops preset with automatic sans typography and system radius', () => {
+  test('uses the Anthropic preset with automatic serif typography and system radius', () => {
     assert.deepEqual(DEFAULT_THEME_CUSTOMIZATION, {
-      preset: 'operator',
+      preset: 'anthropic',
       font: 'default',
       radius: 'default',
       scale: 'default',
@@ -39,12 +39,12 @@ describe('default UI customization', () => {
         DEFAULT_THEME_CUSTOMIZATION.font,
         DEFAULT_THEME_CUSTOMIZATION.preset
       ),
-      'sans'
+      'serif'
     )
-    assert.ok(THEME_PRESETS.some((preset) => preset.value === 'operator'))
+    assert.ok(THEME_PRESETS.some((preset) => preset.value === 'anthropic'))
     assert.equal(
-      THEME_PRESETS.find((preset) => preset.value === 'operator')?.name,
-      'Comic Ops'
+      THEME_PRESETS.find((preset) => preset.value === 'anthropic')?.name,
+      'Anthropic'
     )
   })
 })
