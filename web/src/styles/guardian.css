@@ -1,0 +1,363 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+/*
+ * Claude-Guardian page surface.
+ *
+ * Everything is scoped to `.guardian-root` so the page keeps its own editorial
+ * look without touching the site theme. The project tokens (`--background`,
+ * `--primary`, ...) are remapped inside the scope, so shared components such as
+ * Button, Input, Dialog and Accordion follow this palette without forks.
+ * Portaled content (dialogs, popovers) opts in by adding `guardian-root` to its
+ * content className.
+ */
+.guardian-root {
+  --g-paper: #f5f2eb;
+  --g-paper-raised: #fbfaf6;
+  --g-paper-sunk: #ebe6db;
+  --g-ink: #1d1c19;
+  --g-ink-soft: #57534b;
+  --g-rule: #dcd5c7;
+  --g-rule-strong: #c4bba9;
+  --g-accent: #b4552f;
+  --g-accent-wash: #f2e1d6;
+  --g-tier-a: #4c6a44;
+  --g-tier-b: #87600f;
+  --g-tier-c: #a3392b;
+  --g-code-bg: #1d1c19;
+  --g-code-ink: #ede9df;
+  --g-code-soft: #a9a396;
+  --g-font-serif: 'Lora Variable', 'Noto Sans SC Variable', Georgia, serif;
+  --g-font-sans:
+    'Public Sans Variable', 'Noto Sans SC Variable', system-ui, sans-serif;
+  --g-font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --background: var(--g-paper);
+  --foreground: var(--g-ink);
+  --card: var(--g-paper-raised);
+  --card-foreground: var(--g-ink);
+  --popover: var(--g-paper-raised);
+  --popover-foreground: var(--g-ink);
+  --primary: var(--g-ink);
+  --primary-foreground: var(--g-paper);
+  --secondary: var(--g-paper-sunk);
+  --secondary-foreground: var(--g-ink);
+  --muted: var(--g-paper-sunk);
+  --muted-foreground: var(--g-ink-soft);
+  --accent: var(--g-paper-sunk);
+  --accent-foreground: var(--g-ink);
+  --border: var(--g-rule);
+  --input: var(--g-rule-strong);
+  --ring: var(--g-accent);
+  --radius: 0.5rem;
+  --font-body: var(--g-font-sans);
+
+  background-color: var(--g-paper);
+  color: var(--g-ink);
+  font-family: var(--g-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.dark .guardian-root {
+  --g-paper: #191814;
+  --g-paper-raised: #22201b;
+  --g-paper-sunk: #2a2822;
+  --g-ink: #ede9df;
+  --g-ink-soft: #a9a396;
+  --g-rule: #353229;
+  --g-rule-strong: #4a463b;
+  --g-accent: #e2875f;
+  --g-accent-wash: #3a2a21;
+  --g-tier-a: #93b387;
+  --g-tier-b: #d9aa47;
+  --g-tier-c: #e9806c;
+  --g-code-bg: #0f0e0c;
+}
+
+/*
+ * Site theme presets (operator, anthropic, ...) restyle headings, buttons and
+ * form controls globally with selectors up to (0,3,0). `html` plus the doubled
+ * scope class lifts these resets to (0,3,1) so the page keeps one look no
+ * matter which preset an administrator picks.
+ */
+html .guardian-root.guardian-root :is(h1, h2, h3, h4) {
+  font-family: var(--g-font-serif);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+html .guardian-root.guardian-root [data-slot='button'] {
+  border-width: 1px;
+  border-radius: var(--radius-lg);
+  font-family: var(--g-font-sans);
+  font-weight: 500;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+html .guardian-root.guardian-root [data-slot='button'].bg-primary {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+html .guardian-root.guardian-root [data-slot='button'].bg-primary:hover {
+  background: color-mix(in srgb, var(--primary) 86%, var(--g-paper));
+}
+
+html
+  .guardian-root.guardian-root
+  [data-slot='button']:is(.border-border, .bg-secondary) {
+  border-color: var(--g-rule-strong);
+  background: transparent;
+  color: var(--g-ink);
+}
+
+html
+  .guardian-root.guardian-root
+  [data-slot='button']:is(.border-border, .bg-secondary):hover {
+  background: var(--g-paper-sunk);
+}
+
+html
+  .guardian-root.guardian-root
+  [data-slot='button']:active:not([aria-haspopup]) {
+  transform: translateY(1px);
+}
+
+html
+  .guardian-root.guardian-root
+  :is(
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select'],
+    [data-slot='checkbox']
+  ) {
+  border-width: 1px;
+  border-color: var(--input);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  box-shadow: none;
+}
+
+html
+  .guardian-root.guardian-root
+  :is(
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ):focus-visible {
+  border-color: var(--g-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--g-accent) 22%, transparent);
+}
+
+html .guardian-root.guardian-root [data-slot='badge'] {
+  height: 1.25rem;
+  border-width: 1px;
+  border-radius: 999px;
+  font-family: var(--g-font-sans);
+  font-weight: 500;
+}
+
+html .guardian-root.guardian-root :is(code, kbd, pre, samp) {
+  font-family: var(--g-font-mono);
+}
+
+.guardian-root ::selection {
+  background-color: var(--g-accent-wash);
+  color: var(--g-ink);
+}
+
+html .guardian-root.guardian-root .g-display {
+  font-family: var(--g-font-serif);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+html .guardian-root.guardian-root .g-heading {
+  font-family: var(--g-font-serif);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.guardian-root .g-eyebrow {
+  font-family: var(--g-font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--g-accent);
+}
+
+.guardian-root .g-lede {
+  color: var(--g-ink-soft);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+.guardian-root .g-mono {
+  font-family: var(--g-font-mono);
+}
+
+.guardian-root .g-rule {
+  border-color: var(--g-rule);
+}
+
+.guardian-root .g-link {
+  color: var(--g-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--g-rule-strong);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 150ms ease;
+}
+
+.guardian-root .g-link:hover {
+  text-decoration-color: var(--g-accent);
+}
+
+.guardian-root .g-numeral {
+  font-family: var(--g-font-serif);
+  font-feature-settings: 'lnum' 1;
+  color: var(--g-accent);
+}
+
+/* A dotted connector between the "how it works" nodes. */
+.guardian-root .g-connector {
+  background-image: linear-gradient(
+    to right,
+    var(--g-rule-strong) 50%,
+    transparent 0
+  );
+  background-size: 8px 1px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+
+.guardian-root .g-connector-v {
+  background-image: linear-gradient(
+    to bottom,
+    var(--g-rule-strong) 50%,
+    transparent 0
+  );
+  background-size: 1px 8px;
+  background-repeat: repeat-y;
+  background-position: center;
+}
+
+/* Conversation lines in the hero reveal one after another. */
+@keyframes guardian-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.guardian-root .g-reveal {
+  opacity: 0;
+  animation: guardian-line-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guardian-root .g-reveal {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/*
+ * Tinted bands fade in and out instead of starting on a hard edge, so one
+ * section flows into the next over the continuous pixel field.
+ */
+.guardian-root .g-band {
+  --g-band: color-mix(in srgb, var(--g-paper-sunk) 72%, transparent);
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--g-band) 9rem,
+    var(--g-band) calc(100% - 9rem),
+    transparent 100%
+  );
+}
+
+/* A thin line with a segment sliding down it, under the first screen. */
+.guardian-root .g-scroll-line {
+  position: relative;
+  display: block;
+  width: 1px;
+  height: 2.5rem;
+  overflow: hidden;
+  background-color: var(--g-rule);
+}
+
+.guardian-root .g-scroll-line::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 40%;
+  background-color: var(--g-accent);
+  animation: guardian-scroll-hint 1.8s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+
+@keyframes guardian-scroll-hint {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(250%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.guardian-root) {
+    scroll-behavior: smooth;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guardian-root .g-scroll-line::after {
+    animation: none;
+    transform: translateY(75%);
+  }
+}
+
+/* Pill-shaped buttons; lifted to the same specificity as the preset reset. */
+html .guardian-root.guardian-root [data-slot='button'].g-pill {
+  border-radius: 999px;
+}
+
+/* Second headline line fades from ink to the muted tone. */
+.guardian-root .g-fade-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--g-ink) 0%,
+    color-mix(in srgb, var(--g-ink-soft) 80%, var(--g-paper)) 85%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

@@ -36,6 +36,7 @@ import {
   ServerCog,
   Settings,
   ShieldCheck,
+  ShieldHalf,
   Ticket,
   User,
   Users,
@@ -176,6 +177,12 @@ export function useSidebarData(): SidebarData {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('Guardian services'),
+            url: '/guardian-admin',
+            icon: ShieldHalf,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Revenue management'),

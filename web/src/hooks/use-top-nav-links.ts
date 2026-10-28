@@ -86,6 +86,11 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
+  // Claude-Guardian page (fork addition; hide with HeaderNavModules.guardian = false)
+  if (modules?.guardian !== false) {
+    links.push({ title: 'Guardian', href: '/guardian' })
+  }
+
   // Docs (supports external links)
   if (modules?.docs !== false) {
     if (docsLink) {

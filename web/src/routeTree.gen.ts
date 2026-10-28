@@ -30,6 +30,9 @@ import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as GuardianIndexRouteImport } from './routes/guardian/index'
+import { Route as GuardianOrdersRouteImport } from './routes/guardian/orders'
+import { Route as GuardianServicesRouteImport } from './routes/guardian/services'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
@@ -43,6 +46,7 @@ import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedDesktopAuthorizeRouteImport } from './routes/_authenticated/desktop/authorize'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
+import { Route as AuthenticatedGuardianAdminIndexRouteImport } from './routes/_authenticated/guardian-admin/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
@@ -184,6 +188,21 @@ const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   path: '/email/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GuardianIndexRoute = GuardianIndexRouteImport.update({
+  id: '/guardian/',
+  path: '/guardian/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuardianOrdersRoute = GuardianOrdersRouteImport.update({
+  id: '/guardian/orders',
+  path: '/guardian/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuardianServicesRoute = GuardianServicesRouteImport.update({
+  id: '/guardian/services',
+  path: '/guardian/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
   id: '/oauth/$provider',
   path: '/oauth/$provider',
@@ -253,6 +272,12 @@ const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
     path: '/errors/$error',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedGuardianAdminIndexRoute =
+  AuthenticatedGuardianAdminIndexRouteImport.update({
+    id: '/guardian-admin/',
+    path: '/guardian-admin/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
@@ -488,8 +513,11 @@ export interface FileRoutesByFullPath {
   '/503': typeof errors503Route
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/guardian/orders': typeof GuardianOrdersRoute
+  '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/guardian/': typeof GuardianIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -506,6 +534,7 @@ export interface FileRoutesByFullPath {
   '/affiliate/': typeof AuthenticatedAffiliateIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/guardian-admin/': typeof AuthenticatedGuardianAdminIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -557,8 +586,11 @@ export interface FileRoutesByTo {
   '/503': typeof errors503Route
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/guardian/orders': typeof GuardianOrdersRoute
+  '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
+  '/guardian': typeof GuardianIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/setup': typeof SetupIndexRoute
@@ -575,6 +607,7 @@ export interface FileRoutesByTo {
   '/affiliate': typeof AuthenticatedAffiliateIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/guardian-admin': typeof AuthenticatedGuardianAdminIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
@@ -630,8 +663,11 @@ export interface FileRoutesById {
   '/(errors)/503': typeof errors503Route
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/guardian/orders': typeof GuardianOrdersRoute
+  '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/guardian/': typeof GuardianIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -648,6 +684,7 @@ export interface FileRoutesById {
   '/_authenticated/affiliate/': typeof AuthenticatedAffiliateIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/guardian-admin/': typeof AuthenticatedGuardianAdminIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -702,8 +739,11 @@ export interface FileRouteTypes {
     | '/503'
     | '/chat2link'
     | '/email/unsubscribe'
+    | '/guardian/orders'
+    | '/guardian/services'
     | '/oauth/$provider'
     | '/about/'
+    | '/guardian/'
     | '/pricing/'
     | '/rankings/'
     | '/setup/'
@@ -720,6 +760,7 @@ export interface FileRouteTypes {
     | '/affiliate/'
     | '/channels/'
     | '/dashboard/'
+    | '/guardian-admin/'
     | '/keys/'
     | '/models/'
     | '/playground/'
@@ -771,8 +812,11 @@ export interface FileRouteTypes {
     | '/503'
     | '/chat2link'
     | '/email/unsubscribe'
+    | '/guardian/orders'
+    | '/guardian/services'
     | '/oauth/$provider'
     | '/about'
+    | '/guardian'
     | '/pricing'
     | '/rankings'
     | '/setup'
@@ -789,6 +833,7 @@ export interface FileRouteTypes {
     | '/affiliate'
     | '/channels'
     | '/dashboard'
+    | '/guardian-admin'
     | '/keys'
     | '/models'
     | '/playground'
@@ -843,8 +888,11 @@ export interface FileRouteTypes {
     | '/(errors)/503'
     | '/_authenticated/chat2link'
     | '/email/unsubscribe'
+    | '/guardian/orders'
+    | '/guardian/services'
     | '/oauth/$provider'
     | '/about/'
+    | '/guardian/'
     | '/pricing/'
     | '/rankings/'
     | '/setup/'
@@ -861,6 +909,7 @@ export interface FileRouteTypes {
     | '/_authenticated/affiliate/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/guardian-admin/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
@@ -907,8 +956,11 @@ export interface RootRouteChildren {
   errors500Route: typeof errors500Route
   errors503Route: typeof errors503Route
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
+  GuardianOrdersRoute: typeof GuardianOrdersRoute
+  GuardianServicesRoute: typeof GuardianServicesRoute
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  GuardianIndexRoute: typeof GuardianIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
@@ -1065,6 +1117,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmailUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/guardian/': {
+      id: '/guardian/'
+      path: '/guardian'
+      fullPath: '/guardian/'
+      preLoaderRoute: typeof GuardianIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guardian/orders': {
+      id: '/guardian/orders'
+      path: '/guardian/orders'
+      fullPath: '/guardian/orders'
+      preLoaderRoute: typeof GuardianOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guardian/services': {
+      id: '/guardian/services'
+      path: '/guardian/services'
+      fullPath: '/guardian/services'
+      preLoaderRoute: typeof GuardianServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/$provider': {
       id: '/oauth/$provider'
       path: '/oauth/$provider'
@@ -1154,6 +1227,13 @@ declare module '@tanstack/react-router' {
       path: '/errors/$error'
       fullPath: '/errors/$error'
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/guardian-admin/': {
+      id: '/_authenticated/guardian-admin/'
+      path: '/guardian-admin'
+      fullPath: '/guardian-admin/'
+      preLoaderRoute: typeof AuthenticatedGuardianAdminIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/keys/': {
@@ -1514,6 +1594,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAffiliateIndexRoute: typeof AuthenticatedAffiliateIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedGuardianAdminIndexRoute: typeof AuthenticatedGuardianAdminIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
@@ -1545,6 +1626,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAffiliateIndexRoute: AuthenticatedAffiliateIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedGuardianAdminIndexRoute: AuthenticatedGuardianAdminIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
@@ -1578,8 +1660,11 @@ const rootRouteChildren: RootRouteChildren = {
   errors500Route: errors500Route,
   errors503Route: errors503Route,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
+  GuardianOrdersRoute: GuardianOrdersRoute,
+  GuardianServicesRoute: GuardianServicesRoute,
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
+  GuardianIndexRoute: GuardianIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
