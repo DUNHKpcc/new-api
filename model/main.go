@@ -390,6 +390,8 @@ func migrateDB() error {
 		&TwoFA{},
 		&TwoFABackupCode{},
 		&Checkin{},
+		&SiteDocument{},
+		&SiteDocumentImage{},
 		&GuardianService{},
 		&GuardianServiceOrder{},
 		&SubscriptionOrder{},
@@ -425,6 +427,9 @@ func migrateDB() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := SeedSiteDocuments(DB); err != nil {
+		return err
 	}
 	if err := backfillAffiliateReferrals(); err != nil {
 		return err
@@ -488,6 +493,8 @@ func migrateDBFast() error {
 		{&TwoFA{}, "TwoFA"},
 		{&TwoFABackupCode{}, "TwoFABackupCode"},
 		{&Checkin{}, "Checkin"},
+		{&SiteDocument{}, "SiteDocument"},
+		{&SiteDocumentImage{}, "SiteDocumentImage"},
 		{&GuardianService{}, "GuardianService"},
 		{&GuardianServiceOrder{}, "GuardianServiceOrder"},
 		{&SubscriptionOrder{}, "SubscriptionOrder"},
@@ -537,6 +544,9 @@ func migrateDBFast() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := SeedSiteDocuments(DB); err != nil {
+		return err
 	}
 	if err := backfillAffiliateReferrals(); err != nil {
 		return err

@@ -244,6 +244,16 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// Subscription billing (plans, purchase, admin management)
+		apiRouter.GET("/site-doc-images/:hash", controller.GetSiteDocumentImage)
+		apiRouter.GET("/site-docs", controller.ListSiteDocuments)
+		apiRouter.GET("/site-docs/:slug", controller.GetSiteDocument)
+		siteDocsAdmin := apiRouter.Group("/site-docs-admin", middleware.AdminAuth(), middleware.DisableCache())
+		siteDocsAdmin.Use(func(c *gin.Context) { c.Set("site_docs_admin", true); c.Next() })
+		siteDocsAdmin.GET("", controller.ListSiteDocuments)
+		siteDocsAdmin.GET("/:slug", controller.GetSiteDocument)
+		siteDocsAdmin.POST("", controller.SaveSiteDocument)
+		siteDocsAdmin.POST("/images", controller.UploadSiteDocumentImage)
+		siteDocsAdmin.PUT("/:slug", controller.SaveSiteDocument)
 		apiRouter.GET("/guardian/services", controller.GetGuardianCatalog)
 		apiRouter.POST("/guardian/epay/notify", anonymousRequestBodyLimit, controller.GuardianEpayNotify)
 		apiRouter.GET("/guardian/epay/notify", controller.GuardianEpayNotify)

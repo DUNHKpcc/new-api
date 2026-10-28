@@ -41,6 +41,11 @@ func accessTokenScopeRule(scope string) accessTokenRouteRule {
 // Casbin-guarded routes declare themselves through
 // DeclareAccessTokenPermissionRoute when they are registered.
 var accessTokenRouteRules = map[string]accessTokenRouteRule{
+	"GET /api/site-docs-admin":         accessTokenSessionRule,
+	"GET /api/site-docs-admin/:slug":   accessTokenSessionRule,
+	"POST /api/site-docs-admin/images": accessTokenSessionRule,
+	"POST /api/site-docs-admin":        accessTokenSessionRule,
+	"PUT /api/site-docs-admin/:slug":   accessTokenSessionRule,
 	// Guardian purchases and administration use dashboard sessions.
 	"POST /api/guardian/orders":            accessTokenSessionRule,
 	"GET /api/guardian/orders/self":        accessTokenSessionRule,

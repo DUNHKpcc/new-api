@@ -67,6 +67,9 @@ var accessTokenExemptRoutes = []string{
 	"GET /api/desktop/usage",
 	"GET /api/desktop/usage/summary",
 
+	"GET /api/site-doc-images/:hash",
+	"GET /api/site-docs",
+	"GET /api/site-docs/:slug",
 	"GET /api/guardian/services",
 	"GET /api/guardian/epay/notify",
 	"POST /api/guardian/epay/notify",
