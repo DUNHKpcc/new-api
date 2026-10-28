@@ -264,3 +264,37 @@ VITE_REACT_APP_SERVER_URL=http://localhost:3001 bun run dev
 - 状态机：第 3 节以外的状态变更全部被拒绝；只改 `admin_note` 允许。
 - 用户订单列表不返回别人的订单，也不包含 `provider_payload`。
 - 迁移：分别在 SQLite、MySQL、PostgreSQL 上验证新库建表、旧库升级、重复启动两次，并记录数据库版本和执行的命令。
+
+## 8. 后端实现与验证（2026-10-28）
+
+用户已明确授权按本交接文档实现后端、支付接入和数据库改动。本次新增 `model/guardian.go`、`controller/guardian.go`，接入普通及快速启动迁移与 API 路由；前端接口约定保持不变。Guardian 用户及管理接口使用现有登录会话鉴权，个人访问令牌不开放这些接口。易支付回调使用现有验签与订单锁，金额精确比较，支付签名不进入访问日志。
+
+验证环境为独立本地数据库：SQLite **3.50.4**、MySQL **8.4.11**、PostgreSQL **16.15**。`router/guardian_test.go` 集中覆盖目录编辑、上下架、参数校验、支付合规、支付方式过滤、三笔待付款上限（含并发）、签名与金额校验、重复回调、状态机、两小时过期、用户订单隔离、管理员权限、PAT 拒绝、过期与撤销会话、日志签名脱敏、重复迁移及订单号唯一约束。
+
+已执行并通过：
+
+```bash
+go build ./...
+go test ./model ./controller ./router
+TEST_MYSQL_DSN='root@tcp(127.0.0.1:13316)/guardian_test?parseTime=true&charset=utf8mb4' \
+TEST_POSTGRES_DSN='host=127.0.0.1 port=15436 user=postgres dbname=guardian_test sslmode=disable' \
+go test ./router -run 'TestGuardianLifecycle|TestAccessTokenRouteRulesCoverEveryDashboardRoute' -count=1 -v
+```
+
+三种数据库均验证了新建 Guardian 表与重复迁移。旧库升级额外使用 GitHub 最新发布版 **v1.0.0-rc.46** 的归档源码创建完整数据库并写入代表性用户（余额 123456），随后运行当前版本 `model.InitDB()` 三次，检查用户数据、用户名唯一约束及 Guardian 新表；再在升级后的数据库上运行同一套接口测试，全部通过。迁移验证使用临时程序 `/tmp/guardian-migrate.go`（调用 `model.InitDB()`，关闭连接后再次初始化，最后检查数据与唯一约束）：
+
+```bash
+# 在 v1.0.0-rc.46 归档目录运行以下三条，各自创建旧库。
+GUARDIAN_SEED=1 TEST_GUARDIAN_SQLITE=/tmp/guardian-upgrade.db go run /tmp/guardian-migrate.go
+GUARDIAN_SEED=1 SQL_DSN='root@tcp(127.0.0.1:13316)/guardian_upgrade?parseTime=true&charset=utf8mb4' go run /tmp/guardian-migrate.go
+GUARDIAN_SEED=1 SQL_DSN='postgres://postgres@127.0.0.1:15436/guardian_upgrade?sslmode=disable' go run /tmp/guardian-migrate.go
+# 在当前源码目录移除 GUARDIAN_SEED=1，分别重跑上述三条验证升级及重复启动。
+TEST_GUARDIAN_SQLITE=/tmp/guardian-upgrade.db \
+TEST_MYSQL_DSN='root@tcp(127.0.0.1:13316)/guardian_upgrade?parseTime=true&charset=utf8mb4' \
+TEST_POSTGRES_DSN='host=127.0.0.1 port=15436 user=postgres dbname=guardian_upgrade sslmode=disable' \
+go test ./router -run TestGuardianLifecycle -count=1 -v
+```
+
+访问控制依据 [OWASP ASVS 5.0.0 V8](https://github.com/OWASP/ASVS/blob/v5.0.0/5.0/en/0x17-V8-Authorization.md) 的 8.2.1、8.2.2、8.2.3、8.3.1，以及 [Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)、[Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)：在服务端执行角色、对象和字段访问限制，并复用已有会话有效性校验；相关拒绝与隔离用例已覆盖。这不代表对整个项目的 ASVS 合规认证。
+
+验证使用本地支付签名夹具，未向真实商户发起交易，未验证公网回调可达性，未部署生产，也未执行浏览器视觉测试。独立日志数据库没有结构变化。

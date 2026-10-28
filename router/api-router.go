@@ -244,6 +244,21 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// Subscription billing (plans, purchase, admin management)
+		apiRouter.GET("/guardian/services", controller.GetGuardianCatalog)
+		apiRouter.POST("/guardian/epay/notify", anonymousRequestBodyLimit, controller.GuardianEpayNotify)
+		apiRouter.GET("/guardian/epay/notify", controller.GuardianEpayNotify)
+		apiRouter.GET("/guardian/epay/return", controller.GuardianEpayReturn)
+		apiRouter.POST("/guardian/epay/return", anonymousRequestBodyLimit, controller.GuardianEpayReturn)
+		guardian := apiRouter.Group("/guardian", middleware.UserAuth())
+		guardian.POST("/orders", middleware.CriticalRateLimit(), controller.CreateGuardianOrder)
+		guardian.GET("/orders/self", controller.ListGuardianOrders)
+		guardianAdmin := apiRouter.Group("/guardian/admin", middleware.AdminAuth())
+		guardianAdmin.GET("/services", controller.AdminListGuardianServices)
+		guardianAdmin.POST("/services", controller.AdminSaveGuardianService)
+		guardianAdmin.PUT("/services/:id", controller.AdminSaveGuardianService)
+		guardianAdmin.GET("/orders", controller.ListGuardianOrders)
+		guardianAdmin.PUT("/orders/:id", controller.AdminUpdateGuardianOrder)
+
 		subscriptionRoute := apiRouter.Group("/subscription")
 		subscriptionRoute.Use(middleware.UserAuth())
 		{

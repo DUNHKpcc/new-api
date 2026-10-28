@@ -67,6 +67,12 @@ var accessTokenExemptRoutes = []string{
 	"GET /api/desktop/usage",
 	"GET /api/desktop/usage/summary",
 
+	"GET /api/guardian/services",
+	"GET /api/guardian/epay/notify",
+	"POST /api/guardian/epay/notify",
+	"GET /api/guardian/epay/return",
+	"POST /api/guardian/epay/return",
+
 	// Payment callbacks.
 	"POST /api/stripe/webhook",
 	"POST /api/creem/webhook",

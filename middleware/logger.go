@@ -31,7 +31,7 @@ func SetUpLogger(server *gin.Engine) {
 		path := param.Path
 		// OAuth callbacks and unsubscribe links carry credentials in the query.
 		// Redact the log value only; the handler still needs the original query.
-		if strings.HasPrefix(path, "/api/oauth/") || strings.HasPrefix(path, "/oauth/") || strings.HasPrefix(path, "/api/email/unsubscribe") || strings.HasPrefix(path, "/email/unsubscribe") {
+		if strings.HasPrefix(path, "/api/oauth/") || strings.HasPrefix(path, "/oauth/") || strings.HasPrefix(path, "/api/email/unsubscribe") || strings.HasPrefix(path, "/email/unsubscribe") || strings.HasPrefix(path, "/api/guardian/epay/") {
 			path, _, _ = strings.Cut(path, "?")
 		}
 		return fmt.Sprintf("[GIN] %s | %s | %s | %3d | %13v | %15s | %7s %s\n",

@@ -41,6 +41,15 @@ func accessTokenScopeRule(scope string) accessTokenRouteRule {
 // Casbin-guarded routes declare themselves through
 // DeclareAccessTokenPermissionRoute when they are registered.
 var accessTokenRouteRules = map[string]accessTokenRouteRule{
+	// Guardian purchases and administration use dashboard sessions.
+	"POST /api/guardian/orders":            accessTokenSessionRule,
+	"GET /api/guardian/orders/self":        accessTokenSessionRule,
+	"GET /api/guardian/admin/services":     accessTokenSessionRule,
+	"POST /api/guardian/admin/services":    accessTokenSessionRule,
+	"PUT /api/guardian/admin/services/:id": accessTokenSessionRule,
+	"GET /api/guardian/admin/orders":       accessTokenSessionRule,
+	"PUT /api/guardian/admin/orders/:id":   accessTokenSessionRule,
+
 	// router/api-router.go: top level
 	"GET /api/models":                     accessTokenScopeRule("profile:read"),
 	"GET /api/status/test":                accessTokenScopeRule("log:read"),
