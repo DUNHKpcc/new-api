@@ -51,7 +51,9 @@ async function renderHeroActions(isAuthenticated: boolean) {
   })
 
   const queryClient = new QueryClient()
-  queryClient.setQueryData(['status'], {})
+  queryClient.setQueryData(['status'], {
+    docs_link: 'https://example.test/old-docs',
+  })
   useAuthStore.getState().auth.reset('idle')
 
   const TestPage = () =>
@@ -120,6 +122,8 @@ describe('home hero actions', () => {
   test('renders a resource download link in the public hero', async () => {
     const markup = await renderHeroActions(false)
 
+    assert.match(markup, /href="\/docs"/)
+    assert.doesNotMatch(markup, /example.test\/old-docs/)
     assert.match(markup, /href="\/resource-downloads"/)
     assert.match(markup, />Resource Downloads<\/span>/)
   })

@@ -179,6 +179,12 @@ export function useSidebarData(): SidebarData {
             icon: CreditCard,
           },
           {
+            title: t('Document management'),
+            url: '/documents',
+            icon: FileText,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
             title: t('Guardian services'),
             url: '/guardian-admin',
             icon: ShieldHalf,

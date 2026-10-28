@@ -111,7 +111,8 @@ async function loadImage(file: File): Promise<LoadedImage> {
 export async function compressImageToWebP(
   file: File,
   aspectRatio?: number,
-  crop?: CropArea
+  crop?: CropArea,
+  profile: 'thumbnail' | 'document' = 'thumbnail'
 ): Promise<string> {
   if (
     aspectRatio !== undefined &&
@@ -163,7 +164,16 @@ export async function compressImageToWebP(
       }
     }
 
-    for (const attempt of compressionAttempts) {
+    const attempts =
+      profile === 'document'
+        ? [
+            { maxWidth: 2560, maxHeight: 2560, quality: 0.85 },
+            { maxWidth: 1920, maxHeight: 1920, quality: 0.8 },
+            { maxWidth: 1600, maxHeight: 1600, quality: 0.72 },
+          ]
+        : compressionAttempts
+    const maxBytes = profile === 'document' ? 1024 * 1024 : MAX_THUMBNAIL_BYTES
+    for (const attempt of attempts) {
       const scale = Math.min(
         1,
         attempt.maxWidth / cropWidth,
@@ -190,7 +200,7 @@ export async function compressImageToWebP(
       )
 
       const blob = await canvasToWebP(canvas, attempt.quality)
-      if (blob.size <= MAX_THUMBNAIL_BYTES) {
+      if (blob.size <= maxBytes) {
         return blobToDataUrl(blob)
       }
     }

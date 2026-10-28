@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils'
 interface MarkdownProps {
   /** Resolve relative document links against their source, never the dashboard URL. */
   baseUrl?: string
+  lazyImages?: boolean
   breaks?: boolean
   children: string
   className?: string
@@ -720,7 +721,11 @@ const markdownParser = new Marked({
 
 markdownParser.use(...markdownExtensions)
 
-function addExternalLinkAttributes(html: string, baseUrl?: string): string {
+function addExternalLinkAttributes(
+  html: string,
+  baseUrl?: string,
+  lazyImages?: boolean
+): string {
   if (typeof window === 'undefined') {
     return html
   }
@@ -745,13 +750,21 @@ function addExternalLinkAttributes(html: string, baseUrl?: string): string {
     link.setAttribute('rel', 'noopener noreferrer')
   })
 
+  if (lazyImages) {
+    template.content.querySelectorAll('img').forEach((img) => {
+      img.setAttribute('loading', 'lazy')
+      img.setAttribute('decoding', 'async')
+    })
+  }
+
   return template.innerHTML
 }
 
 function renderMarkdown(
   markdown: string,
   breaks = false,
-  baseUrl?: string
+  baseUrl?: string,
+  lazyImages?: boolean
 ): string {
   const parsedHtml = markdownParser.parse(markdown, {
     ...markdownOptions,
@@ -759,13 +772,19 @@ function renderMarkdown(
   })
   const html = DOMPurify.sanitize(parsedHtml, sanitizeOptions)
 
-  return addExternalLinkAttributes(html, baseUrl)
+  return addExternalLinkAttributes(html, baseUrl, lazyImages)
 }
 
 export function Markdown(props: MarkdownProps) {
   const html = useMemo(
-    () => renderMarkdown(props.children, props.breaks, props.baseUrl),
-    [props.breaks, props.children, props.baseUrl]
+    () =>
+      renderMarkdown(
+        props.children,
+        props.breaks,
+        props.baseUrl,
+        props.lazyImages
+      ),
+    [props.breaks, props.children, props.baseUrl, props.lazyImages]
   )
 
   return (

@@ -24,6 +24,7 @@ type RichContentMode = 'markdown' | 'html'
 interface RichContentProps {
   content: string
   mode?: RichContentMode
+  lazyImages?: boolean
   breaks?: boolean
   className?: string
   htmlVariant?: HtmlContentVariant
@@ -41,7 +42,11 @@ export function RichContent(props: RichContentProps) {
   }
 
   return (
-    <Markdown breaks={props.breaks} className={props.className}>
+    <Markdown
+      lazyImages={props.lazyImages}
+      breaks={props.breaks}
+      className={props.className}
+    >
       {props.content}
     </Markdown>
   )

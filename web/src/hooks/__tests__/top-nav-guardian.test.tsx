@@ -41,6 +41,7 @@ function linksFor(headerNavModules: object | null) {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
   client.setQueryData(['status'], {
+    docs_link: 'https://example.test/old-docs',
     HeaderNavModules: headerNavModules ? JSON.stringify(headerNavModules) : '',
   })
   function Wrapper(props: { children: ReactNode }) {
@@ -65,4 +66,10 @@ describe('Guardian top navigation entry', () => {
   it('hides the Guardian page link when HeaderNavModules sets guardian to false', () => {
     expect(linksFor({ guardian: false })).not.toContain('/guardian')
   })
+})
+
+it('keeps documentation inside the site and respects the visibility setting', () => {
+  expect(linksFor(null)).toContain('/docs')
+  expect(linksFor(null)).not.toContain('https://example.test/old-docs')
+  expect(linksFor({ docs: false })).not.toContain('/docs')
 })

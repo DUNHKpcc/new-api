@@ -79,6 +79,30 @@ describe('compressImageToWebP', () => {
     vi.unstubAllGlobals()
   })
 
+  test('preserves uncropped document screenshots at a readable resolution', async () => {
+    const file = new File(['image'], 'guide.png', { type: 'image/png' })
+    const result = await compressImageToWebP(
+      file,
+      undefined,
+      undefined,
+      'document'
+    )
+    expect(result).toBe('data:image/webp;base64,test')
+    expect(canvas.width).toBe(1000)
+    expect(canvas.height).toBe(800)
+    expect(drawImage).toHaveBeenCalledWith(
+      expect.anything(),
+      0,
+      0,
+      1000,
+      800,
+      0,
+      0,
+      1000,
+      800
+    )
+  })
+
   test('uses an HTML image fallback and preserves an arbitrary crop ratio', async () => {
     const file = new File(['image'], 'source.png', { type: 'image/png' })
     const crop = {

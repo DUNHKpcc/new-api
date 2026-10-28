@@ -29,6 +29,7 @@ import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as GuardianIndexRouteImport } from './routes/guardian/index'
 import { Route as GuardianOrdersRouteImport } from './routes/guardian/orders'
@@ -45,6 +46,7 @@ import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedDesktopAuthorizeRouteImport } from './routes/_authenticated/desktop/authorize'
+import { Route as AuthenticatedDocumentsIndexRouteImport } from './routes/_authenticated/documents/index'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedGuardianAdminIndexRouteImport } from './routes/_authenticated/guardian-admin/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
@@ -183,6 +185,11 @@ const AboutIndexRoute = AboutIndexRouteImport.update({
   path: '/about/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/docs/',
+  path: '/docs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
@@ -266,6 +273,12 @@ const AuthenticatedDesktopAuthorizeRoute =
   AuthenticatedDesktopAuthorizeRouteImport.update({
     id: '/desktop/authorize',
     path: '/desktop/authorize',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDocumentsIndexRoute =
+  AuthenticatedDocumentsIndexRouteImport.update({
+    id: '/documents/',
+    path: '/documents/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedErrorsErrorRoute =
@@ -517,6 +530,7 @@ export interface FileRoutesByFullPath {
   '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/guardian/': typeof GuardianIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
@@ -534,6 +548,7 @@ export interface FileRoutesByFullPath {
   '/affiliate/': typeof AuthenticatedAffiliateIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/documents/': typeof AuthenticatedDocumentsIndexRoute
   '/guardian-admin/': typeof AuthenticatedGuardianAdminIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
@@ -590,6 +605,7 @@ export interface FileRoutesByTo {
   '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
+  '/docs': typeof DocsIndexRoute
   '/guardian': typeof GuardianIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
@@ -607,6 +623,7 @@ export interface FileRoutesByTo {
   '/affiliate': typeof AuthenticatedAffiliateIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/documents': typeof AuthenticatedDocumentsIndexRoute
   '/guardian-admin': typeof AuthenticatedGuardianAdminIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
@@ -667,6 +684,7 @@ export interface FileRoutesById {
   '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/guardian/': typeof GuardianIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
@@ -684,6 +702,7 @@ export interface FileRoutesById {
   '/_authenticated/affiliate/': typeof AuthenticatedAffiliateIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/documents/': typeof AuthenticatedDocumentsIndexRoute
   '/_authenticated/guardian-admin/': typeof AuthenticatedGuardianAdminIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
@@ -743,6 +762,7 @@ export interface FileRouteTypes {
     | '/guardian/services'
     | '/oauth/$provider'
     | '/about/'
+    | '/docs/'
     | '/guardian/'
     | '/pricing/'
     | '/rankings/'
@@ -760,6 +780,7 @@ export interface FileRouteTypes {
     | '/affiliate/'
     | '/channels/'
     | '/dashboard/'
+    | '/documents/'
     | '/guardian-admin/'
     | '/keys/'
     | '/models/'
@@ -816,6 +837,7 @@ export interface FileRouteTypes {
     | '/guardian/services'
     | '/oauth/$provider'
     | '/about'
+    | '/docs'
     | '/guardian'
     | '/pricing'
     | '/rankings'
@@ -833,6 +855,7 @@ export interface FileRouteTypes {
     | '/affiliate'
     | '/channels'
     | '/dashboard'
+    | '/documents'
     | '/guardian-admin'
     | '/keys'
     | '/models'
@@ -892,6 +915,7 @@ export interface FileRouteTypes {
     | '/guardian/services'
     | '/oauth/$provider'
     | '/about/'
+    | '/docs/'
     | '/guardian/'
     | '/pricing/'
     | '/rankings/'
@@ -909,6 +933,7 @@ export interface FileRouteTypes {
     | '/_authenticated/affiliate/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/documents/'
     | '/_authenticated/guardian-admin/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
@@ -960,6 +985,7 @@ export interface RootRouteChildren {
   GuardianServicesRoute: typeof GuardianServicesRoute
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  DocsIndexRoute: typeof DocsIndexRoute
   GuardianIndexRoute: typeof GuardianIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
@@ -1110,6 +1136,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs/': {
+      id: '/docs/'
+      path: '/docs'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/email/unsubscribe': {
       id: '/email/unsubscribe'
       path: '/email/unsubscribe'
@@ -1220,6 +1253,13 @@ declare module '@tanstack/react-router' {
       path: '/desktop/authorize'
       fullPath: '/desktop/authorize'
       preLoaderRoute: typeof AuthenticatedDesktopAuthorizeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/documents/': {
+      id: '/_authenticated/documents/'
+      path: '/documents'
+      fullPath: '/documents/'
+      preLoaderRoute: typeof AuthenticatedDocumentsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/errors/$error': {
@@ -1594,6 +1634,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAffiliateIndexRoute: typeof AuthenticatedAffiliateIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedDocumentsIndexRoute: typeof AuthenticatedDocumentsIndexRoute
   AuthenticatedGuardianAdminIndexRoute: typeof AuthenticatedGuardianAdminIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
@@ -1626,6 +1667,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAffiliateIndexRoute: AuthenticatedAffiliateIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedDocumentsIndexRoute: AuthenticatedDocumentsIndexRoute,
   AuthenticatedGuardianAdminIndexRoute: AuthenticatedGuardianAdminIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
@@ -1664,6 +1706,7 @@ const rootRouteChildren: RootRouteChildren = {
   GuardianServicesRoute: GuardianServicesRoute,
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
+  DocsIndexRoute: DocsIndexRoute,
   GuardianIndexRoute: GuardianIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
