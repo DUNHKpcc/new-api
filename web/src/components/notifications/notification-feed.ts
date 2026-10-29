@@ -30,6 +30,7 @@ export type AnnouncementNotification = {
 }
 
 export type NotificationFeedItem = {
+  lottery?: LotteryItem['lottery']
   key: string
   source: 'discount' | 'notice' | 'announcement' | 'global' | 'lottery'
   kind?: string
@@ -234,6 +235,7 @@ export function buildNotificationFeed(
     items.push({
       key,
       source: 'lottery',
+      lottery: lottery.lottery,
       title: lottery.title.trim(),
       content: lottery.content.trim(),
       winnerInfo: lottery.winnerInfo.trim() || undefined,
@@ -268,6 +270,7 @@ export function buildNotificationFeed(
 
   return items.map((item) => ({
     key: item.key,
+    lottery: item.lottery,
     source: item.source,
     kind: item.kind,
     type: item.type,

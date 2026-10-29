@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LotteryCard } from '@/features/lottery/lottery-card'
 import { useNotifications } from '@/hooks/use-notifications'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
@@ -203,7 +204,8 @@ function NotificationList(props: NotificationListProps) {
                   <RichContent breaks content={item.extra} />
                 </div>
               ) : null}
-              {item.winnerInfo ? (
+              {item.lottery ? <LotteryCard lottery={item.lottery} /> : null}
+              {item.winnerInfo && !item.lottery ? (
                 <div className='bg-muted/40 mt-3 rounded-md border p-2.5 text-xs'>
                   <p className='mb-1 font-medium'>{t('Winning information')}</p>
                   <RichContent breaks content={item.winnerInfo} />
