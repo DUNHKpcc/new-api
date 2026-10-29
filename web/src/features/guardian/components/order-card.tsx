@@ -28,6 +28,7 @@ import { GUARDIAN_ORDER_TRACK } from '../constants'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny } from '../lib/price'
 import type { GuardianOrder } from '../types'
+import { OrderActions } from './order-actions'
 import { OrderStatusBadge } from './order-status-badge'
 
 export function OrderProgress(props: { order: GuardianOrder }) {
@@ -113,11 +114,14 @@ export function OrderCard(props: { order: GuardianOrder }) {
       </div>
 
       {order.status === 'pending_payment' && (
-        <p className='mt-4 text-sm text-[var(--g-ink-soft)]'>
-          {t(
-            'If you have already paid, the status updates within a few minutes. Unpaid orders expire after two hours.'
-          )}
-        </p>
+        <>
+          <p className='mt-4 text-sm text-[var(--g-ink-soft)]'>
+            {t(
+              'If you have already paid, the status updates within a few minutes. Unpaid orders expire after two hours.'
+            )}
+          </p>
+          <OrderActions order={order} />
+        </>
       )}
 
       <dl className='g-rule mt-6 grid gap-x-8 gap-y-3 border-t pt-5 text-sm sm:grid-cols-2'>

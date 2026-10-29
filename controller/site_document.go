@@ -65,19 +65,16 @@ func SaveSiteDocument(c *gin.Context) {
 	}
 	doc.UpdatedAt = time.Now().Unix()
 	if c.Request.Method == http.MethodPost {
-		var count int64
-		if err := model.DB.Model(&model.SiteDocument{}).Where("slug = ?", doc.Slug).Count(&count).Error; err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if count > 0 {
-			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Document slug already exists"})
-			return
-		}
 		doc.Version = 1
 		doc.CreatedAt = doc.UpdatedAt
-		if err := model.DB.Create(&doc).Error; err != nil {
-			common.ApiError(c, err)
+		// The slug primary key rejects duplicates atomically.
+		result := model.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&doc)
+		if result.Error != nil {
+			common.ApiError(c, result.Error)
+			return
+		}
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Document slug already exists"})
 			return
 		}
 	} else {
@@ -90,6 +87,15 @@ func SaveSiteDocument(c *gin.Context) {
 			return
 		}
 		if result.RowsAffected == 0 {
+			var count int64
+			if err := model.DB.Model(&model.SiteDocument{}).Where("slug = ?", doc.Slug).Count(&count).Error; err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			if count == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Document not found"})
+				return
+			}
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Document changed. Reload before saving."})
 			return
 		}

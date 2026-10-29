@@ -61,7 +61,7 @@
 | 状态 | 怎么进入 |
 | --- | --- |
 | `pending_payment` | 下单成功 |
-| `paid` | 易支付回调或跳回校验成功，**而且实付金额和订单一致** |
+| `paid` | 易支付回调或跳回校验成功，**而且实付金额和订单一致**。已 `expired` 或 `cancelled` 的订单收到迟到付款也会改成 `paid`，并记一条系统日志 |
 | `scheduled` | 管理员排期 |
 | `in_progress` | 管理员开始交付 |
 | `delivered` | 管理员确认交付完成，同时写入 `delivered_at` |
@@ -171,6 +171,10 @@
 { "success": true, "data": { "items": [GuardianOrder], "total": 3 } }
 ```
 
+`POST /api/guardian/orders/:id/pay`，挂 `middleware.CriticalRateLimit()`：本人的 `pending_payment` 订单重新拉起易支付收银台，订单号、金额和支付方式不变，响应同下单接口。订单已过期、已付款或不属于本人时返回 `success:false`；原支付方式已停用时提示取消后重新下单。
+
+`POST /api/guardian/orders/:id/cancel`：本人取消 `pending_payment` 订单，返回更新后的 `GuardianOrder`。取消后仍到账的付款按第 4.4 节照常完成。
+
 `GuardianOrder`（用户视角）的字段：`id`、`trade_no`、`service_id`、`service_title`、`amount_cents`、`payment_method`、`status`、`route`、`os`、`contact_type`、`contact`、`note`、`admin_note`、`created_at`、`paid_at`、`delivered_at`、`updated_at`。**不包含** `user_id` 和 `provider_payload`。
 
 ### 4.3 管理员接口（`middleware.AdminAuth()`）
@@ -203,7 +207,7 @@ apiRouter.POST("/guardian/epay/return", anonymousRequestBodyLimit, controller.Gu
 
 1. 在 `LockOrder(tradeNo)` 之内运行，并开数据库事务，用 `lockForUpdate(tx)` 锁住订单行。
 2. 找不到订单，返回 not found。
-3. 订单已经不是 `pending_payment`，**直接返回成功**，保证幂等：易支付会重复回调，跳回和回调也可能同时到达。
+3. 订单是 `expired` 或 `cancelled` 时照常完成：收银台在订单过期或取消后仍可能付款，钱已经收了就不能吞掉。订单已经是 `paid` 或之后的状态，**直接返回成功**，保证幂等：易支付会重复回调，跳回和回调也可能同时到达。
 4. 把 `verifyInfo.Money` 换算成分，和 `amount_cents` 比较。不一致就拒绝，订单保持不变，并记一条 `logger.LogError`。
 5. 把订单更新为 `status=paid`，写入 `paid_at` 和 `provider_payload`，并在 `payment_method` 写入实际支付类型 `verifyInfo.Type`。
 

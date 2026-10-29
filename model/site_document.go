@@ -52,9 +52,6 @@ func SeedSiteDocuments(db *gorm.DB) error {
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		for _, doc := range docs {
-			if err := doc.Validate(); err != nil {
-				return err
-			}
 			doc.Version = 1
 			doc.CreatedAt = time.Now().Unix()
 			doc.UpdatedAt = doc.CreatedAt

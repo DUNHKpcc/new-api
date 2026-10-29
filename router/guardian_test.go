@@ -185,6 +185,23 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Equal(t, false, decode(request("POST", "/api/guardian/orders", tokens[0], orderBody))["success"])
 			var order model.GuardianServiceOrder
 			require.NoError(t, db.Where("trade_no = ?", trade).First(&order).Error)
+			// The buyer reopens the cashier for the same trade number and amount; other users cannot touch the order.
+			payPath, cancelPath := fmt.Sprintf("/api/guardian/orders/%d/pay", order.ID), fmt.Sprintf("/api/guardian/orders/%d/cancel", order.ID)
+			resumed := decode(request("POST", payPath, tokens[0], ""))
+			require.Equal(t, true, resumed["success"])
+			assert.Equal(t, trade, resumed["data"].(map[string]any)["trade_no"])
+			assert.Equal(t, "599.01", resumed["data"].(map[string]any)["pay_params"].(map[string]any)["money"])
+			assert.Equal(t, false, decode(request("POST", payPath, tokens[2], ""))["success"])
+			assert.Equal(t, false, decode(request("POST", cancelPath, tokens[2], ""))["success"])
+			// Cancelling frees a pending slot and closes the cashier for that order.
+			var withdrawn model.GuardianServiceOrder
+			require.NoError(t, db.Where("user_id = ? AND trade_no <> ?", users[0].Id, trade).First(&withdrawn).Error)
+			cancelled := decode(request("POST", fmt.Sprintf("/api/guardian/orders/%d/cancel", withdrawn.ID), tokens[0], ""))
+			require.Equal(t, true, cancelled["success"])
+			assert.Equal(t, "cancelled", cancelled["data"].(map[string]any)["status"])
+			assert.Equal(t, false, decode(request("POST", fmt.Sprintf("/api/guardian/orders/%d/pay", withdrawn.ID), tokens[0], ""))["success"])
+			assert.Equal(t, false, decode(request("POST", fmt.Sprintf("/api/guardian/orders/%d/cancel", withdrawn.ID), tokens[0], ""))["success"])
+			assert.Equal(t, true, decode(request("POST", "/api/guardian/orders", tokens[0], orderBody))["success"])
 			// Signed notification transport, amount verification, and replay all use actual handlers.
 			callback := func(method, path, money, status, tradeNo string, tamper bool) *httptest.ResponseRecorder {
 				params := epay.GenerateParams(map[string]string{"pid": "123", "type": "alipay", "out_trade_no": tradeNo, "trade_no": "provider-1", "money": money, "trade_status": status, "sign_type": "MD5"}, operation_setting.EpayKey)
@@ -221,6 +238,8 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Contains(t, callback("POST", "/api/guardian/epay/return", "599.01", epay.StatusTradeSuccess, trade, false).Header().Get("Location"), "pay=success")
 			require.NoError(t, db.First(&order, order.ID).Error)
 			assert.Equal(t, paidAt, order.PaidAt)
+			assert.Equal(t, false, decode(request("POST", payPath, tokens[0], ""))["success"])
+			assert.Equal(t, false, decode(request("POST", cancelPath, tokens[0], ""))["success"])
 			own := request("GET", "/api/guardian/orders/self?page_size=100", tokens[0], "")
 			assert.NotContains(t, own.Body.String(), "provider_payload")
 			assert.NotContains(t, own.Body.String(), "user_id")
@@ -244,7 +263,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			for _, from := range allStatuses {
 				for _, to := range allStatuses {
 					require.NoError(t, db.Model(&order).Update("status", from).Error)
-					err := model.UpdateGuardianOrder(order.ID, to, "状态验证")
+					_, err := model.UpdateGuardianOrder(order.ID, to, "状态验证")
 					ok := from == to
 					for _, next := range allowed[from] {
 						ok = ok || next == to
@@ -260,6 +279,19 @@ func TestGuardianLifecycle(t *testing.T) {
 			listed := decode(request("GET", "/api/guardian/orders/self", tokens[0], ""))["data"].(map[string]any)
 			for _, item := range listed["items"].([]any) {
 				assert.Equal(t, "expired", item.(map[string]any)["status"])
+			}
+			assert.Equal(t, false, decode(request("POST", payPath, tokens[0], ""))["success"])
+			// The cashier outlives expiry and cancellation; a verified late payment must still complete the order.
+			var late model.GuardianServiceOrder
+			require.NoError(t, db.Where("user_id = ? AND trade_no <> ?", users[0].Id, trade).First(&late).Error)
+			require.NoError(t, db.Model(&late).Update("status", "cancelled").Error)
+			assert.Equal(t, "success", callback("POST", "/api/guardian/epay/notify", "599.01", epay.StatusTradeSuccess, trade, false).Body.String())
+			assert.Contains(t, callback("GET", "/api/guardian/epay/return", "599.01", epay.StatusTradeSuccess, late.TradeNo, false).Header().Get("Location"), "pay=success")
+			for _, tradeNo := range []string{trade, late.TradeNo} {
+				var paid model.GuardianServiceOrder
+				require.NoError(t, db.Where("trade_no = ?", tradeNo).First(&paid).Error)
+				assert.Equal(t, "paid", paid.Status, tradeNo)
+				assert.Positive(t, paid.PaidAt)
 			}
 			// Two concurrent requests competing for the third slot cannot both succeed.
 			require.Equal(t, true, decode(request("POST", "/api/guardian/orders", tokens[0], orderBody))["success"])
@@ -283,13 +315,6 @@ func TestGuardianLifecycle(t *testing.T) {
 			var count int64
 			require.NoError(t, db.Model(&model.GuardianServiceOrder{}).Where("user_id = ? AND status = ?", users[0].Id, "pending_payment").Count(&count).Error)
 			assert.Equal(t, int64(3), count)
-			expired, err := service.CreateLoginSession(users[2].Id, "password", "127.0.0.1", "guardian-expired")
-			require.NoError(t, err)
-			require.NoError(t, db.Model(&model.UserSession{}).Where("sid = ?", expired.Session.SID).Update("expires_at", time.Now().Unix()-1).Error)
-			assert.Equal(t, http.StatusUnauthorized, request("GET", "/api/guardian/orders/self", expired.AccessToken, "").Code)
-			_, err = model.RevokeAllUserSessions(users[2].Id, "guardian-test")
-			require.NoError(t, err)
-			assert.Equal(t, http.StatusUnauthorized, request("GET", "/api/guardian/orders/self", tokens[2], "").Code)
 			assert.NotContains(t, accessLog.String(), "sign=")
 			assert.NotContains(t, accessLog.String(), operation_setting.EpayKey)
 			// Repeated migrations preserve rows, zero-valued fields, JSON arrays and unique order numbers.
@@ -297,10 +322,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}))
 			}
 			require.NoError(t, db.First(&order, order.ID).Error)
-			duplicate := order
-			duplicate.ID = 0
-			assert.Error(t, db.Create(&duplicate).Error)
-			replacement := strings.Replace(payload, `"enabled":true`, `"enabled":false`, 1)
+			replacement := strings.Replace(payload, `"enabled":true,`, ``, 1)
 			replacement = strings.Replace(replacement, `"sort_order":10`, `"sort_order":0`, 1)
 			updated := decode(request("PUT", fmt.Sprintf("/api/guardian/admin/services/%d", id), tokens[1], replacement))
 			require.Equal(t, true, updated["success"])

@@ -64,6 +64,14 @@ func TestSiteDocuments(t *testing.T) {
 			})
 			require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.UserAccessToken{}, &model.Option{}, &model.AuditLog{}))
 			require.NoError(t, model.EnsureLegacyAccessTokenRetireAt(time.Now().Unix()))
+			// Startup imports seeds without validation, so every bundled seed must stay valid.
+			seedData, err := os.ReadFile(filepath.Join("..", "model", "site-documents-seed.json"))
+			require.NoError(t, err)
+			var seeds []model.SiteDocument
+			require.NoError(t, common.Unmarshal(seedData, &seeds))
+			for _, seed := range seeds {
+				assert.NoError(t, seed.Validate(), seed.Slug)
+			}
 			// Upgrade an existing database, then repeat migration and seed import.
 			require.NoError(t, db.AutoMigrate(&model.SiteDocument{}, &model.SiteDocumentImage{}))
 			require.NoError(t, model.SeedSiteDocuments(db))
@@ -150,6 +158,7 @@ func TestSiteDocuments(t *testing.T) {
 			require.NoError(t, err)
 			require.Contains(t, request("PUT", "/api/site-docs-admin/example", tokens[0], string(body)).Body.String(), `"success":true`)
 			assert.Equal(t, http.StatusConflict, request("PUT", "/api/site-docs-admin/example", tokens[0], string(body)).Code)
+			assert.Equal(t, http.StatusNotFound, request("PUT", "/api/site-docs-admin/missing", tokens[0], string(body)).Code)
 			assert.Equal(t, http.StatusNotFound, request("GET", "/api/site-docs/example", "", "").Code)
 			assert.NotContains(t, request("GET", "/api/site-docs", "", "").Body.String(), `"slug":"example"`)
 			assert.Contains(t, request("GET", "/api/site-docs-admin/example", tokens[0], "").Body.String(), "Changed")

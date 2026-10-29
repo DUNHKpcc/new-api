@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -44,7 +45,7 @@ func AdminListGuardianServices(c *gin.Context) {
 	}
 	common.ApiSuccess(c, services)
 }
-func AdminSaveGuardianService(c *gin.Context) {
+func AdminCreateGuardianService(c *gin.Context) {
 	service := model.GuardianService{Enabled: true}
 	if err := c.ShouldBindJSON(&service); err != nil {
 		common.ApiErrorMsg(c, "参数错误")
@@ -57,29 +58,66 @@ func AdminSaveGuardianService(c *gin.Context) {
 	service.ID = 0
 	service.CreatedAt = time.Now().Unix()
 	service.UpdatedAt = service.CreatedAt
-	if c.Param("id") != "" {
-		id, err := strconv.Atoi(c.Param("id"))
-		if err != nil || id <= 0 {
-			common.ApiErrorMsg(c, "服务 ID 无效")
-			return
-		}
-		var previous model.GuardianService
-		if err := model.DB.First(&previous, id).Error; err != nil {
-			common.ApiErrorMsg(c, "服务不存在")
-			return
-		}
-		service.ID = id
-		service.CreatedAt = previous.CreatedAt
-		if err := model.DB.Model(&previous).Select("title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
-			common.ApiError(c, err)
-			return
-		}
-	} else if err := model.DB.Create(&service).Error; err != nil {
+	if err := model.DB.Create(&service).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, service)
 }
+
+// The payload replaces the whole service, so an omitted enabled means delisted.
+func AdminUpdateGuardianService(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorMsg(c, "服务 ID 无效")
+		return
+	}
+	var service model.GuardianService
+	if err := c.ShouldBindJSON(&service); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if err := service.Validate(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var previous model.GuardianService
+	if err := model.DB.First(&previous, id).Error; err != nil {
+		common.ApiErrorMsg(c, "服务不存在")
+		return
+	}
+	service.ID = id
+	service.CreatedAt = previous.CreatedAt
+	service.UpdatedAt = time.Now().Unix()
+	if err := model.DB.Model(&previous).Select("title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, service)
+}
+
+// New and resumed payments sign the same cashier arguments for the order.
+func purchaseGuardianOrder(order *model.GuardianServiceOrder) (string, map[string]string, error) {
+	client := GetEpayClient()
+	if client == nil {
+		return "", nil, errors.New("epay client is not configured")
+	}
+	callback := service.GetCallbackAddress()
+	notifyURL, err := url.Parse(callback + "/api/guardian/epay/notify")
+	if err != nil {
+		return "", nil, err
+	}
+	returnURL, err := url.Parse(callback + "/api/guardian/epay/return")
+	if err != nil {
+		return "", nil, err
+	}
+	return client.Purchase(&epay.PurchaseArgs{Type: order.PaymentMethod, ServiceTradeNo: order.TradeNo, Name: "SVC:" + order.ServiceTitle, Money: fmt.Sprintf("%d.%02d", order.AmountCents/100, order.AmountCents%100), Device: epay.PC, NotifyUrl: notifyURL, ReturnUrl: returnURL})
+}
+
+func guardianPayMethodEnabled(method string) bool {
+	return slices.ContainsFunc(guardianPayMethods(), func(m map[string]string) bool { return m["type"] == method })
+}
+
 func CreateGuardianOrder(c *gin.Context) {
 	if !requirePaymentCompliance(c) {
 		return
@@ -89,28 +127,12 @@ func CreateGuardianOrder(c *gin.Context) {
 		common.ApiErrorMsg(c, "参数错误")
 		return
 	}
-	if err := req.Validate(); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) || !slices.ContainsFunc(guardianPayMethods(), func(m map[string]string) bool { return m["type"] == req.PaymentMethod }) {
+	if !guardianPayMethodEnabled(req.PaymentMethod) {
 		common.ApiErrorMsg(c, "支付方式不存在")
 		return
 	}
-	client := GetEpayClient()
-	if client == nil {
+	if GetEpayClient() == nil {
 		common.ApiErrorMsg(c, "当前管理员未配置支付信息")
-		return
-	}
-	callback := service.GetCallbackAddress()
-	notifyURL, err := url.Parse(callback + "/api/guardian/epay/notify")
-	if err != nil {
-		common.ApiErrorMsg(c, "回调地址配置错误")
-		return
-	}
-	returnURL, err := url.Parse(callback + "/api/guardian/epay/return")
-	if err != nil {
-		common.ApiErrorMsg(c, "回调地址配置错误")
 		return
 	}
 	order, err := model.CreateGuardianOrder(c.GetInt("id"), req)
@@ -118,8 +140,9 @@ func CreateGuardianOrder(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	uri, params, err := client.Purchase(&epay.PurchaseArgs{Type: req.PaymentMethod, ServiceTradeNo: order.TradeNo, Name: "SVC:" + order.ServiceTitle, Money: fmt.Sprintf("%d.%02d", order.AmountCents/100, order.AmountCents%100), Device: epay.PC, NotifyUrl: notifyURL, ReturnUrl: returnURL})
+	uri, params, err := purchaseGuardianOrder(order)
 	if err != nil {
+		logger.LogError(c, "Guardian payment initiation failed: "+err.Error())
 		if expireErr := model.DB.Model(order).Where("status = ?", "pending_payment").Updates(map[string]any{"status": "expired", "updated_at": time.Now().Unix()}).Error; expireErr != nil {
 			logger.LogError(c, "Guardian payment initiation cleanup failed: "+expireErr.Error())
 		}
@@ -128,33 +151,64 @@ func CreateGuardianOrder(c *gin.Context) {
 	}
 	common.ApiSuccess(c, gin.H{"trade_no": order.TradeNo, "pay_url": uri, "pay_params": params})
 }
-func ListGuardianOrders(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
-	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	page = max(1, page)
-	size = min(50, max(1, size))
-	userID := c.GetInt("id")
-	status, keyword := "", ""
-	admin := c.FullPath() == "/api/guardian/admin/orders"
-	if admin {
-		userID = 0
-		status = c.Query("status")
-		keyword = c.Query("keyword")
+func PayGuardianOrder(c *gin.Context) {
+	if !requirePaymentCompliance(c) {
+		return
 	}
-	orders, total, err := model.ListGuardianOrders(userID, status, keyword, page, size)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorMsg(c, "订单 ID 无效")
+		return
+	}
+	order, err := model.GetPayableGuardianOrder(c.GetInt("id"), id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if admin {
-		common.ApiSuccess(c, gin.H{"items": orders, "total": total})
+	if !guardianPayMethodEnabled(order.PaymentMethod) {
+		common.ApiErrorMsg(c, "该支付方式已停用，请取消后重新下单")
 		return
 	}
-	items := make([]model.GuardianServiceOrder, 0, len(orders))
-	for _, order := range orders {
-		items = append(items, order.GuardianServiceOrder)
+	uri, params, err := purchaseGuardianOrder(order)
+	if err != nil {
+		logger.LogError(c, "Guardian payment resume failed: "+err.Error())
+		common.ApiErrorMsg(c, "拉起支付失败")
+		return
 	}
-	common.ApiSuccess(c, gin.H{"items": items, "total": total})
+	common.ApiSuccess(c, gin.H{"trade_no": order.TradeNo, "pay_url": uri, "pay_params": params})
+}
+func CancelGuardianOrder(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorMsg(c, "订单 ID 无效")
+		return
+	}
+	order, err := model.CancelGuardianOrder(c.GetInt("id"), id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, order)
+}
+func ListMyGuardianOrders(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	orders, total, err := model.ListUserGuardianOrders(c.GetInt("id"), max(1, page), min(50, max(1, size)))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": orders, "total": total})
+}
+func AdminListGuardianOrders(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	orders, total, err := model.ListAdminGuardianOrders(c.Query("status"), c.Query("keyword"), max(1, page), min(50, max(1, size)))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": orders, "total": total})
 }
 func AdminUpdateGuardianOrder(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -170,21 +224,17 @@ func AdminUpdateGuardianOrder(c *gin.Context) {
 		common.ApiErrorMsg(c, "参数错误")
 		return
 	}
-	if err := model.UpdateGuardianOrder(id, req.Status, req.AdminNote); err != nil {
+	order, err := model.UpdateGuardianOrder(id, req.Status, req.AdminNote)
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	var order model.GuardianServiceOrder
-	if err := model.DB.First(&order, id).Error; err != nil {
-		common.ApiError(c, err)
-		return
-	}
+	// The change is committed; a deleted buyer only leaves the username blank.
 	var user model.User
-	if err := model.DB.Select("id", "username").First(&user, order.UserID).Error; err != nil {
-		common.ApiError(c, err)
-		return
+	if err := model.DB.Unscoped().Select("id", "username").Where("id = ?", order.UserID).Find(&user).Error; err != nil {
+		logger.LogError(c, "Guardian order buyer lookup failed: "+err.Error())
 	}
-	common.ApiSuccess(c, model.AdminGuardianOrder{GuardianServiceOrder: order, AdminUserID: order.UserID, Username: user.Username})
+	common.ApiSuccess(c, model.AdminGuardianOrder{GuardianServiceOrder: *order, AdminUserID: order.UserID, Username: user.Username})
 }
 
 // Both callback transports share signature verification and the same order lock.

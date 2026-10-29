@@ -142,8 +142,7 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		if err := lockForUpdate(tx).Select("id").First(&user, userID).Error; err != nil {
 			return err
 		}
-		now := time.Now().Unix()
-		if err := tx.Model(&GuardianServiceOrder{}).Where("user_id = ? AND status = ? AND created_at <= ?", userID, "pending_payment", now-7200).Updates(map[string]any{"status": "expired", "updated_at": now}).Error; err != nil {
+		if err := expireGuardianOrders(tx, userID); err != nil {
 			return err
 		}
 		var count int64
@@ -157,74 +156,138 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		if err := tx.First(&service, req.ServiceID).Error; err != nil {
 			return errors.New("服务不存在")
 		}
-		if !service.Enabled || service.PriceCents < 1 || service.PriceCents > 10000000 {
+		if !service.Enabled || service.PriceCents < 1 {
 			return errors.New("服务已下架或价格无效")
 		}
+		now := time.Now().Unix()
 		*order = GuardianServiceOrder{TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: service.PriceCents, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
 		return tx.Create(order).Error
 	})
 	return order, err
 }
 
+// Pending orders expire after two hours; userID 0 expires them for every user.
+func expireGuardianOrders(db *gorm.DB, userID int) error {
+	now := time.Now().Unix()
+	query := db.Model(&GuardianServiceOrder{}).Where("status = ? AND created_at <= ?", "pending_payment", now-7200)
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+	return query.Updates(map[string]any{"status": "expired", "updated_at": now}).Error
+}
+
 // Caller holds LockOrder for both asynchronous notification and browser return.
+// The cashier stays open after an order expires or is cancelled, so a verified
+// late payment still completes the order instead of being acknowledged and lost.
 func CompleteGuardianOrder(tradeNo, payload, paidMoney, paymentMethod string) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var order GuardianServiceOrder
 		if err := lockForUpdate(tx).Where("trade_no = ?", tradeNo).First(&order).Error; err != nil {
 			return err
 		}
-		if order.Status != "pending_payment" {
+		if !slices.Contains([]string{"pending_payment", "expired", "cancelled"}, order.Status) {
 			return nil
 		}
 		money, err := decimal.NewFromString(paidMoney)
 		if err != nil || !money.Equal(decimal.NewFromInt(order.AmountCents).Div(decimal.NewFromInt(100))) {
 			return errors.New("支付金额与订单金额不一致")
 		}
+		if order.Status != "pending_payment" {
+			common.SysLog(fmt.Sprintf("Guardian order %s was paid after it became %s", tradeNo, order.Status))
+		}
 		now := time.Now().Unix()
-		return tx.Model(&order).Where("status = ?", "pending_payment").Updates(map[string]any{"status": "paid", "paid_at": now, "updated_at": now, "provider_payload": payload, "payment_method": paymentMethod}).Error
+		return tx.Model(&order).Updates(map[string]any{"status": "paid", "paid_at": now, "updated_at": now, "provider_payload": payload, "payment_method": paymentMethod}).Error
 	})
 }
 
-func UpdateGuardianOrder(id int, status, note string) error {
-	if utf8.RuneCountInString(note) > 2000 {
-		return errors.New("交付备注最多 2000 字")
+// An unpaid order can reopen its cashier until it expires; the trade number and amount stay fixed.
+func GetPayableGuardianOrder(userID, id int) (*GuardianServiceOrder, error) {
+	if err := expireGuardianOrders(DB, userID); err != nil {
+		return nil, err
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
-		var order GuardianServiceOrder
-		if err := lockForUpdate(tx).First(&order, id).Error; err != nil {
+	order := &GuardianServiceOrder{}
+	if err := DB.Where("id = ? AND user_id = ?", id, userID).First(order).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("订单不存在")
+		}
+		return nil, err
+	}
+	if order.Status != "pending_payment" {
+		return nil, errors.New("订单已过期或无需付款")
+	}
+	return order, nil
+}
+
+// A buyer may withdraw an unpaid order; a payment that still arrives completes it as usual.
+func CancelGuardianOrder(userID, id int) (*GuardianServiceOrder, error) {
+	order := &GuardianServiceOrder{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where("id = ? AND user_id = ?", id, userID).First(order).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("订单不存在")
+			}
+			return err
+		}
+		if order.Status != "pending_payment" {
+			return errors.New("只能取消待付款订单")
+		}
+		order.Status, order.UpdatedAt = "cancelled", time.Now().Unix()
+		return tx.Model(order).Select("status", "updated_at").Updates(order).Error
+	})
+	return order, err
+}
+
+func UpdateGuardianOrder(id int, status, note string) (*GuardianServiceOrder, error) {
+	if utf8.RuneCountInString(note) > 2000 {
+		return nil, errors.New("交付备注最多 2000 字")
+	}
+	order := &GuardianServiceOrder{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).First(order, id).Error; err != nil {
 			return err
 		}
 		transitions := map[string][]string{"pending_payment": {"cancelled"}, "paid": {"scheduled", "in_progress", "refunded"}, "scheduled": {"in_progress", "refunded"}, "in_progress": {"delivered", "refunded"}, "delivered": {"refunded"}}
 		if status != order.Status && !slices.Contains(transitions[order.Status], status) {
 			return errors.New("不允许的订单状态变更")
 		}
-		updates := map[string]any{"status": status, "admin_note": note, "updated_at": time.Now().Unix()}
+		now := time.Now().Unix()
 		if status == "delivered" && order.Status != status {
-			updates["delivered_at"] = time.Now().Unix()
+			order.DeliveredAt = now
 		}
-		return tx.Model(&order).Updates(updates).Error
+		order.Status, order.AdminNote, order.UpdatedAt = status, note, now
+		return tx.Model(order).Select("status", "admin_note", "updated_at", "delivered_at").Updates(order).Error
 	})
+	return order, err
 }
 
-func ListGuardianOrders(userID int, status, keyword string, page, pageSize int) ([]AdminGuardianOrder, int64, error) {
-	now := time.Now().Unix()
-	expire := DB.Model(&GuardianServiceOrder{}).Where("status = ? AND created_at <= ?", "pending_payment", now-7200)
-	if userID > 0 {
-		expire = expire.Where("user_id = ?", userID)
+func ListUserGuardianOrders(userID, page, pageSize int) ([]GuardianServiceOrder, int64, error) {
+	if err := expireGuardianOrders(DB, userID); err != nil {
+		return nil, 0, err
 	}
-	if err := expire.Updates(map[string]any{"status": "expired", "updated_at": now}).Error; err != nil {
+	query := DB.Model(&GuardianServiceOrder{}).Where("user_id = ?", userID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	orders := []GuardianServiceOrder{}
+	if err := query.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&orders).Error; err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
+}
+
+// Usernames include soft-deleted accounts so their paid orders stay traceable.
+func ListAdminGuardianOrders(status, keyword string, page, pageSize int) ([]AdminGuardianOrder, int64, error) {
+	if err := expireGuardianOrders(DB, 0); err != nil {
 		return nil, 0, err
 	}
 	query := DB.Model(&GuardianServiceOrder{})
-	if userID > 0 {
-		query = query.Where("user_id = ?", userID)
-	}
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
 	if keyword != "" {
 		pattern := "%" + keyword + "%"
-		query = query.Where("trade_no LIKE ? OR contact LIKE ? OR user_id IN (?)", pattern, pattern, DB.Model(&User{}).Select("id").Where("username LIKE ?", pattern))
+		query = query.Where("trade_no LIKE ? OR contact LIKE ? OR user_id IN (?)", pattern, pattern, DB.Unscoped().Model(&User{}).Select("id").Where("username LIKE ?", pattern))
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -234,14 +297,13 @@ func ListGuardianOrders(userID int, status, keyword string, page, pageSize int) 
 	if err := query.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&orders).Error; err != nil {
 		return nil, 0, err
 	}
-	result := make([]AdminGuardianOrder, 0, len(orders))
 	ids := make([]int, 0, len(orders))
 	for _, order := range orders {
 		ids = append(ids, order.UserID)
 	}
 	users := []User{}
-	if len(ids) > 0 && userID == 0 {
-		if err := DB.Select("id", "username").Where("id IN ?", ids).Find(&users).Error; err != nil {
+	if len(ids) > 0 {
+		if err := DB.Unscoped().Select("id", "username").Where("id IN ?", ids).Find(&users).Error; err != nil {
 			return nil, 0, err
 		}
 	}
@@ -249,6 +311,7 @@ func ListGuardianOrders(userID int, status, keyword string, page, pageSize int) 
 	for _, user := range users {
 		names[user.Id] = user.Username
 	}
+	result := make([]AdminGuardianOrder, 0, len(orders))
 	for _, order := range orders {
 		result = append(result, AdminGuardianOrder{GuardianServiceOrder: order, AdminUserID: order.UserID, Username: names[order.UserID]})
 	}

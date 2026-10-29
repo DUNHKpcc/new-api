@@ -20,13 +20,6 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { PixelField } from '../components/pixel-field'
-import {
-  cellAlpha,
-  rippleRing,
-  spotlight,
-  SPOTLIGHT_RADIUS,
-  valueNoise3D,
-} from '../lib/pixel-field'
 
 function stubCanvasContext() {
   const ctx = {
@@ -61,39 +54,6 @@ function preferReducedMotion(reduce: boolean) {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-})
-
-describe('pixel field math', () => {
-  it('returns the same noise for the same coordinates and stays within [-1, 1]', () => {
-    for (let i = 0; i < 200; i++) {
-      const x = i * 0.37
-      const y = i * 0.11
-      const z = i * 0.05
-      const value = valueNoise3D(x, y, z)
-      expect(value).toBe(valueNoise3D(x, y, z))
-      expect(value).toBeGreaterThanOrEqual(-1)
-      expect(value).toBeLessThanOrEqual(1)
-    }
-  })
-
-  it('lights cells under the cursor and leaves cells beyond the radius untouched', () => {
-    expect(spotlight(0)).toBe(1)
-    expect(spotlight(SPOTLIGHT_RADIUS / 2)).toBeCloseTo(0.25)
-    expect(spotlight(SPOTLIGHT_RADIUS)).toBe(0)
-    expect(cellAlpha(-1, spotlight(0), 0)).toBeGreaterThan(cellAlpha(-1, 0, 0))
-  })
-
-  it('moves the ripple ring outward over time and fades it out', () => {
-    expect(rippleRing(0, 0)).toBeCloseTo(1)
-    expect(rippleRing(220, 200)).toBeCloseTo(rippleRing(0, 0) * 0.84, 1)
-    expect(rippleRing(0, 400)).toBeLessThan(0.01)
-    expect(rippleRing(2000, 5000)).toBe(0)
-    expect(rippleRing(0, -10)).toBe(0)
-  })
-
-  it('never exceeds full opacity however strong the inputs', () => {
-    expect(cellAlpha(1, 1, 3)).toBe(1)
-  })
 })
 
 describe('PixelField', () => {

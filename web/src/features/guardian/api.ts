@@ -64,6 +64,23 @@ export async function listMyGuardianOrders(p: number, page_size: number) {
   ).data
 }
 
+export async function payGuardianOrder(id: number) {
+  return requireServerSuccess(
+    (
+      await api.post<Response<GuardianOrderCheckout>>(
+        `${base}/orders/${id}/pay`
+      )
+    ).data
+  ).data
+}
+
+export async function cancelGuardianOrder(id: number) {
+  return requireServerSuccess(
+    (await api.post<Response<GuardianOrder>>(`${base}/orders/${id}/cancel`))
+      .data
+  ).data
+}
+
 export async function listAdminGuardianServices() {
   return requireServerSuccess(
     (await api.get<Response<GuardianService[]>>(`${base}/admin/services`)).data
