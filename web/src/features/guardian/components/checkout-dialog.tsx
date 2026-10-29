@@ -20,23 +20,16 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ShieldAlert } from 'lucide-react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Textarea } from '@/components/ui/textarea'
 import { submitPaymentForm } from '@/features/wallet/lib/payment'
 import { toIntlLocale } from '@/i18n/languages'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -46,6 +39,7 @@ import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny } from '../lib/price'
 import { guardianOrderSchema, type GuardianOrderForm } from '../lib/schema'
 import type { GuardianPayMethod, GuardianService } from '../types'
+import { GuardianContactFields } from './contact-fields'
 
 const FORM_ID = 'guardian-checkout'
 
@@ -151,64 +145,9 @@ export function CheckoutDialog(props: {
           </Field>
         </div>
 
-        <div className='grid gap-4 sm:grid-cols-[9rem_1fr]'>
-          <Field>
-            <FieldLabel htmlFor='guardian-contact-type'>
-              {t('Contact via')}
-            </FieldLabel>
-            <NativeSelect
-              id='guardian-contact-type'
-              {...form.register('contact_type')}
-            >
-              {Object.entries(labels.contactType).map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field data-invalid={!!errors.contact}>
-            <FieldLabel htmlFor='guardian-contact'>{t('Contact')}</FieldLabel>
-            <Input
-              id='guardian-contact'
-              maxLength={128}
-              autoComplete='off'
-              aria-invalid={!!errors.contact}
-              aria-describedby={
-                errors.contact ? 'guardian-contact-error' : undefined
-              }
-              {...form.register('contact')}
-            />
-            {errors.contact && (
-              <FieldError id='guardian-contact-error'>
-                {t(errors.contact.message ?? '')}
-              </FieldError>
-            )}
-          </Field>
-        </div>
-
-        <Field data-invalid={!!errors.note}>
-          <FieldLabel htmlFor='guardian-note'>
-            {t('Note (optional)')}
-          </FieldLabel>
-          <Textarea
-            id='guardian-note'
-            rows={3}
-            maxLength={1000}
-            aria-invalid={!!errors.note}
-            aria-describedby='guardian-note-help'
-            {...form.register('note')}
-          />
-          <FieldDescription id='guardian-note-help'>
-            {t(
-              'Your current setup, budget, or anything we should know before scheduling.'
-            )}
-          </FieldDescription>
-          {errors.note && (
-            <FieldError>{t(errors.note.message ?? '')}</FieldError>
-          )}
-        </Field>
-
+        <FormProvider {...form}>
+          <GuardianContactFields />
+        </FormProvider>
         <Alert className='border-[color-mix(in_srgb,var(--g-tier-c)_35%,transparent)]'>
           <ShieldAlert className='text-[var(--g-tier-c)]' aria-hidden='true' />
           <AlertDescription>

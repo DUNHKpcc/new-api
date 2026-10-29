@@ -95,12 +95,14 @@ export interface GuardianOrder {
   admin_note: string
   created_at: number
   paid_at: number
+  refunded_at?: number
   delivered_at: number
   updated_at: number
 }
 
 export interface AdminGuardianOrder extends GuardianOrder {
   user_id: number
+  payment_anomaly?: boolean
   username: string
 }
 
@@ -112,4 +114,30 @@ export interface GuardianPage<T> {
 export interface GuardianOrderUpdate {
   status: GuardianOrderStatus
   admin_note: string
+}
+
+export type GuardianContactUpdate = Pick<
+  GuardianOrder,
+  'contact_type' | 'contact' | 'note'
+>
+export interface GuardianOrderEvent {
+  id: number
+  actor_id: number
+  actor_type: string
+  action: string
+  created_at: number
+  before: Pick<
+    GuardianOrder,
+    'status' | 'admin_note' | 'contact_type' | 'contact' | 'note'
+  >
+  after: GuardianOrderEvent['before']
+}
+export interface GuardianPaymentAnomaly {
+  id: number
+  expected_cents: number
+  paid_money: string
+  payment_method: string
+  occurrences: number
+  first_seen_at: number
+  last_seen_at: number
 }

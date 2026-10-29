@@ -140,3 +140,87 @@ it('warns that marking refunded does not move money, then saves status and trimm
     admin_note: 'Refunded to Alipay.',
   })
 })
+
+it('loads history only when expanded and displays before and after notes', async () => {
+  const get = vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        total: 1,
+        items: [
+          {
+            id: 1,
+            actor_id: 2,
+            actor_type: 'admin',
+            action: 'admin_updated',
+            created_at: 1761500100,
+            before: {
+              status: 'paid',
+              admin_note: 'old note',
+              contact_type: 'telegram',
+              contact: '@alice',
+              note: '',
+            },
+            after: {
+              status: 'scheduled',
+              admin_note: 'new note',
+              contact_type: 'telegram',
+              contact: '@alice',
+              note: '',
+            },
+          },
+        ],
+      },
+    },
+  })
+  renderDialog(
+    <GuardianOrderDialog
+      order={order}
+      onClose={() => undefined}
+      onSaved={() => undefined}
+    />
+  )
+  expect(get).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: 'Order history' }))
+  expect(await screen.findByText('Before: old note')).toBeInTheDocument()
+  expect(screen.getByText('After: new note')).toBeInTheDocument()
+  expect(get).toHaveBeenCalledWith('/api/guardian/admin/orders/9/history', {
+    params: { p: 1, page_size: 10 },
+  })
+})
+
+it('shows payment anomaly amounts and repeated callback count', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        total: 1,
+        items: [
+          {
+            id: 1,
+            expected_cents: 59900,
+            paid_money: '0.01',
+            payment_method: 'alipay',
+            occurrences: 3,
+            first_seen_at: 1761500100,
+            last_seen_at: 1761500200,
+          },
+        ],
+      },
+    },
+  })
+  renderDialog(
+    <GuardianOrderDialog
+      order={order}
+      onClose={() => undefined}
+      onSaved={() => undefined}
+    />
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Payment anomalies' })
+  )
+  expect(
+    await screen.findByText(/Callback amount.*0.01 CNY/)
+  ).toBeInTheDocument()
+  expect(screen.getByText(/Occurrences.*3/)).toBeInTheDocument()
+})

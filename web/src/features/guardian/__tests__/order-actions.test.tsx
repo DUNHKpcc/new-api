@@ -135,3 +135,38 @@ it('offers no payment or cancellation once the order is paid', () => {
     screen.queryByRole('button', { name: 'Cancel order' })
   ).not.toBeInTheDocument()
 })
+
+it.each(['delivered', 'refunded', 'expired', 'cancelled'] as const)(
+  'hides contact editing for %s orders',
+  (status) => {
+    renderCard(status)
+    expect(
+      screen.queryByRole('button', { name: 'Edit contact and note' })
+    ).not.toBeInTheDocument()
+  }
+)
+
+it('edits existing contact details and sends them to the own-order endpoint', async () => {
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: order('paid') } })
+  renderCard('paid')
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Edit contact and note' })
+  )
+  expect(screen.getByLabelText('Contact')).toHaveValue('@guardian_user')
+  await userEvent.clear(screen.getByLabelText('Contact'))
+  await userEvent.type(screen.getByLabelText('Contact'), '@updated')
+  await userEvent.type(screen.getByLabelText('Note (optional)'), 'updated note')
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith('/api/guardian/orders/7/contact', {
+      contact_type: 'telegram',
+      contact: '@updated',
+      note: 'updated note',
+    })
+  )
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
+})

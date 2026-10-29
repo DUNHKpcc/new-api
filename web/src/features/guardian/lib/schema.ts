@@ -104,3 +104,9 @@ export const guardianServiceSchema = z.object({
     .max(9999),
 })
 export type GuardianServiceForm = z.infer<typeof guardianServiceSchema>
+
+export const guardianContactSchema = guardianOrderSchema.pick({
+  contact_type: true,
+  contact: true,
+  note: true,
+})

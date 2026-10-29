@@ -59,17 +59,25 @@ export function GuardianOrdersPanel() {
   const queryClient = useQueryClient()
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [status, setStatus] = useState<GuardianOrderStatus | ''>('')
+  const [anomaliesOnly, setAnomaliesOnly] = useState(false)
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [managing, setManaging] = useState<AdminGuardianOrder | null>(null)
   const orders = useQuery({
-    queryKey: [...GUARDIAN_QUERY_KEYS.adminOrders, pagination, status, keyword],
+    queryKey: [
+      ...GUARDIAN_QUERY_KEYS.adminOrders,
+      pagination,
+      status,
+      keyword,
+      anomaliesOnly,
+    ],
     queryFn: () =>
       listAdminGuardianOrders({
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
         status,
         keyword,
+        payment_anomaly: anomaliesOnly,
       }),
   })
   const { table } = useDataTable({
@@ -117,6 +125,17 @@ export function GuardianOrdersPanel() {
             </NativeSelectOption>
           ))}
         </NativeSelect>
+        <Button
+          type='button'
+          variant={anomaliesOnly ? 'default' : 'outline'}
+          aria-pressed={anomaliesOnly}
+          onClick={() => {
+            setAnomaliesOnly(!anomaliesOnly)
+            resetPage()
+          }}
+        >
+          {t('Payment anomalies')}
+        </Button>
         <Input
           aria-label={t('Search orders')}
           placeholder={t('Order number, username or contact')}
@@ -173,6 +192,11 @@ export function GuardianOrdersPanel() {
                   <TableCell>{formatCny(order.amount_cents, locale)}</TableCell>
                   <TableCell>
                     <OrderStatusBadge status={order.status} />
+                    {order.payment_anomaly && (
+                      <p className='text-destructive mt-1 text-xs'>
+                        {t('Payment anomalies')}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className='text-xs'>
                     {formatTimestampToDate(order.created_at)}

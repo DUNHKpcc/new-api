@@ -28,6 +28,7 @@ import { GUARDIAN_ORDER_TRACK } from '../constants'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny } from '../lib/price'
 import type { GuardianOrder } from '../types'
+import { EditGuardianContact } from './contact-dialog'
 import { OrderActions } from './order-actions'
 import { OrderStatusBadge } from './order-status-badge'
 
@@ -144,6 +145,10 @@ export function OrderCard(props: { order: GuardianOrder }) {
           </div>
         )}
       </dl>
+
+      {['pending_payment', 'paid', 'scheduled', 'in_progress'].includes(
+        order.status
+      ) && <EditGuardianContact order={order} />}
 
       {order.admin_note && (
         <div className='mt-5 rounded-xl bg-[var(--g-accent-wash)] p-4'>

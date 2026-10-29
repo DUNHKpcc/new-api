@@ -42,6 +42,7 @@ import { useGuardianLabels } from '../../hooks/use-guardian-labels'
 import { formatCny } from '../../lib/price'
 import type { AdminGuardianOrder, GuardianOrderStatus } from '../../types'
 import { OrderStatusBadge } from '../order-status-badge'
+import { GuardianOrderHistory } from './order-history'
 
 const MAX_ADMIN_NOTE = 2000
 
@@ -86,6 +87,10 @@ export function GuardianOrderDialog(props: {
       value: `${labels.contactType[order.contact_type] ?? order.contact_type} · ${order.contact}`,
     },
     { label: t('Ordered at'), value: formatTimestampToDate(order.created_at) },
+    {
+      label: t('Marked refunded at'),
+      value: formatTimestampToDate(order.refunded_at || 0),
+    },
     { label: t('Paid at'), value: formatTimestampToDate(order.paid_at) },
     {
       label: t('Delivered at'),
@@ -192,6 +197,7 @@ export function GuardianOrderDialog(props: {
             </FieldError>
           )}
         </Field>
+        <GuardianOrderHistory orderId={order.id} />
       </div>
     </Dialog>
   )

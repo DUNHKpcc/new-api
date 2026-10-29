@@ -22,6 +22,9 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import type {
   AdminGuardianOrder,
   GuardianCatalog,
+  GuardianContactUpdate,
+  GuardianOrderEvent,
+  GuardianPaymentAnomaly,
   GuardianOrder,
   GuardianOrderCheckout,
   GuardianOrderRequest,
@@ -108,6 +111,7 @@ export async function listAdminGuardianOrders(params: {
   page_size: number
   status: GuardianOrderStatus | ''
   keyword: string
+  payment_anomaly?: boolean
 }) {
   return requireServerSuccess(
     (
@@ -128,6 +132,42 @@ export async function updateAdminGuardianOrder(
       await api.put<Response<AdminGuardianOrder>>(
         `${base}/admin/orders/${id}`,
         update
+      )
+    ).data
+  ).data
+}
+
+export async function updateGuardianContact(
+  id: number,
+  update: GuardianContactUpdate
+) {
+  return requireServerSuccess(
+    (
+      await api.put<Response<GuardianOrder>>(
+        `${base}/orders/${id}/contact`,
+        update
+      )
+    ).data
+  ).data
+}
+
+export async function getGuardianOrderHistory(id: number, p: number) {
+  return requireServerSuccess(
+    (
+      await api.get<Response<GuardianPage<GuardianOrderEvent>>>(
+        `${base}/admin/orders/${id}/history`,
+        { params: { p, page_size: 10 } }
+      )
+    ).data
+  ).data
+}
+
+export async function getGuardianPaymentAnomalies(id: number, p: number) {
+  return requireServerSuccess(
+    (
+      await api.get<Response<GuardianPage<GuardianPaymentAnomaly>>>(
+        `${base}/admin/orders/${id}/history`,
+        { params: { p, page_size: 10, kind: 'payments' } }
       )
     ).data
   ).data
