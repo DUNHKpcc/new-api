@@ -1,6 +1,7 @@
 package model
 
 import (
+	"crypto/sha256"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type GuardianFeatures []string
@@ -94,38 +96,43 @@ type GuardianOrderRequest struct {
 
 func (r *GuardianOrderRequest) Validate() error {
 	r.Contact = strings.TrimSpace(r.Contact)
-	if r.ServiceID <= 0 || !slices.Contains([]string{"local", "vm", "vps", "unsure"}, r.Route) || !slices.Contains([]string{"macos", "windows", "linux", "other"}, r.OS) || !slices.Contains([]string{"telegram", "qq", "wechat", "email"}, r.ContactType) {
+	if r.ServiceID <= 0 || !slices.Contains([]string{"local", "vm", "vps", "unsure"}, r.Route) || !slices.Contains([]string{"macos", "windows", "linux", "other"}, r.OS) {
 		return errors.New("服务或环境参数无效")
 	}
-	if r.Contact == "" || utf8.RuneCountInString(r.Contact) > 128 || utf8.RuneCountInString(r.Note) > 1000 {
-		return errors.New("联系方式需为 1–128 字，备注最多 1000 字")
+	contact := GuardianContactUpdate{ContactType: r.ContactType, Contact: r.Contact, Note: r.Note}
+	if err := contact.Validate(); err != nil {
+		return err
 	}
+	r.Contact = contact.Contact
 	return nil
 }
 
 type GuardianServiceOrder struct {
-	ID              int    `json:"id"`
-	TradeNo         string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
-	UserID          int    `json:"-" gorm:"index"`
-	ServiceID       int    `json:"service_id" gorm:"index"`
-	ServiceTitle    string `json:"service_title" gorm:"type:varchar(128)"`
-	AmountCents     int64  `json:"amount_cents"`
-	PaymentMethod   string `json:"payment_method" gorm:"type:varchar(32)"`
-	Status          string `json:"status" gorm:"type:varchar(24);index"`
-	Route           string `json:"route" gorm:"type:varchar(16)"`
-	OS              string `json:"os" gorm:"type:varchar(32)"`
-	ContactType     string `json:"contact_type" gorm:"type:varchar(16)"`
-	Contact         string `json:"contact" gorm:"type:varchar(128)"`
-	Note            string `json:"note" gorm:"type:text"`
-	AdminNote       string `json:"admin_note" gorm:"type:text"`
-	ProviderPayload string `json:"-" gorm:"type:text"`
-	CreatedAt       int64  `json:"created_at"`
-	PaidAt          int64  `json:"paid_at"`
-	DeliveredAt     int64  `json:"delivered_at"`
-	UpdatedAt       int64  `json:"updated_at"`
+	RefundedAt        int64  `json:"refunded_at"`
+	HasPaymentAnomaly bool   `json:"-" gorm:"index"`
+	ID                int    `json:"id"`
+	TradeNo           string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
+	UserID            int    `json:"-" gorm:"index"`
+	ServiceID         int    `json:"service_id" gorm:"index"`
+	ServiceTitle      string `json:"service_title" gorm:"type:varchar(128)"`
+	AmountCents       int64  `json:"amount_cents"`
+	PaymentMethod     string `json:"payment_method" gorm:"type:varchar(32)"`
+	Status            string `json:"status" gorm:"type:varchar(24);index"`
+	Route             string `json:"route" gorm:"type:varchar(16)"`
+	OS                string `json:"os" gorm:"type:varchar(32)"`
+	ContactType       string `json:"contact_type" gorm:"type:varchar(16)"`
+	Contact           string `json:"contact" gorm:"type:varchar(128)"`
+	Note              string `json:"note" gorm:"type:text"`
+	AdminNote         string `json:"admin_note" gorm:"type:text"`
+	ProviderPayload   string `json:"-" gorm:"type:text"`
+	CreatedAt         int64  `json:"created_at"`
+	PaidAt            int64  `json:"paid_at"`
+	DeliveredAt       int64  `json:"delivered_at"`
+	UpdatedAt         int64  `json:"updated_at"`
 }
 
 type AdminGuardianOrder struct {
+	PaymentAnomaly bool `json:"payment_anomaly"`
 	GuardianServiceOrder
 	AdminUserID int    `json:"user_id" gorm:"column:user_id"`
 	Username    string `json:"username"`
@@ -161,7 +168,10 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		}
 		now := time.Now().Unix()
 		*order = GuardianServiceOrder{TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: service.PriceCents, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
-		return tx.Create(order).Error
+		if err := tx.Create(order).Error; err != nil {
+			return err
+		}
+		return recordGuardianOrderEvent(tx, GuardianServiceOrder{}, *order, userID, "user", "created")
 	})
 	return order, err
 }
@@ -169,35 +179,87 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 // Pending orders expire after two hours; userID 0 expires them for every user.
 func expireGuardianOrders(db *gorm.DB, userID int) error {
 	now := time.Now().Unix()
-	query := db.Model(&GuardianServiceOrder{}).Where("status = ? AND created_at <= ?", "pending_payment", now-7200)
-	if userID > 0 {
-		query = query.Where("user_id = ?", userID)
+	for {
+		var processed int
+		err := db.Transaction(func(tx *gorm.DB) error {
+			query := lockForUpdate(tx).Where("status = ? AND created_at <= ?", "pending_payment", now-7200)
+			if userID > 0 {
+				query = query.Where("user_id = ?", userID)
+			}
+			var orders []GuardianServiceOrder
+			if err := query.Order("id").Limit(100).Find(&orders).Error; err != nil {
+				return err
+			}
+			processed = len(orders)
+			for _, order := range orders {
+				before := order
+				order.Status = "expired"
+				order.UpdatedAt = now
+				result := tx.Model(&order).Where("status = ?", "pending_payment").Select("status", "updated_at").Updates(&order)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected == 0 {
+					continue
+				}
+				if err := recordGuardianOrderEvent(tx, before, order, 0, "system", "expired"); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if processed < 100 {
+			return nil
+		}
 	}
-	return query.Updates(map[string]any{"status": "expired", "updated_at": now}).Error
 }
 
 // Caller holds LockOrder for both asynchronous notification and browser return.
 // The cashier stays open after an order expires or is cancelled, so a verified
 // late payment still completes the order instead of being acknowledged and lost.
 func CompleteGuardianOrder(tradeNo, payload, paidMoney, paymentMethod string) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	mismatch := false
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		var order GuardianServiceOrder
 		if err := lockForUpdate(tx).Where("trade_no = ?", tradeNo).First(&order).Error; err != nil {
 			return err
 		}
+		money, err := decimal.NewFromString(paidMoney)
+		if err != nil || !money.Equal(decimal.NewFromInt(order.AmountCents).Div(decimal.NewFromInt(100))) {
+			mismatch = true
+			normalized := paidMoney
+			if err == nil {
+				normalized = money.String()
+			}
+			hash := sha256.Sum256([]byte(fmt.Sprintf("%d:%s:%s", order.ID, normalized, paymentMethod)))
+			now := time.Now().Unix()
+			anomaly := GuardianPaymentAnomaly{OrderID: order.ID, DedupKey: fmt.Sprintf("%x", hash), ExpectedCents: order.AmountCents, PaidMoney: string([]rune(paidMoney)[:min(len([]rune(paidMoney)), 128)]), PaymentMethod: string([]rune(paymentMethod)[:min(len([]rune(paymentMethod)), 32)]), Occurrences: 1, FirstSeenAt: now, LastSeenAt: now}
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "dedup_key"}}, DoUpdates: clause.Assignments(map[string]any{"occurrences": gorm.Expr("? + 1", clause.Column{Table: "guardian_payment_anomalies", Name: "occurrences"}), "last_seen_at": now})}).Create(&anomaly).Error; err != nil {
+				return err
+			}
+			return tx.Model(&order).Update("has_payment_anomaly", true).Error
+		}
 		if !slices.Contains([]string{"pending_payment", "expired", "cancelled"}, order.Status) {
 			return nil
 		}
-		money, err := decimal.NewFromString(paidMoney)
-		if err != nil || !money.Equal(decimal.NewFromInt(order.AmountCents).Div(decimal.NewFromInt(100))) {
-			return errors.New("支付金额与订单金额不一致")
-		}
-		if order.Status != "pending_payment" {
-			common.SysLog(fmt.Sprintf("Guardian order %s was paid after it became %s", tradeNo, order.Status))
-		}
+		before := order
 		now := time.Now().Unix()
-		return tx.Model(&order).Updates(map[string]any{"status": "paid", "paid_at": now, "updated_at": now, "provider_payload": payload, "payment_method": paymentMethod}).Error
+		order.Status, order.PaidAt, order.UpdatedAt, order.ProviderPayload, order.PaymentMethod = "paid", now, now, payload, paymentMethod
+		if err := tx.Model(&order).Select("status", "paid_at", "updated_at", "provider_payload", "payment_method").Updates(&order).Error; err != nil {
+			return err
+		}
+		return recordGuardianOrderEvent(tx, before, order, 0, "payment", "paid")
 	})
+	if err != nil {
+		return err
+	}
+	if mismatch {
+		return errors.New("支付金额与订单金额不一致")
+	}
+	return nil
 }
 
 // An unpaid order can reopen its cashier until it expires; the trade number and amount stay fixed.
@@ -231,13 +293,17 @@ func CancelGuardianOrder(userID, id int) (*GuardianServiceOrder, error) {
 		if order.Status != "pending_payment" {
 			return errors.New("只能取消待付款订单")
 		}
+		before := *order
 		order.Status, order.UpdatedAt = "cancelled", time.Now().Unix()
-		return tx.Model(order).Select("status", "updated_at").Updates(order).Error
+		if err := tx.Model(order).Select("status", "updated_at").Updates(order).Error; err != nil {
+			return err
+		}
+		return recordGuardianOrderEvent(tx, before, *order, userID, "user", "cancelled")
 	})
 	return order, err
 }
 
-func UpdateGuardianOrder(id int, status, note string) (*GuardianServiceOrder, error) {
+func UpdateGuardianOrder(id, actorID int, status, note string) (*GuardianServiceOrder, error) {
 	if utf8.RuneCountInString(note) > 2000 {
 		return nil, errors.New("交付备注最多 2000 字")
 	}
@@ -250,12 +316,19 @@ func UpdateGuardianOrder(id int, status, note string) (*GuardianServiceOrder, er
 		if status != order.Status && !slices.Contains(transitions[order.Status], status) {
 			return errors.New("不允许的订单状态变更")
 		}
+		before := *order
 		now := time.Now().Unix()
+		if status == "refunded" && order.Status != status {
+			order.RefundedAt = now
+		}
 		if status == "delivered" && order.Status != status {
 			order.DeliveredAt = now
 		}
 		order.Status, order.AdminNote, order.UpdatedAt = status, note, now
-		return tx.Model(order).Select("status", "admin_note", "updated_at", "delivered_at").Updates(order).Error
+		if err := tx.Model(order).Select("status", "admin_note", "updated_at", "delivered_at", "refunded_at").Updates(order).Error; err != nil {
+			return err
+		}
+		return recordGuardianOrderEvent(tx, before, *order, actorID, "admin", "admin_updated")
 	})
 	return order, err
 }
@@ -277,11 +350,14 @@ func ListUserGuardianOrders(userID, page, pageSize int) ([]GuardianServiceOrder,
 }
 
 // Usernames include soft-deleted accounts so their paid orders stay traceable.
-func ListAdminGuardianOrders(status, keyword string, page, pageSize int) ([]AdminGuardianOrder, int64, error) {
+func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomaliesOnly bool) ([]AdminGuardianOrder, int64, error) {
 	if err := expireGuardianOrders(DB, 0); err != nil {
 		return nil, 0, err
 	}
 	query := DB.Model(&GuardianServiceOrder{})
+	if anomaliesOnly {
+		query = query.Where("has_payment_anomaly = ?", true)
+	}
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -313,7 +389,7 @@ func ListAdminGuardianOrders(status, keyword string, page, pageSize int) ([]Admi
 	}
 	result := make([]AdminGuardianOrder, 0, len(orders))
 	for _, order := range orders {
-		result = append(result, AdminGuardianOrder{GuardianServiceOrder: order, AdminUserID: order.UserID, Username: names[order.UserID]})
+		result = append(result, AdminGuardianOrder{GuardianServiceOrder: order, PaymentAnomaly: order.HasPaymentAnomaly, AdminUserID: order.UserID, Username: names[order.UserID]})
 	}
 	return result, total, nil
 }

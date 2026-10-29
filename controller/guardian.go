@@ -143,7 +143,7 @@ func CreateGuardianOrder(c *gin.Context) {
 	uri, params, err := purchaseGuardianOrder(order)
 	if err != nil {
 		logger.LogError(c, "Guardian payment initiation failed: "+err.Error())
-		if expireErr := model.DB.Model(order).Where("status = ?", "pending_payment").Updates(map[string]any{"status": "expired", "updated_at": time.Now().Unix()}).Error; expireErr != nil {
+		if expireErr := model.ExpireGuardianPaymentInitiation(order.ID); expireErr != nil {
 			logger.LogError(c, "Guardian payment initiation cleanup failed: "+expireErr.Error())
 		}
 		common.ApiErrorMsg(c, "拉起支付失败")
@@ -203,7 +203,7 @@ func ListMyGuardianOrders(c *gin.Context) {
 func AdminListGuardianOrders(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	orders, total, err := model.ListAdminGuardianOrders(c.Query("status"), c.Query("keyword"), max(1, page), min(50, max(1, size)))
+	orders, total, err := model.ListAdminGuardianOrders(c.Query("status"), c.Query("keyword"), max(1, page), min(50, max(1, size)), c.Query("payment_anomaly") == "true")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -224,7 +224,7 @@ func AdminUpdateGuardianOrder(c *gin.Context) {
 		common.ApiErrorMsg(c, "参数错误")
 		return
 	}
-	order, err := model.UpdateGuardianOrder(id, req.Status, req.AdminNote)
+	order, err := model.UpdateGuardianOrder(id, c.GetInt("id"), req.Status, req.AdminNote)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -234,7 +234,7 @@ func AdminUpdateGuardianOrder(c *gin.Context) {
 	if err := model.DB.Unscoped().Select("id", "username").Where("id = ?", order.UserID).Find(&user).Error; err != nil {
 		logger.LogError(c, "Guardian order buyer lookup failed: "+err.Error())
 	}
-	common.ApiSuccess(c, model.AdminGuardianOrder{GuardianServiceOrder: *order, AdminUserID: order.UserID, Username: user.Username})
+	common.ApiSuccess(c, model.AdminGuardianOrder{GuardianServiceOrder: *order, PaymentAnomaly: order.HasPaymentAnomaly, AdminUserID: order.UserID, Username: user.Username})
 }
 
 // Both callback transports share signature verification and the same order lock.
@@ -285,4 +285,58 @@ func GuardianEpayNotify(c *gin.Context) {
 }
 func GuardianEpayReturn(c *gin.Context) {
 	c.Redirect(http.StatusFound, paymentReturnPath("/guardian/orders?pay="+guardianEpayResult(c)))
+}
+
+func UpdateGuardianContact(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorMsg(c, "订单 ID 无效")
+		return
+	}
+	var req model.GuardianContactUpdate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	order, err := model.UpdateGuardianContact(c.GetInt("id"), id, req)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, order)
+}
+
+func AdminGuardianOrderHistory(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorMsg(c, "订单 ID 无效")
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	page, size = max(1, page), min(50, max(1, size))
+	var total int64
+	var items any
+	if c.Query("kind") == "payments" {
+		rows := []model.GuardianPaymentAnomaly{}
+		query := model.DB.Model(&model.GuardianPaymentAnomaly{}).Where("order_id = ?", id)
+		err = query.Count(&total).Error
+		if err == nil {
+			err = query.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error
+		}
+		items = rows
+	} else {
+		rows := []model.GuardianOrderEvent{}
+		query := model.DB.Model(&model.GuardianOrderEvent{}).Where("order_id = ?", id)
+		err = query.Count(&total).Error
+		if err == nil {
+			err = query.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error
+		}
+		items = rows
+	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": items, "total": total})
 }

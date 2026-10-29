@@ -96,7 +96,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			users := []model.User{{Username: "buyer-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "a" + suffix}, {Username: "admin-" + suffix, Password: "unused", Role: common.RoleAdminUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "b" + suffix}, {Username: "other-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "c" + suffix}}
 			require.NoError(t, db.Create(&users).Error)
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
 			}
 			var preserved model.User
 			require.NoError(t, db.First(&preserved, users[0].Id).Error)
@@ -185,6 +185,36 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Equal(t, false, decode(request("POST", "/api/guardian/orders", tokens[0], orderBody))["success"])
 			var order model.GuardianServiceOrder
 			require.NoError(t, db.Where("trade_no = ?", trade).First(&order).Error)
+
+			contactPath := fmt.Sprintf("/api/guardian/orders/%d/contact", order.ID)
+			historyPath := fmt.Sprintf("/api/guardian/admin/orders/%d/history", order.ID)
+			contactBody := `{"contact_type":"wechat","contact":"new-contact","note":"new note"}`
+			assert.Equal(t, http.StatusUnauthorized, request("PUT", contactPath, "", contactBody).Code)
+			assert.Equal(t, http.StatusForbidden, request("PUT", contactPath, pat, contactBody).Code)
+			assert.Equal(t, false, decode(request("PUT", contactPath, tokens[2], contactBody))["success"])
+			assert.Equal(t, false, decode(request("PUT", contactPath, tokens[0], `{"contact_type":"email","contact":""}`))["success"])
+			assert.Equal(t, true, decode(request("PUT", contactPath, tokens[0], contactBody))["success"])
+			assert.Equal(t, http.StatusForbidden, request("GET", historyPath, tokens[0], "").Code)
+			assert.Equal(t, http.StatusForbidden, request("GET", historyPath, pat, "").Code)
+			history := decode(request("GET", historyPath, tokens[1], ""))["data"].(map[string]any)
+			change := history["items"].([]any)[0].(map[string]any)
+			assert.Equal(t, float64(users[0].Id), change["actor_id"])
+			assert.Equal(t, "reader@example.test", change["before"].(map[string]any)["contact"])
+			assert.Equal(t, "new-contact", change["after"].(map[string]any)["contact"])
+			// A history write failure must roll back the contact update as well.
+			require.NoError(t, db.Callback().Create().Before("gorm:create").Register("guardian_history_failure", func(tx *gorm.DB) {
+				if tx.Statement.Table == "guardian_order_events" {
+					tx.AddError(fmt.Errorf("history fixture failure"))
+				}
+			}))
+			_, updateErr := model.UpdateGuardianContact(users[0].Id, order.ID, model.GuardianContactUpdate{ContactType: "email", Contact: "must-rollback", Note: "must-rollback"})
+			require.NoError(t, db.Callback().Create().Remove("guardian_history_failure"))
+			require.Error(t, updateErr)
+			require.NoError(t, db.First(&order, order.ID).Error)
+			assert.Equal(t, "new-contact", order.Contact)
+			assert.Equal(t, "new note", order.Note)
+			// Restore the buyer contact so existing keyword searches still apply.
+			assert.Equal(t, true, decode(request("PUT", contactPath, tokens[0], `{"contact_type":"email","contact":"reader@example.test","note":"部署"}`))["success"])
 			// The buyer reopens the cashier for the same trade number and amount; other users cannot touch the order.
 			payPath, cancelPath := fmt.Sprintf("/api/guardian/orders/%d/pay", order.ID), fmt.Sprintf("/api/guardian/orders/%d/cancel", order.ID)
 			resumed := decode(request("POST", payPath, tokens[0], ""))
@@ -225,7 +255,21 @@ func TestGuardianLifecycle(t *testing.T) {
 				return response
 			}
 			assert.Equal(t, "fail", callback("GET", "/api/guardian/epay/notify", "599.01", epay.StatusTradeSuccess, trade, true).Body.String())
+			var anomalies int64
+			require.NoError(t, db.Model(&model.GuardianPaymentAnomaly{}).Where("order_id = ?", order.ID).Count(&anomalies).Error)
+			assert.Zero(t, anomalies)
 			assert.Equal(t, "fail", callback("POST", "/api/guardian/epay/notify", "599.02", epay.StatusTradeSuccess, trade, false).Body.String())
+			assert.Equal(t, "fail", callback("POST", "/api/guardian/epay/notify", "599.02", epay.StatusTradeSuccess, trade, false).Body.String())
+			paymentHistory := decode(request("GET", historyPath+"?kind=payments", tokens[1], ""))["data"].(map[string]any)
+			require.Equal(t, float64(1), paymentHistory["total"])
+			anomaly := paymentHistory["items"].([]any)[0].(map[string]any)
+			assert.Equal(t, float64(2), anomaly["occurrences"])
+			assert.Equal(t, float64(59901), anomaly["expected_cents"])
+			assert.Equal(t, "599.02", anomaly["paid_money"])
+			assert.Positive(t, anomaly["first_seen_at"])
+			filtered := decode(request("GET", "/api/guardian/admin/orders?payment_anomaly=true&keyword="+trade, tokens[1], ""))["data"].(map[string]any)
+			assert.Equal(t, float64(1), filtered["total"])
+			assert.Equal(t, true, filtered["items"].([]any)[0].(map[string]any)["payment_anomaly"])
 			assert.Equal(t, "fail", callback("GET", "/api/guardian/epay/notify", "599.01", epay.StatusTradeSuccess, "missing", false).Body.String())
 			require.NoError(t, db.First(&order, order.ID).Error)
 			assert.Equal(t, "pending_payment", order.Status)
@@ -258,12 +302,39 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.Equal(t, users[0].Username, data["username"])
 				assert.Equal(t, status, data["status"])
 			}
+			require.NoError(t, db.First(&order, order.ID).Error)
+			require.Positive(t, order.RefundedAt)
+			refundAt := order.RefundedAt
+			assert.Equal(t, false, decode(request("PUT", contactPath, tokens[0], contactBody))["success"])
+			refundUpdated, err := model.UpdateGuardianOrder(order.ID, users[1].Id, "refunded", "refund note")
+			require.NoError(t, err)
+			assert.Equal(t, refundAt, refundUpdated.RefundedAt)
+			history = decode(request("GET", historyPath, tokens[1], ""))["data"].(map[string]any)
+			change = history["items"].([]any)[0].(map[string]any)
+			assert.Equal(t, float64(users[1].Id), change["actor_id"])
+			assert.Equal(t, "进度说明", change["before"].(map[string]any)["admin_note"])
+			assert.Equal(t, "refund note", change["after"].(map[string]any)["admin_note"])
+			for range 2 {
+				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+			}
+			var persistedAnomaly model.GuardianPaymentAnomaly
+			require.NoError(t, db.Where("order_id = ?", order.ID).First(&persistedAnomaly).Error)
+			assert.Equal(t, 2, persistedAnomaly.Occurrences)
+			var persistedEvent model.GuardianOrderEvent
+			require.NoError(t, db.Where("order_id = ?", order.ID).Order("id DESC").First(&persistedEvent).Error)
+			assert.Equal(t, "refund note", persistedEvent.After.AdminNote)
+			for _, state := range []string{"pending_payment", "paid", "scheduled", "in_progress", "delivered", "refunded", "expired", "cancelled"} {
+				require.NoError(t, db.Model(&order).Update("status", state).Error)
+				result := decode(request("PUT", contactPath, tokens[0], contactBody))
+				expected := state == "pending_payment" || state == "paid" || state == "scheduled" || state == "in_progress"
+				assert.Equal(t, expected, result["success"], state)
+			}
 			allStatuses := []string{"pending_payment", "paid", "scheduled", "in_progress", "delivered", "expired", "cancelled", "refunded"}
 			allowed := map[string][]string{"pending_payment": {"cancelled"}, "paid": {"scheduled", "in_progress", "refunded"}, "scheduled": {"in_progress", "refunded"}, "in_progress": {"delivered", "refunded"}, "delivered": {"refunded"}}
 			for _, from := range allStatuses {
 				for _, to := range allStatuses {
 					require.NoError(t, db.Model(&order).Update("status", from).Error)
-					_, err := model.UpdateGuardianOrder(order.ID, to, "状态验证")
+					_, err := model.UpdateGuardianOrder(order.ID, users[1].Id, to, "状态验证")
 					ok := from == to
 					for _, next := range allowed[from] {
 						ok = ok || next == to
@@ -319,7 +390,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.NotContains(t, accessLog.String(), operation_setting.EpayKey)
 			// Repeated migrations preserve rows, zero-valued fields, JSON arrays and unique order numbers.
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
 			}
 			require.NoError(t, db.First(&order, order.ID).Error)
 			replacement := strings.Replace(payload, `"enabled":true,`, ``, 1)

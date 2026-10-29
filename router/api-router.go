@@ -271,6 +271,7 @@ func SetApiRouter(router *gin.Engine) {
 		guardian := apiRouter.Group("/guardian", middleware.UserAuth())
 		guardian.POST("/orders", middleware.CriticalRateLimit(), controller.CreateGuardianOrder)
 		guardian.GET("/orders/self", controller.ListMyGuardianOrders)
+		guardian.PUT("/orders/:id/contact", middleware.SessionCookieOriginGuard(), anonymousRequestBodyLimit, controller.UpdateGuardianContact)
 		guardian.POST("/orders/:id/pay", middleware.CriticalRateLimit(), controller.PayGuardianOrder)
 		guardian.POST("/orders/:id/cancel", controller.CancelGuardianOrder)
 		guardianAdmin := apiRouter.Group("/guardian/admin", middleware.AdminAuth())
@@ -278,6 +279,7 @@ func SetApiRouter(router *gin.Engine) {
 		guardianAdmin.POST("/services", controller.AdminCreateGuardianService)
 		guardianAdmin.PUT("/services/:id", controller.AdminUpdateGuardianService)
 		guardianAdmin.GET("/orders", controller.AdminListGuardianOrders)
+		guardianAdmin.GET("/orders/:id/history", controller.AdminGuardianOrderHistory)
 		guardianAdmin.PUT("/orders/:id", controller.AdminUpdateGuardianOrder)
 
 		subscriptionRoute := apiRouter.Group("/subscription")
