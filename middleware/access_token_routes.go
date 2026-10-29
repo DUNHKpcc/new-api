@@ -41,11 +41,18 @@ func accessTokenScopeRule(scope string) accessTokenRouteRule {
 // Casbin-guarded routes declare themselves through
 // DeclareAccessTokenPermissionRoute when they are registered.
 var accessTokenRouteRules = map[string]accessTokenRouteRule{
-	"GET /api/site-docs-admin":         accessTokenSessionRule,
-	"GET /api/site-docs-admin/:slug":   accessTokenSessionRule,
-	"POST /api/site-docs-admin/images": accessTokenSessionRule,
-	"POST /api/site-docs-admin":        accessTokenSessionRule,
-	"PUT /api/site-docs-admin/:slug":   accessTokenSessionRule,
+	"GET /api/lotteries/:id/self":                 accessTokenSessionRule,
+	"POST /api/lotteries/:id/join":                accessTokenSessionRule,
+	"GET /api/lotteries-admin":                    accessTokenSessionRule,
+	"POST /api/lotteries-admin":                   accessTokenSessionRule,
+	"POST /api/lotteries-admin/:id/:action":       accessTokenSessionRule,
+	"GET /api/lotteries-admin/:id/winners":        accessTokenSessionRule,
+	"PUT /api/lotteries-admin/:id/winners/:entry": accessTokenSessionRule,
+	"GET /api/site-docs-admin":                    accessTokenSessionRule,
+	"GET /api/site-docs-admin/:slug":              accessTokenSessionRule,
+	"POST /api/site-docs-admin/images":            accessTokenSessionRule,
+	"POST /api/site-docs-admin":                   accessTokenSessionRule,
+	"PUT /api/site-docs-admin/:slug":              accessTokenSessionRule,
 	// Guardian purchases and administration use dashboard sessions.
 	"POST /api/guardian/orders":            accessTokenSessionRule,
 	"GET /api/guardian/orders/self":        accessTokenSessionRule,

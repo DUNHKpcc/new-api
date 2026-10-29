@@ -860,3 +860,22 @@ func TestCampaignSMTPAuthUsesConfigurationSnapshot(t *testing.T) {
 		})
 	}
 }
+
+func TestSendNotificationEmailOmitsCampaignUnsubscribeHeaders(t *testing.T) {
+	server := newFakeSMTPServerWithSTARTTLSAdvertisement(t, false, fakeSMTPBehavior{})
+	defer server.close()
+	message := configureCampaignSMTP(t, server)
+	message.UnsubscribeURL = ""
+	require.NoError(t, SendNotificationEmail(context.Background(), message))
+	select {
+	case raw := <-server.messages:
+		parsed, err := mail.ReadMessage(strings.NewReader(raw))
+		require.NoError(t, err)
+		assert.Equal(t, message.MessageID, parsed.Header.Get("Message-ID"))
+		assert.Empty(t, parsed.Header.Get("List-Unsubscribe"))
+		assert.Empty(t, parsed.Header.Get("List-Unsubscribe-Post"))
+	case <-time.After(2 * time.Second):
+		t.Fatal("notification was not delivered")
+	}
+	require.Error(t, SendCampaignEmail(context.Background(), message))
+}

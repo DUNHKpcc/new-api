@@ -66,6 +66,16 @@ func campaignSMTPError(phase string, err error, dataStarted bool) error {
 // transactional SendEmail path. The full operation is bounded to 30 seconds,
 // shorter than the queue lease; cancellation closes the active socket as well.
 func SendCampaignEmail(ctx context.Context, message CampaignEmailMessage) error {
+	return sendManagedEmail(ctx, message, true)
+}
+
+// SendNotificationEmail uses the same bounded SMTP transport for transactional notices.
+func SendNotificationEmail(ctx context.Context, message CampaignEmailMessage) error {
+	message.UnsubscribeURL = ""
+	return sendManagedEmail(ctx, message, false)
+}
+
+func sendManagedEmail(ctx context.Context, message CampaignEmailMessage, campaign bool) error {
 	OptionMapRWMutex.RLock()
 	host, port := SMTPServer, SMTPPort
 	from, systemName := SMTPFrom, SystemName
@@ -112,11 +122,13 @@ func SendCampaignEmail(ctx context.Context, message CampaignEmailMessage) error 
 			return &CampaignEmailDeliveryError{Phase: "message-id"}
 		}
 	}
-	unsubscribe, err := url.Parse(message.UnsubscribeURL)
-	if err != nil || unsubscribe.Scheme != "https" || unsubscribe.Hostname() == "" || unsubscribe.User != nil || unsubscribe.Fragment != "" || strings.ContainsAny(message.UnsubscribeURL, " <>\t") || len(message.UnsubscribeURL) > 900 {
-		return &CampaignEmailDeliveryError{Phase: "unsubscribe-url"}
-	}
+	if campaign {
+		unsubscribe, err := url.Parse(message.UnsubscribeURL)
+		if err != nil || unsubscribe.Scheme != "https" || unsubscribe.Hostname() == "" || unsubscribe.User != nil || unsubscribe.Fragment != "" || strings.ContainsAny(message.UnsubscribeURL, " <>\t") || len(message.UnsubscribeURL) > 900 {
+			return &CampaignEmailDeliveryError{Phase: "unsubscribe-url"}
+		}
 
+	}
 	var body bytes.Buffer
 	parts := multipart.NewWriter(&body)
 	for _, part := range []struct{ kind, body string }{{"plain", message.TextBody}, {"html", message.HTMLBody}} {
@@ -142,8 +154,12 @@ func SendCampaignEmail(ctx context.Context, message CampaignEmailMessage) error 
 		return &CampaignEmailDeliveryError{Phase: "encoding"}
 	}
 	var payload bytes.Buffer
-	fmt.Fprintf(&payload, "To: %s\r\nFrom: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%q\r\nList-Unsubscribe: <%s>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n\r\n",
-		receiver.String(), sender.String(), mime.QEncoding.Encode("UTF-8", message.Subject), time.Now().Format(time.RFC1123Z), message.MessageID, parts.Boundary(), message.UnsubscribeURL)
+	fmt.Fprintf(&payload, "To: %s\r\nFrom: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%q\r\n",
+		receiver.String(), sender.String(), mime.QEncoding.Encode("UTF-8", message.Subject), time.Now().Format(time.RFC1123Z), message.MessageID, parts.Boundary())
+	if campaign {
+		fmt.Fprintf(&payload, "List-Unsubscribe: <%s>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n", message.UnsubscribeURL)
+	}
+	payload.WriteString("\r\n")
 	payload.Write(body.Bytes())
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 )
 
@@ -94,13 +95,18 @@ func getLotteryItems() []LotteryItem {
 }
 
 func GetLotteryItems(c *gin.Context) {
-	common.OptionMapRWMutex.RLock()
-	items := getLotteryItems()
-	common.OptionMapRWMutex.RUnlock()
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    items,
-	})
+	lotteries := []model.Lottery{}
+	if err := model.DB.Where("status IN ?", []string{"active", "drawn"}).Order("status ASC").Order("id DESC").Limit(30).Find(&lotteries).Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "message": "could not load lotteries"})
+		return
+	}
+	items := make([]gin.H, 0, len(lotteries))
+	for _, l := range lotteries {
+		winnerInfo := ""
+		if l.Status == "drawn" {
+			winnerInfo = "drawn"
+		}
+		items = append(items, gin.H{"id": fmt.Sprint(l.ID), "title": l.Title, "content": l.Content, "image": "", "winnerInfo": winnerInfo, "publishDate": time.Unix(l.CreatedAt, 0).UTC().Format(time.RFC3339), "lottery": l})
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})
 }
