@@ -27,10 +27,11 @@ import { cn } from '@/lib/utils'
 import { GUARDIAN_ORDER_TRACK } from '../constants'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny } from '../lib/price'
-import type { GuardianOrder } from '../types'
+import type { GuardianOrder, GuardianQueueState } from '../types'
 import { EditGuardianContact } from './contact-dialog'
 import { OrderActions } from './order-actions'
 import { OrderStatusBadge } from './order-status-badge'
+import { QueueTracker } from './queue-tracker'
 
 export function OrderProgress(props: { order: GuardianOrder }) {
   const { t } = useTranslation()
@@ -69,7 +70,10 @@ export function OrderProgress(props: { order: GuardianOrder }) {
   )
 }
 
-export function OrderCard(props: { order: GuardianOrder }) {
+export function OrderCard(props: {
+  order: GuardianOrder
+  queue?: GuardianQueueState
+}) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
@@ -113,6 +117,8 @@ export function OrderCard(props: { order: GuardianOrder }) {
       <div className='mt-6'>
         <OrderProgress order={order} />
       </div>
+
+      <QueueTracker order={order} queue={props.queue} />
 
       {order.status === 'pending_payment' && (
         <>

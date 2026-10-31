@@ -280,6 +280,9 @@ func SetApiRouter(router *gin.Engine) {
 		guardianAdmin.PUT("/services/:id", controller.AdminUpdateGuardianService)
 		guardianAdmin.GET("/orders", controller.AdminListGuardianOrders)
 		guardianAdmin.GET("/orders/:id/history", controller.AdminGuardianOrderHistory)
+		guardianAdmin.GET("/queue", controller.AdminGetGuardianQueue)
+		guardianAdmin.PUT("/queue/settings", middleware.SessionCookieOriginGuard(), controller.AdminUpdateGuardianQueueSetting)
+		guardianAdmin.POST("/queue/:id/move", middleware.SessionCookieOriginGuard(), controller.AdminMoveGuardianQueueOrder)
 		guardianAdmin.PUT("/orders/:id", controller.AdminUpdateGuardianOrder)
 
 		subscriptionRoute := apiRouter.Group("/subscription")

@@ -133,7 +133,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result), response.Body.String())
 				return result
 			}
-			for _, route := range []struct{ method, path string }{{"POST", "/api/guardian/orders"}, {"GET", "/api/guardian/orders/self"}, {"GET", "/api/guardian/admin/services"}, {"POST", "/api/guardian/admin/services"}, {"PUT", "/api/guardian/admin/services/1"}, {"GET", "/api/guardian/admin/orders"}, {"PUT", "/api/guardian/admin/orders/1"}} {
+			for _, route := range []struct{ method, path string }{{"POST", "/api/guardian/orders"}, {"GET", "/api/guardian/orders/self"}, {"GET", "/api/guardian/admin/services"}, {"POST", "/api/guardian/admin/services"}, {"PUT", "/api/guardian/admin/services/1"}, {"GET", "/api/guardian/admin/orders"}, {"PUT", "/api/guardian/admin/orders/1"}, {"GET", "/api/guardian/admin/queue"}, {"PUT", "/api/guardian/admin/queue/settings"}, {"POST", "/api/guardian/admin/queue/1/move"}} {
 				assert.Equal(t, http.StatusUnauthorized, request(route.method, route.path, "", "{}").Code)
 				if strings.Contains(route.path, "/admin/") {
 					assert.Equal(t, http.StatusForbidden, request(route.method, route.path, tokens[0], "{}").Code)
@@ -402,6 +402,88 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.False(t, saved.Enabled)
 			assert.Zero(t, saved.SortOrder)
 			assert.Equal(t, model.GuardianFeatures{"Linux"}, saved.Features)
+
+			// Delivery queue: payment order, placeholders, daily capacity, manual moves and pauses.
+			t.Cleanup(func() {
+				_ = model.UpdateOptionsBulk(map[string]string{"guardian_queue.daily_capacity": "0", "guardian_queue.extra_slots": "0", "guardian_queue.paused": "false", "guardian_queue.resume_at": "0"})
+			})
+			require.NoError(t, db.Model(&model.GuardianServiceOrder{}).Where("1 = 1").Update("status", "delivered").Error)
+			require.NoError(t, db.Where("1 = 1").Delete(&model.GuardianOrderEvent{}).Error)
+			require.NoError(t, db.Model(&model.GuardianService{}).Where("id = ?", id).Update("enabled", true).Error)
+			queued := map[string]model.GuardianServiceOrder{}
+			for _, buyer := range []struct {
+				name  string
+				token string
+			}{{"first", tokens[0]}, {"other", tokens[2]}, {"second", tokens[0]}} {
+				created := decode(request("POST", "/api/guardian/orders", buyer.token, orderBody))
+				require.Equal(t, true, created["success"], created["message"])
+				tradeNo := created["data"].(map[string]any)["trade_no"].(string)
+				require.Equal(t, "success", callback("POST", "/api/guardian/epay/notify", "599.01", epay.StatusTradeSuccess, tradeNo, false).Body.String())
+				var paid model.GuardianServiceOrder
+				require.NoError(t, db.Where("trade_no = ?", tradeNo).First(&paid).Error)
+				queued[buyer.name] = paid
+			}
+			setQueue := func(body string) map[string]any {
+				return decode(request("PUT", "/api/guardian/admin/queue/settings", tokens[1], body))
+			}
+			myQueue := func(token string) (map[int]map[string]any, map[string]any) {
+				data := decode(request("GET", "/api/guardian/orders/self", token, ""))["data"].(map[string]any)
+				byID := map[int]map[string]any{}
+				for _, item := range data["items"].([]any) {
+					row := item.(map[string]any)
+					byID[int(row["id"].(float64))] = row
+				}
+				return byID, data["queue"].(map[string]any)
+			}
+			ahead := func(token string, order model.GuardianServiceOrder) any {
+				rows, _ := myQueue(token)
+				return rows[order.ID]["queue_ahead"]
+			}
+			today, tomorrow := time.Now().Format(time.DateOnly), time.Now().AddDate(0, 0, 1).Format(time.DateOnly)
+			assert.Equal(t, float64(0), ahead(tokens[0], queued["first"]))
+			assert.Equal(t, float64(1), ahead(tokens[2], queued["other"]))
+			assert.Equal(t, float64(2), ahead(tokens[0], queued["second"]))
+			rows, _ := myQueue(tokens[2])
+			assert.Len(t, rows, 1, "buyers only see their own orders")
+
+			require.Equal(t, true, setQueue(`{"daily_capacity":2,"extra_slots":1,"paused":false,"resume_at":0}`)["success"])
+			rows, queueState := myQueue(tokens[0])
+			assert.Equal(t, false, queueState["paused"])
+			assert.Equal(t, float64(1), rows[queued["first"].ID]["queue_ahead"])
+			assert.Equal(t, today, rows[queued["first"].ID]["queue_start_date"])
+			assert.Equal(t, float64(3), rows[queued["second"].ID]["queue_ahead"])
+			assert.Equal(t, tomorrow, rows[queued["second"].ID]["queue_start_date"])
+
+			move := func(order model.GuardianServiceOrder, position int) map[string]any {
+				return decode(request("POST", fmt.Sprintf("/api/guardian/admin/queue/%d/move", order.ID), tokens[1], fmt.Sprintf(`{"position":%d}`, position)))
+			}
+			require.Equal(t, true, move(queued["second"], 1)["success"])
+			assert.Equal(t, float64(1), ahead(tokens[0], queued["second"]))
+			assert.Equal(t, float64(2), ahead(tokens[0], queued["first"]))
+			assert.Equal(t, float64(3), ahead(tokens[2], queued["other"]))
+			adminQueue := decode(request("GET", "/api/guardian/admin/queue", tokens[1], ""))["data"].(map[string]any)
+			assert.Len(t, adminQueue["waiting"], 3)
+			assert.Equal(t, float64(queued["second"].ID), adminQueue["waiting"].([]any)[0].(map[string]any)["id"])
+
+			// Starting an order counts against today's capacity and moves it out of the waiting list.
+			require.Equal(t, true, decode(request("PUT", fmt.Sprintf("/api/guardian/admin/orders/%d", queued["other"].ID), tokens[1], `{"status":"in_progress","admin_note":""}`))["success"])
+			assert.Equal(t, false, move(queued["other"], 1)["success"])
+			rows, _ = myQueue(tokens[2])
+			assert.Nil(t, rows[queued["other"].ID]["queue_ahead"])
+			rows, _ = myQueue(tokens[0])
+			assert.Equal(t, float64(2), rows[queued["second"].ID]["queue_ahead"])
+			assert.Equal(t, tomorrow, rows[queued["second"].ID]["queue_start_date"])
+
+			resumeAt := time.Now().AddDate(0, 0, 3)
+			assert.Equal(t, false, setQueue(fmt.Sprintf(`{"daily_capacity":2,"extra_slots":1,"paused":true,"resume_at":%d}`, time.Now().Unix()-60))["success"])
+			require.Equal(t, true, setQueue(fmt.Sprintf(`{"daily_capacity":2,"extra_slots":1,"paused":true,"resume_at":%d}`, resumeAt.Unix()))["success"])
+			rows, queueState = myQueue(tokens[0])
+			assert.Equal(t, true, queueState["paused"])
+			assert.Equal(t, resumeAt.Format(time.DateOnly), rows[queued["second"].ID]["queue_start_date"])
+			require.Equal(t, true, setQueue(`{"daily_capacity":2,"extra_slots":1,"paused":true,"resume_at":0}`)["success"])
+			rows, _ = myQueue(tokens[0])
+			assert.Equal(t, "", rows[queued["second"].ID]["queue_start_date"])
+			assert.Equal(t, false, setQueue(`{"daily_capacity":-1,"extra_slots":0,"paused":false,"resume_at":0}`)["success"])
 		})
 	}
 }

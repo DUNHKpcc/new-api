@@ -45,6 +45,8 @@ export const GUARDIAN_QUERY_KEYS = {
   myOrders: ['guardian', 'orders', 'self'] as const,
   adminServices: ['guardian', 'admin', 'services'] as const,
   adminOrders: ['guardian', 'admin', 'orders'] as const,
+  /** Nested under adminOrders so order changes also refresh the queue. */
+  adminQueue: ['guardian', 'admin', 'orders', 'queue'] as const,
   githubStars: ['guardian', 'github-stars'] as const,
 }
 

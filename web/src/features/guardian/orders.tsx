@@ -33,9 +33,17 @@ import { listMyGuardianOrders } from './api'
 import { GuardianShell } from './components/guardian-shell'
 import { OrderCard } from './components/order-card'
 import { GUARDIAN_QUERY_KEYS } from './constants'
+import type { GuardianOrderStatus } from './types'
 
 const PAGE_SIZE = 10
 const PENDING_REFRESH_MS = 15000
+/** Orders whose payment or queue place can change while the page is open. */
+const WATCHED_STATUSES = new Set<GuardianOrderStatus>([
+  'pending_payment',
+  'paid',
+  'scheduled',
+  'in_progress',
+])
 
 export type GuardianPayResult = 'success' | 'pending' | 'fail'
 
@@ -70,8 +78,8 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
     queryKey: [...GUARDIAN_QUERY_KEYS.myOrders, page],
     queryFn: () => listMyGuardianOrders(page, PAGE_SIZE),
     refetchInterval: (query) =>
-      query.state.data?.items.some(
-        (order) => order.status === 'pending_payment'
+      query.state.data?.items.some((order) =>
+        WATCHED_STATUSES.has(order.status)
       )
         ? PENDING_REFRESH_MS
         : false,
@@ -123,7 +131,11 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
 
           {orders.isSuccess &&
             orders.data.items.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard
+                key={order.id}
+                order={order}
+                queue={orders.data.queue}
+              />
             ))}
         </div>
 

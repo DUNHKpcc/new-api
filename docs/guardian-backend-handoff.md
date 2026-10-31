@@ -221,6 +221,19 @@ apiRouter.POST("/guardian/epay/return", anonymousRequestBodyLimit, controller.Gu
 
 **完全不需要改动**现有的 `topup_*.go`、`subscription_payment_*.go` 和 Stripe、Creem、Waffo 的回调。
 
+### 4.5 排单
+
+- 订单付款成功时写入 `queue_seq`（当前最大值加 1），排到队尾。排队顺序为 `queue_seq, paid_at, id`；排单功能上线前已付款的订单 `queue_seq` 为 0，按付款时间排在最前。
+- 买家看到的"前面还有几单" = 额外占位数 + 交付中订单数 + 队列里排在前面的已付款或已排期订单数。`GET /api/guardian/orders/self` 的已付款、已排期订单带 `queue_ahead` 和 `queue_start_date`（`YYYY-MM-DD`，没有预计时为空），响应顶层带 `queue: { paused, resume_at }`。只返回数字，不暴露其他买家的订单。
+- 预计开始日期：今天已开始的单数（订单历史中当天转入 `in_progress` 的订单数）先占用当天名额，再按每日上限依次往后排；暂停且设了恢复时间时从恢复当天算起；暂停但没有恢复时间、或没有每日上限且未暂停时不给日期。日期按服务器时区计算。
+- 设置保存在系统选项 `guardian_queue.daily_capacity`、`guardian_queue.extra_slots`、`guardian_queue.paused`、`guardian_queue.resume_at`。恢复时间过去后自动视为未暂停。
+
+| 方法和路径 | 请求 | 返回的 `data` |
+| --- | --- | --- |
+| `GET /api/guardian/admin/queue` | 无 | `{ setting, paused, started_today, in_progress: AdminGuardianOrder[], waiting: (AdminGuardianOrder + queue_ahead + queue_start_date)[] }` |
+| `PUT /api/guardian/admin/queue/settings` | `{ daily_capacity, extra_slots, paused, resume_at }`，前两项 0 到 1000，`resume_at` 为 Unix 秒、0 表示手动恢复 | 保存后的设置 |
+| `POST /api/guardian/admin/queue/:id/move` | `{ "position": 1 }`，在排队订单中的位置（从 1 开始） | `null`；交付中或已结束的订单返回 `success:false` |
+
 ## 5. 前端已经替你做好的部分
 
 - 顶部导航默认显示 "Guardian" 入口。想隐藏的话，在 `HeaderNavModules` 里加 `"guardian": false`，前端会读取这个值，后端不用改。

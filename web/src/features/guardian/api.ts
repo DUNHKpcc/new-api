@@ -21,6 +21,7 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 
 import type {
   AdminGuardianOrder,
+  AdminGuardianQueue,
   GuardianCatalog,
   GuardianContactUpdate,
   GuardianOrderEvent,
@@ -30,7 +31,9 @@ import type {
   GuardianOrderRequest,
   GuardianOrderStatus,
   GuardianOrderUpdate,
+  GuardianMyOrders,
   GuardianPage,
+  GuardianQueueSetting,
   GuardianService,
   GuardianServicePayload,
 } from './types'
@@ -59,10 +62,9 @@ export async function createGuardianOrder(request: GuardianOrderRequest) {
 export async function listMyGuardianOrders(p: number, page_size: number) {
   return requireServerSuccess(
     (
-      await api.get<Response<GuardianPage<GuardianOrder>>>(
-        `${base}/orders/self`,
-        { params: { p, page_size } }
-      )
+      await api.get<Response<GuardianMyOrders>>(`${base}/orders/self`, {
+        params: { p, page_size },
+      })
     ).data
   ).data
 }
@@ -171,4 +173,33 @@ export async function getGuardianPaymentAnomalies(id: number, p: number) {
       )
     ).data
   ).data
+}
+
+export async function getAdminGuardianQueue() {
+  return requireServerSuccess(
+    (await api.get<Response<AdminGuardianQueue>>(`${base}/admin/queue`)).data
+  ).data
+}
+
+export async function updateGuardianQueueSetting(
+  setting: GuardianQueueSetting
+) {
+  return requireServerSuccess(
+    (
+      await api.put<Response<GuardianQueueSetting>>(
+        `${base}/admin/queue/settings`,
+        setting
+      )
+    ).data
+  ).data
+}
+
+export async function moveGuardianQueueOrder(id: number, position: number) {
+  return requireServerSuccess(
+    (
+      await api.post<Response<null>>(`${base}/admin/queue/${id}/move`, {
+        position,
+      })
+    ).data
+  )
 }

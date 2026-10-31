@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { GuardianOrdersPanel } from './components/admin/orders-panel'
+import { GuardianQueuePanel } from './components/admin/queue-panel'
 import { GuardianServicesPanel } from './components/admin/services-panel'
 
 export function GuardianAdmin() {
@@ -49,10 +50,14 @@ export function GuardianAdmin() {
         <Tabs defaultValue='orders'>
           <TabsList>
             <TabsTrigger value='orders'>{t('Orders')}</TabsTrigger>
+            <TabsTrigger value='queue'>{t('Queue')}</TabsTrigger>
             <TabsTrigger value='services'>{t('Service catalog')}</TabsTrigger>
           </TabsList>
           <TabsContent value='orders' className='mt-4'>
             <GuardianOrdersPanel />
+          </TabsContent>
+          <TabsContent value='queue' className='mt-4'>
+            <GuardianQueuePanel />
           </TabsContent>
           <TabsContent value='services' className='mt-4'>
             <GuardianServicesPanel />

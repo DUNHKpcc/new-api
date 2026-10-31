@@ -198,7 +198,25 @@ func ListMyGuardianOrders(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, gin.H{"items": orders, "total": total})
+	setting, now := operation_setting.GetGuardianQueueSetting(), time.Now()
+	items := make([]guardianOrderView, 0, len(orders))
+	var queue *model.GuardianQueue
+	for _, order := range orders {
+		view := guardianOrderView{GuardianServiceOrder: order}
+		if order.Status == "paid" || order.Status == "scheduled" {
+			if queue == nil {
+				if queue, err = model.LoadGuardianQueue(setting, now); err != nil {
+					common.ApiError(c, err)
+					return
+				}
+			}
+			if slot, ok := queue.Slots[order.ID]; ok {
+				view.QueueAhead, view.QueueStartDate = &slot.Ahead, slot.StartDate
+			}
+		}
+		items = append(items, view)
+	}
+	common.ApiSuccess(c, gin.H{"items": items, "total": total, "queue": gin.H{"paused": setting.PausedAt(now.Unix()), "resume_at": setting.ResumeAt}})
 }
 func AdminListGuardianOrders(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))

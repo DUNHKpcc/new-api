@@ -127,6 +127,7 @@ type GuardianServiceOrder struct {
 	ProviderPayload   string `json:"-" gorm:"type:text"`
 	CreatedAt         int64  `json:"created_at"`
 	PaidAt            int64  `json:"paid_at"`
+	QueueSeq          int64  `json:"-" gorm:"index"`
 	DeliveredAt       int64  `json:"delivered_at"`
 	UpdatedAt         int64  `json:"updated_at"`
 }
@@ -245,10 +246,15 @@ func CompleteGuardianOrder(tradeNo, payload, paidMoney, paymentMethod string) er
 		if !slices.Contains([]string{"pending_payment", "expired", "cancelled"}, order.Status) {
 			return nil
 		}
+		// A paid order joins the end of the delivery queue.
+		var lastSeq int64
+		if err := tx.Model(&GuardianServiceOrder{}).Select("COALESCE(MAX(queue_seq), 0)").Scan(&lastSeq).Error; err != nil {
+			return err
+		}
 		before := order
 		now := time.Now().Unix()
-		order.Status, order.PaidAt, order.UpdatedAt, order.ProviderPayload, order.PaymentMethod = "paid", now, now, payload, paymentMethod
-		if err := tx.Model(&order).Select("status", "paid_at", "updated_at", "provider_payload", "payment_method").Updates(&order).Error; err != nil {
+		order.Status, order.PaidAt, order.UpdatedAt, order.ProviderPayload, order.PaymentMethod, order.QueueSeq = "paid", now, now, payload, paymentMethod, lastSeq+1
+		if err := tx.Model(&order).Select("status", "paid_at", "updated_at", "provider_payload", "payment_method", "queue_seq").Updates(&order).Error; err != nil {
 			return err
 		}
 		return recordGuardianOrderEvent(tx, before, order, 0, "payment", "paid")
@@ -349,7 +355,6 @@ func ListUserGuardianOrders(userID, page, pageSize int) ([]GuardianServiceOrder,
 	return orders, total, nil
 }
 
-// Usernames include soft-deleted accounts so their paid orders stay traceable.
 func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomaliesOnly bool) ([]AdminGuardianOrder, int64, error) {
 	if err := expireGuardianOrders(DB, 0); err != nil {
 		return nil, 0, err
@@ -373,6 +378,12 @@ func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomali
 	if err := query.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&orders).Error; err != nil {
 		return nil, 0, err
 	}
+	result, err := AdminGuardianOrders(orders)
+	return result, total, err
+}
+
+// Usernames include soft-deleted accounts so their paid orders stay traceable.
+func AdminGuardianOrders(orders []GuardianServiceOrder) ([]AdminGuardianOrder, error) {
 	ids := make([]int, 0, len(orders))
 	for _, order := range orders {
 		ids = append(ids, order.UserID)
@@ -380,7 +391,7 @@ func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomali
 	users := []User{}
 	if len(ids) > 0 {
 		if err := DB.Unscoped().Select("id", "username").Where("id IN ?", ids).Find(&users).Error; err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 	}
 	names := map[int]string{}
@@ -391,5 +402,5 @@ func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomali
 	for _, order := range orders {
 		result = append(result, AdminGuardianOrder{GuardianServiceOrder: order, PaymentAnomaly: order.HasPaymentAnomaly, AdminUserID: order.UserID, Username: names[order.UserID]})
 	}
-	return result, total, nil
+	return result, nil
 }

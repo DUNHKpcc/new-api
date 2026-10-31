@@ -56,6 +56,9 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	// Guardian purchases and administration use dashboard sessions.
 	"PUT /api/guardian/orders/:id/contact":       accessTokenSessionRule,
 	"GET /api/guardian/admin/orders/:id/history": accessTokenSessionRule,
+	"GET /api/guardian/admin/queue":              accessTokenSessionRule,
+	"PUT /api/guardian/admin/queue/settings":     accessTokenSessionRule,
+	"POST /api/guardian/admin/queue/:id/move":    accessTokenSessionRule,
 	"POST /api/guardian/orders":                  accessTokenSessionRule,
 	"GET /api/guardian/orders/self":              accessTokenSessionRule,
 	"POST /api/guardian/orders/:id/pay":          accessTokenSessionRule,

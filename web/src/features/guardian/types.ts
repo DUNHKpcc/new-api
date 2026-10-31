@@ -98,6 +98,27 @@ export interface GuardianOrder {
   refunded_at?: number
   delivered_at: number
   updated_at: number
+  /** Orders ahead of this one; only set while it waits to start. */
+  queue_ahead?: number | null
+  /** Estimated start day as YYYY-MM-DD, empty when there is no estimate. */
+  queue_start_date?: string
+}
+
+export interface GuardianQueueState {
+  paused: boolean
+  /** Unix seconds; 0 means paused until resumed manually. */
+  resume_at: number
+}
+
+export interface GuardianMyOrders extends GuardianPage<GuardianOrder> {
+  queue?: GuardianQueueState
+}
+
+export interface GuardianQueueSetting {
+  daily_capacity: number
+  extra_slots: number
+  paused: boolean
+  resume_at: number
 }
 
 export interface AdminGuardianOrder extends GuardianOrder {
@@ -140,4 +161,17 @@ export interface GuardianPaymentAnomaly {
   occurrences: number
   first_seen_at: number
   last_seen_at: number
+}
+
+export interface AdminGuardianQueueItem extends AdminGuardianOrder {
+  queue_ahead: number
+  queue_start_date: string
+}
+
+export interface AdminGuardianQueue {
+  setting: GuardianQueueSetting
+  paused: boolean
+  started_today: number
+  in_progress: AdminGuardianOrder[]
+  waiting: AdminGuardianQueueItem[]
 }

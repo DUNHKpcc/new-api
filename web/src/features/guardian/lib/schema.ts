@@ -110,3 +110,27 @@ export const guardianContactSchema = guardianOrderSchema.pick({
   contact: true,
   note: true,
 })
+
+const queueCount = z
+  .number({ message: 'Enter a whole number' })
+  .int('Enter a whole number')
+  .min(0, 'Enter a number between 0 and 1000')
+  .max(1000, 'Enter a number between 0 and 1000')
+
+export const guardianQueueSettingSchema = z
+  .object({
+    daily_capacity: queueCount,
+    extra_slots: queueCount,
+    paused: z.boolean(),
+    resume_at: z.date().optional(),
+  })
+  .refine(
+    (value) =>
+      !value.paused ||
+      !value.resume_at ||
+      value.resume_at.getTime() > Date.now(),
+    { path: ['resume_at'], message: 'Resume time must be in the future' }
+  )
+export type GuardianQueueSettingForm = z.infer<
+  typeof guardianQueueSettingSchema
+>
