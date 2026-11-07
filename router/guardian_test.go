@@ -207,6 +207,16 @@ func TestGuardianLifecycle(t *testing.T) {
 			require.NoError(t, grant.SetScopes([]string{"billing:read", "billing:write"}))
 			require.NoError(t, model.CreateUserAccessToken(users[1].Id, grant, service.AccessTokenMaxPerUser))
 			assert.Equal(t, http.StatusForbidden, request("GET", "/api/guardian/admin/orders", pat, "").Code)
+			for _, route := range []struct{ method, path string }{
+				{"GET", "/api/guardian/admin/historical-accounts"},
+				{"PUT", "/api/guardian/admin/historical-accounts"},
+				{"GET", "/api/guardian/admin/account-statuses"},
+				{"PUT", "/api/guardian/admin/account-statuses/1"},
+			} {
+				assert.Equal(t, http.StatusUnauthorized, request(route.method, route.path, "", "{}").Code)
+				assert.Equal(t, http.StatusForbidden, request(route.method, route.path, tokens[0], "{}").Code)
+				assert.Equal(t, http.StatusForbidden, request(route.method, route.path, pat, "{}").Code)
+			}
 			assert.Equal(t, http.StatusUnauthorized, request("GET", "/api/guardian/orders/self", "invalid-token", "").Code)
 			payload := `{"title":" VPS 部署 ","subtitle":"环境","description":"说明","features":[" Linux "," "],"price_cents":59901,"delivery_note":"三天","badge":"","route":"vps","enabled":true,"sort_order":10}`
 			created := decode(request("POST", "/api/guardian/admin/services", tokens[1], payload))
