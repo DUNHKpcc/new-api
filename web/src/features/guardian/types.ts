@@ -31,6 +31,9 @@ export type GuardianOrderStatus =
   | 'refunded'
 
 export interface GuardianService {
+  base_sales?: number
+  actual_sales?: number
+  sold_count?: number
   id: number
   title: string
   subtitle: string
@@ -49,7 +52,7 @@ export interface GuardianService {
 
 export type GuardianServicePayload = Omit<
   GuardianService,
-  'id' | 'created_at' | 'updated_at'
+  'id' | 'created_at' | 'updated_at' | 'actual_sales' | 'sold_count'
 >
 
 export interface GuardianPayMethod {
@@ -174,4 +177,38 @@ export interface AdminGuardianQueue {
   started_today: number
   in_progress: AdminGuardianOrder[]
   waiting: AdminGuardianQueueItem[]
+}
+
+export interface GuardianAccountFlags {
+  banned: boolean
+  phone_required: boolean
+  kyc_required: boolean
+}
+export interface GuardianAccountStatus extends GuardianAccountFlags {
+  user_id: number
+  username: string
+  updated_at: number
+  historical_category?: string
+}
+export interface GuardianAccountStatistics {
+  historical_users: number
+  healthy_users: number
+  all_issues_users: number
+  purchased_users: number
+  recorded_users: number
+  banned_users: number
+  phone_required_users: number
+  kyc_required_users: number
+  updated_at: number
+}
+
+export interface GuardianHistoricalAccounts {
+  total_users: number
+  banned_only: number
+  kyc_only: number
+  phone_only: number
+  banned_kyc: number
+  banned_phone: number
+  kyc_phone: number
+  all_three: number
 }

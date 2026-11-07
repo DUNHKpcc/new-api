@@ -37,6 +37,9 @@ func (f *GuardianFeatures) Scan(value any) error {
 }
 
 type GuardianService struct {
+	BaseSales    int64            `json:"base_sales"`
+	ActualSales  *int64           `json:"actual_sales,omitempty" gorm:"-"`
+	SoldCount    *int64           `json:"sold_count,omitempty" gorm:"-"`
 	ID           int              `json:"id"`
 	Title        string           `json:"title" gorm:"type:varchar(128);not null"`
 	Subtitle     string           `json:"subtitle" gorm:"type:varchar(255)"`
@@ -53,6 +56,9 @@ type GuardianService struct {
 }
 
 func (s *GuardianService) Validate() error {
+	if s.BaseSales < 0 || s.BaseSales > 1000000000 {
+		return errors.New("基础销量须为 0 至 1000000000 的整数")
+	}
 	for _, field := range []struct {
 		value *string
 		max   int
@@ -81,6 +87,35 @@ func (s *GuardianService) Validate() error {
 		return errors.New("服务规格最多 12 条")
 	}
 	s.Features = features
+	return nil
+}
+
+// PopulateGuardianSales counts each retained paid order once, regardless of delivery stage.
+func PopulateGuardianSales(services []GuardianService) error {
+	if len(services) == 0 {
+		return nil
+	}
+	ids := make([]int, len(services))
+	for i := range services {
+		ids[i] = services[i].ID
+		services[i].ActualSales, services[i].SoldCount = nil, nil
+	}
+	var counts []struct {
+		ServiceID int
+		Total     int64
+	}
+	if err := DB.Model(&GuardianServiceOrder{}).Select("service_id, COUNT(*) AS total").Where("service_id IN ? AND status IN ?", ids, []string{"paid", "scheduled", "in_progress", "delivered"}).Group("service_id").Scan(&counts).Error; err != nil {
+		return err
+	}
+	totals := make(map[int]int64, len(counts))
+	for _, count := range counts {
+		totals[count.ServiceID] = count.Total
+	}
+	for i := range services {
+		actual := totals[services[i].ID]
+		sold := services[i].BaseSales + actual
+		services[i].ActualSales, services[i].SoldCount = &actual, &sold
+	}
 	return nil
 }
 

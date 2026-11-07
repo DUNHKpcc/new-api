@@ -20,6 +20,10 @@ import { api } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import type {
+  GuardianHistoricalAccounts,
+  GuardianAccountFlags,
+  GuardianAccountStatus,
+  GuardianAccountStatistics,
   AdminGuardianOrder,
   AdminGuardianQueue,
   GuardianCatalog,
@@ -202,4 +206,63 @@ export async function moveGuardianQueueOrder(id: number, position: number) {
       })
     ).data
   )
+}
+
+export async function getGuardianAccountStatistics() {
+  return requireServerSuccess(
+    (
+      await api.get<Response<GuardianAccountStatistics>>(
+        `${base}/account-statistics`
+      )
+    ).data
+  ).data
+}
+export async function listGuardianAccountStatuses(
+  p: number,
+  page_size: number,
+  keyword: string
+) {
+  return requireServerSuccess(
+    (
+      await api.get<Response<GuardianPage<GuardianAccountStatus>>>(
+        `${base}/admin/account-statuses`,
+        { params: { p, page_size, keyword } }
+      )
+    ).data
+  ).data
+}
+export async function saveGuardianAccountStatus(
+  userId: number,
+  flags: GuardianAccountFlags & { historical_category?: string }
+) {
+  return requireServerSuccess(
+    (
+      await api.put<Response<GuardianAccountStatus>>(
+        `${base}/admin/account-statuses/${userId}`,
+        flags
+      )
+    ).data
+  ).data
+}
+
+export async function getGuardianHistoricalAccounts() {
+  return requireServerSuccess(
+    (
+      await api.get<
+        Response<{ settings: GuardianHistoricalAccounts; base_sales: number }>
+      >(`${base}/admin/historical-accounts`)
+    ).data
+  ).data
+}
+export async function saveGuardianHistoricalAccounts(
+  values: GuardianHistoricalAccounts
+) {
+  return requireServerSuccess(
+    (
+      await api.put<Response<GuardianHistoricalAccounts>>(
+        `${base}/admin/historical-accounts`,
+        values
+      )
+    ).data
+  ).data
 }

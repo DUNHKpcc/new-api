@@ -16,9 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Button } from '@/components/ui/button'
 
 import { ServicesFaqSection } from './components/faq-section'
 import { GuardianShell } from './components/guardian-shell'
@@ -35,16 +37,9 @@ function ServicesIntro() {
 
   return (
     <div className='flex flex-col items-center text-center'>
-      <p className='g-rule inline-flex items-center gap-2 rounded-full border bg-[var(--g-paper-raised)] px-3 py-1 text-xs tracking-[0.02em] text-[var(--g-ink-soft)]'>
-        <span
-          aria-hidden='true'
-          className='size-1.5 rounded-full bg-[var(--g-accent)]'
-        />
-        {t('Hands-on services')}
-      </p>
       <h1
         id='services-title'
-        className='g-display mt-5 max-w-5xl text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem]'
+        className='g-display max-w-5xl text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem]'
       >
         <span className='block'>
           {t('Rather have someone do it with you?')}
@@ -53,11 +48,13 @@ function ServicesIntro() {
           {t('We set it up together, on your machine.')}
         </span>
       </h1>
-      <p className='mt-5 max-w-2xl text-[1.0625rem] leading-[1.625] tracking-[-0.01em] text-pretty text-[var(--g-ink-soft)]'>
-        {t(
-          'The Skill is free and always will be. A session follows the same red lines and authorization tiers, with someone who has done it before.'
-        )}
-      </p>
+      <Button
+        variant='outline'
+        className='mt-5 border-[var(--g-accent)] bg-[var(--g-accent-wash)] font-semibold text-[var(--g-accent)] hover:bg-[var(--g-accent-wash)] hover:text-[var(--g-accent)]'
+        render={<Link to='/guardian/account-statistics' />}
+      >
+        {t('Click to view purchased user account status')}
+      </Button>
       <ul className='mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[var(--g-ink-soft)]'>
         {promises.map((promise) => (
           <li key={promise} className='flex items-center gap-2'>

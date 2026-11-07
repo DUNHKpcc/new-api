@@ -30,6 +30,36 @@ import (
 	"gorm.io/gorm"
 )
 
+// Released rc.48 service schema, retained as an upgrade fixture.
+type guardianServiceRC48 struct {
+	ID           int
+	Title        string                 `gorm:"type:varchar(128);not null"`
+	Subtitle     string                 `gorm:"type:varchar(255)"`
+	Description  string                 `gorm:"type:text"`
+	Features     model.GuardianFeatures `gorm:"type:text"`
+	PriceCents   int64                  `gorm:"not null"`
+	DeliveryNote string                 `gorm:"type:varchar(128)"`
+	Badge        string                 `gorm:"type:varchar(32)"`
+	Route        string                 `gorm:"type:varchar(16)"`
+	Enabled      bool
+	SortOrder    int
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+func (guardianServiceRC48) TableName() string { return "guardian_services" }
+
+type guardianAccountStatusBeforeLinks struct {
+	UserID        int `gorm:"primaryKey;autoIncrement:false"`
+	Banned        bool
+	PhoneRequired bool
+	KYCRequired   bool
+	UpdatedAt     int64
+	UpdatedBy     int
+}
+
+func (guardianAccountStatusBeforeLinks) TableName() string { return "guardian_account_statuses" }
+
 func TestGuardianLifecycle(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -59,6 +89,13 @@ func TestGuardianLifecycle(t *testing.T) {
 			}
 			db, err := gorm.Open(driver, &gorm.Config{})
 			require.NoError(t, err)
+			var version string
+			if dialect == "sqlite" {
+				require.NoError(t, db.Raw("SELECT sqlite_version()").Scan(&version).Error)
+			} else {
+				require.NoError(t, db.Raw("SELECT version()").Scan(&version).Error)
+			}
+			t.Logf("Database version: %s", version)
 			sqlDB, err := db.DB()
 			require.NoError(t, err)
 			if dialect == "sqlite" {
@@ -95,8 +132,32 @@ func TestGuardianLifecycle(t *testing.T) {
 			suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 			users := []model.User{{Username: "buyer-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "a" + suffix}, {Username: "admin-" + suffix, Password: "unused", Role: common.RoleAdminUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "b" + suffix}, {Username: "other-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "c" + suffix}}
 			require.NoError(t, db.Create(&users).Error)
+			var legacy guardianServiceRC48
+			if os.Getenv("TEST_GUARDIAN_UPGRADE") == "1" {
+				require.NoError(t, db.AutoMigrate(&guardianServiceRC48{}, &model.GuardianServiceOrder{}, &guardianAccountStatusBeforeLinks{}))
+				require.NoError(t, db.Create(&guardianAccountStatusBeforeLinks{UserID: users[2].Id, Banned: true, UpdatedAt: 123, UpdatedBy: users[1].Id}).Error)
+				legacy = guardianServiceRC48{Title: "Historical service", PriceCents: 19900, Features: model.GuardianFeatures{"Existing feature"}, Route: "any"}
+				require.NoError(t, db.Create(&legacy).Error)
+				require.NoError(t, db.Create(&model.GuardianServiceOrder{TradeNo: "historical-" + suffix, ServiceID: legacy.ID, Status: "delivered"}).Error)
+			}
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+			}
+			if legacy.ID != 0 {
+				var migratedStatus model.GuardianAccountStatus
+				require.NoError(t, db.First(&migratedStatus, "user_id = ?", users[2].Id).Error)
+				assert.True(t, migratedStatus.Banned)
+				assert.Empty(t, migratedStatus.HistoricalCategory)
+				assert.EqualValues(t, 123, migratedStatus.UpdatedAt)
+				var migrated model.GuardianService
+				require.NoError(t, db.First(&migrated, legacy.ID).Error)
+				assert.Equal(t, legacy.Title, migrated.Title)
+				assert.Equal(t, legacy.Features, migrated.Features)
+				assert.Equal(t, legacy.PriceCents, migrated.PriceCents)
+				assert.Zero(t, migrated.BaseSales)
+				services := []model.GuardianService{migrated}
+				require.NoError(t, model.PopulateGuardianSales(services))
+				assert.EqualValues(t, 1, *services[0].SoldCount)
 			}
 			var preserved model.User
 			require.NoError(t, db.First(&preserved, users[0].Id).Error)
@@ -157,6 +218,251 @@ func TestGuardianLifecycle(t *testing.T) {
 			catalog := decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)
 			assert.Equal(t, true, catalog["purchase_enabled"])
 			assert.Len(t, catalog["pay_methods"], 1)
+			t.Run("sales", func(t *testing.T) {
+				servicePath := fmt.Sprintf("/api/guardian/admin/services/%d", id)
+				for _, invalid := range []string{"-1", "1.5", "1000000001"} {
+					body := strings.Replace(payload, `"sort_order":10`, `"sort_order":10,"base_sales":`+invalid, 1)
+					assert.Equal(t, false, decode(request("PUT", servicePath, tokens[1], body))["success"])
+				}
+				rows := []model.GuardianServiceOrder{}
+				for i, status := range []string{"pending_payment", "paid", "scheduled", "in_progress", "delivered", "expired", "cancelled", "refunded"} {
+					rows = append(rows, model.GuardianServiceOrder{TradeNo: fmt.Sprintf("sales-%s-%d", suffix, i), ServiceID: id, UserID: users[0].Id, Status: status})
+				}
+				rows = append(rows, model.GuardianServiceOrder{TradeNo: "sales-other-" + suffix, ServiceID: id + 100000, Status: "paid"})
+				require.NoError(t, db.Create(&rows).Error)
+				defer func() {
+					for _, row := range rows {
+						require.NoError(t, db.Delete(&row).Error)
+					}
+				}()
+				body := strings.Replace(payload, `"sort_order":10`, `"sort_order":10,"base_sales":5,"sold_count":999,"actual_sales":999`, 1)
+				result := decode(request("PUT", servicePath, tokens[1], body))
+				require.Equal(t, true, result["success"])
+				data := result["data"].(map[string]any)
+				assert.Equal(t, float64(4), data["actual_sales"])
+				assert.Equal(t, float64(9), data["sold_count"])
+				var public struct {
+					Data struct{ Services []model.GuardianService }
+				}
+				require.NoError(t, common.Unmarshal(request("GET", "/api/guardian/services", "", "").Body.Bytes(), &public))
+				found := false
+				for _, item := range public.Data.Services {
+					if item.ID == id {
+						found = true
+						assert.EqualValues(t, 9, *item.SoldCount)
+					}
+				}
+				require.True(t, found)
+				require.NoError(t, db.Model(&rows[1]).Update("status", "delivered").Error)
+				services := []model.GuardianService{{ID: id, BaseSales: 5}}
+				require.NoError(t, model.PopulateGuardianSales(services))
+				assert.EqualValues(t, 9, *services[0].SoldCount)
+				require.NoError(t, db.Model(&rows[1]).Update("status", "refunded").Error)
+				require.NoError(t, model.PopulateGuardianSales(services))
+				assert.EqualValues(t, 8, *services[0].SoldCount)
+				reset := decode(request("PUT", servicePath, tokens[1], payload))
+				require.Equal(t, true, reset["success"])
+				assert.Equal(t, float64(3), reset["data"].(map[string]any)["sold_count"])
+				var stored model.GuardianService
+				require.NoError(t, db.First(&stored, id).Error)
+				assert.Zero(t, stored.BaseSales)
+			})
+			t.Run("account_status", func(t *testing.T) {
+				path := "/api/guardian/admin/account-statuses"
+				assert.Equal(t, http.StatusUnauthorized, request("GET", path, "", "").Code)
+				assert.Equal(t, http.StatusForbidden, request("GET", path, tokens[0], "").Code)
+				snapshot := func() model.GuardianAccountStatistics {
+					t.Helper()
+					response := request("GET", "/api/guardian/account-statistics", "", "")
+					require.Equal(t, http.StatusOK, response.Code)
+					var result struct {
+						Success bool
+						Data    model.GuardianAccountStatistics
+					}
+					require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+					require.True(t, result.Success)
+					assert.NotContains(t, response.Body.String(), "username")
+					assert.NotContains(t, response.Body.String(), "user_id")
+					return result.Data
+				}
+
+				var historicalService model.GuardianService
+				require.NoError(t, db.First(&historicalService, id).Error)
+				originalHistoryBase := historicalService.BaseSales
+				require.NoError(t, db.Model(&historicalService).Update("base_sales", originalHistoryBase+20).Error)
+				historyPath := "/api/guardian/admin/historical-accounts"
+				assert.Equal(t, http.StatusUnauthorized, request("GET", historyPath, "", "").Code)
+				assert.Equal(t, http.StatusForbidden, request("GET", historyPath, tokens[0], "").Code)
+				defaults, err := model.GetGuardianHistoricalAccounts()
+				require.NoError(t, err)
+				assert.Equal(t, model.GuardianHistoricalAccounts{}, defaults)
+				baseline := snapshot()
+				bodyHistory := `{"total_users":20,"banned_only":1,"kyc_only":1,"phone_only":1,"banned_kyc":1,"banned_phone":1,"kyc_phone":1,"all_three":1}`
+				assert.Equal(t, http.StatusUnauthorized, request("PUT", historyPath, "", bodyHistory).Code)
+				assert.Equal(t, http.StatusForbidden, request("PUT", historyPath, tokens[0], bodyHistory).Code)
+				require.Equal(t, true, decode(request("PUT", historyPath, tokens[1], bodyHistory))["success"])
+				historicalStats := snapshot()
+				assert.Equal(t, baseline.PurchasedUsers+20, historicalStats.PurchasedUsers)
+				assert.Equal(t, baseline.RecordedUsers+20, historicalStats.RecordedUsers)
+				assert.Equal(t, int64(20), historicalStats.HistoricalUsers)
+				assert.Equal(t, baseline.HealthyUsers+13, historicalStats.HealthyUsers)
+				assert.Equal(t, baseline.AllIssuesUsers+1, historicalStats.AllIssuesUsers)
+				assert.Equal(t, baseline.BannedUsers+4, historicalStats.BannedUsers)
+				assert.Equal(t, baseline.PhoneRequiredUsers+4, historicalStats.PhoneRequiredUsers)
+				assert.Equal(t, baseline.KYCRequiredUsers+4, historicalStats.KYCRequiredUsers)
+				storedHistory, err := model.GetGuardianHistoricalAccounts()
+				require.NoError(t, err)
+				assert.Equal(t, int64(20), storedHistory.TotalUsers)
+				for _, invalid := range []string{`{"total_users":-1}`, `{"total_users":1,"banned_only":1,"kyc_only":1}`, `{"total_users":1.5}`, `{"total_users":1000000001}`, `{"total_users":1000000000}`} {
+					assert.Equal(t, false, decode(request("PUT", historyPath, tokens[1], invalid))["success"])
+				}
+				assert.Error(t, model.UpdateOption("GuardianHistoricalAccounts", `{"total_users":0,"all_three":1}`))
+				assert.Equal(t, historicalStats, snapshot())
+				require.Equal(t, true, decode(request("PUT", historyPath, tokens[1], `{"total_users":0,"banned_only":0,"kyc_only":0,"phone_only":0,"banned_kyc":0,"banned_phone":0,"kyc_phone":0,"all_three":0}`))["success"])
+				assert.Equal(t, baseline, snapshot())
+				before := snapshot()
+				var service model.GuardianService
+				require.NoError(t, db.First(&service, id).Error)
+				originalBase := service.BaseSales
+				require.NoError(t, db.Model(&service).Update("base_sales", originalBase+7).Error)
+				withBase := snapshot()
+				assert.Equal(t, before.HistoricalUsers, withBase.HistoricalUsers)
+				assert.Equal(t, before.PurchasedUsers, withBase.PurchasedUsers)
+				assert.Equal(t, before.HealthyUsers, withBase.HealthyUsers)
+				require.NoError(t, db.Model(&service).Update("base_sales", originalBase).Error)
+
+				buyers := []model.User{
+					{Username: "status-a-" + suffix, AffCode: "sa" + suffix},
+					{Username: "status-b-" + suffix, AffCode: "sb" + suffix},
+				}
+				require.NoError(t, db.Create(&buyers).Error)
+				orders := []model.GuardianServiceOrder{
+					{TradeNo: "status-a-" + suffix, ServiceID: id, UserID: buyers[0].Id, Status: "paid"},
+					{TradeNo: "status-a2-" + suffix, ServiceID: id, UserID: buyers[0].Id, Status: "delivered"},
+					{TradeNo: "status-b-" + suffix, ServiceID: id, UserID: buyers[1].Id, Status: "in_progress"},
+				}
+				require.NoError(t, db.Create(&orders).Error)
+				after := snapshot()
+				assert.Equal(t, before.PurchasedUsers+2, after.PurchasedUsers)
+				assert.Equal(t, before.RecordedUsers, after.RecordedUsers)
+				response := decode(request("GET", path+"?keyword=status-&page_size=50", tokens[1], ""))
+				require.Equal(t, true, response["success"])
+				found := false
+				for _, item := range response["data"].(map[string]any)["items"].([]any) {
+					row := item.(map[string]any)
+					if row["user_id"] == float64(buyers[0].Id) {
+						found = true
+						assert.Equal(t, float64(0), row["updated_at"])
+					}
+				}
+				require.True(t, found)
+				updatePath := fmt.Sprintf("%s/%d", path, buyers[0].Id)
+				body := `{"banned":true,"phone_required":true,"kyc_required":true}`
+				assert.Equal(t, http.StatusUnauthorized, request("PUT", updatePath, "", body).Code)
+				assert.Equal(t, http.StatusForbidden, request("PUT", updatePath, tokens[0], body).Code)
+				for _, invalid := range []string{`{}`, `{"banned":true}`, `{"banned":"yes","phone_required":false,"kyc_required":false}`} {
+					assert.Equal(t, false, decode(request("PUT", updatePath, tokens[1], invalid))["success"])
+				}
+				assert.Equal(t, false, decode(request("PUT", fmt.Sprintf("%s/%d", path, users[1].Id), tokens[1], body))["success"])
+				for range 2 {
+					require.Equal(t, true, decode(request("PUT", updatePath, tokens[1], body))["success"])
+				}
+				after = snapshot()
+				assert.Equal(t, before.RecordedUsers+1, after.RecordedUsers)
+				assert.Equal(t, before.AllIssuesUsers+1, after.AllIssuesUsers)
+				assert.Equal(t, before.HealthyUsers, after.HealthyUsers)
+				assert.Equal(t, before.BannedUsers+1, after.BannedUsers)
+				assert.Equal(t, before.PhoneRequiredUsers+1, after.PhoneRequiredUsers)
+				assert.Equal(t, before.KYCRequiredUsers+1, after.KYCRequiredUsers)
+				require.Positive(t, after.UpdatedAt)
+				for range 2 {
+					require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}))
+				}
+				var stored model.GuardianAccountStatus
+				require.NoError(t, db.First(&stored, "user_id = ?", buyers[0].Id).Error)
+				assert.True(t, stored.Banned)
+				assert.True(t, stored.PhoneRequired)
+				assert.True(t, stored.KYCRequired)
+				assert.Equal(t, users[1].Id, stored.UpdatedBy)
+
+				for _, partial := range []string{
+					`{"banned":true,"phone_required":false,"kyc_required":false}`,
+					`{"banned":true,"phone_required":true,"kyc_required":false}`,
+				} {
+					require.Equal(t, true, decode(request("PUT", updatePath, tokens[1], partial))["success"])
+					partialStats := snapshot()
+					assert.Equal(t, before.AllIssuesUsers, partialStats.AllIssuesUsers)
+					assert.Equal(t, before.HealthyUsers, partialStats.HealthyUsers)
+					assert.Equal(t, before.RecordedUsers+1, partialStats.RecordedUsers)
+				}
+				cleared := `{"banned":false,"phone_required":false,"kyc_required":false}`
+				require.Equal(t, true, decode(request("PUT", updatePath, tokens[1], cleared))["success"])
+				after = snapshot()
+				assert.Equal(t, before.RecordedUsers+1, after.RecordedUsers)
+				assert.Equal(t, before.HealthyUsers+1, after.HealthyUsers)
+				assert.Equal(t, before.AllIssuesUsers, after.AllIssuesUsers)
+				assert.Equal(t, before.BannedUsers, after.BannedUsers)
+				assert.Equal(t, before.PhoneRequiredUsers, after.PhoneRequiredUsers)
+				assert.Equal(t, before.KYCRequiredUsers, after.KYCRequiredUsers)
+				require.NoError(t, db.Model(&model.GuardianServiceOrder{}).Where("user_id = ?", buyers[0].Id).Update("status", "refunded").Error)
+				after = snapshot()
+				assert.Equal(t, before.PurchasedUsers+1, after.PurchasedUsers)
+				assert.Equal(t, before.RecordedUsers, after.RecordedUsers)
+				assert.Equal(t, false, decode(request("PUT", updatePath, tokens[1], body))["success"])
+
+				historyAll := `{"total_users":8,"banned_only":1,"kyc_only":1,"phone_only":1,"banned_kyc":1,"banned_phone":1,"kyc_phone":1,"all_three":1}`
+				require.Equal(t, true, decode(request("PUT", historyPath, tokens[1], historyAll))["success"])
+				beforeLink := snapshot()
+				linkPath := fmt.Sprintf("%s/%d", path, buyers[1].Id)
+				for _, tc := range []struct {
+					category                string
+					banned, phone, kyc, all int64
+				}{
+					{"healthy", 0, 0, 0, 0}, {"banned_only", 1, 0, 0, 0}, {"kyc_only", 0, 0, 1, 0}, {"phone_only", 0, 1, 0, 0},
+					{"banned_kyc", 1, 0, 1, 0}, {"banned_phone", 1, 1, 0, 0}, {"kyc_phone", 0, 1, 1, 0}, {"all_three", 1, 1, 1, 1},
+				} {
+					linkedBody := fmt.Sprintf(`{"banned":false,"phone_required":false,"kyc_required":false,"historical_category":%q}`, tc.category)
+					for range 2 {
+						require.Equal(t, true, decode(request("PUT", linkPath, tokens[1], linkedBody))["success"])
+					}
+					linked := snapshot()
+					assert.Equal(t, beforeLink.PurchasedUsers-1, linked.PurchasedUsers)
+					assert.Equal(t, beforeLink.RecordedUsers, linked.RecordedUsers)
+					assert.Equal(t, beforeLink.BannedUsers-tc.banned, linked.BannedUsers)
+					assert.Equal(t, beforeLink.PhoneRequiredUsers-tc.phone, linked.PhoneRequiredUsers)
+					assert.Equal(t, beforeLink.KYCRequiredUsers-tc.kyc, linked.KYCRequiredUsers)
+					assert.Equal(t, beforeLink.AllIssuesUsers-tc.all, linked.AllIssuesUsers)
+				}
+
+				linkedSnapshot := snapshot()
+				repeatOrder := model.GuardianServiceOrder{TradeNo: "repeat-" + suffix, ServiceID: id, UserID: buyers[1].Id, Status: "paid"}
+				require.NoError(t, db.Create(&repeatOrder).Error)
+				assert.Equal(t, linkedSnapshot, snapshot())
+				require.NoError(t, db.Model(&orders[0]).Update("status", "paid").Error)
+				assert.Equal(t, false, decode(request("PUT", updatePath, tokens[1], `{"banned":false,"phone_required":false,"kyc_required":false,"historical_category":"all_three"}`))["success"])
+				require.NoError(t, db.Model(&orders[0]).Update("status", "refunded").Error)
+				assert.Equal(t, linkedSnapshot, snapshot())
+				assert.Equal(t, false, decode(request("PUT", historyPath, tokens[1], `{}`))["success"])
+				assert.Equal(t, false, decode(request("PUT", fmt.Sprintf("/api/guardian/admin/services/%d", id), tokens[1], payload))["success"])
+				var linkedStored model.GuardianAccountStatus
+				for range 2 {
+					require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}))
+				}
+				require.NoError(t, db.First(&linkedStored, "user_id = ?", buyers[1].Id).Error)
+				assert.Equal(t, "all_three", linkedStored.HistoricalCategory)
+				assert.Equal(t, false, decode(request("PUT", linkPath, tokens[1], `{"banned":false,"phone_required":false,"kyc_required":false,"historical_category":"invalid"}`))["success"])
+				require.NoError(t, db.Model(&model.GuardianServiceOrder{}).Where("user_id = ?", buyers[1].Id).Update("status", "refunded").Error)
+				assert.Equal(t, linkedSnapshot.PurchasedUsers, snapshot().PurchasedUsers)
+				linkedList, _, err := model.ListGuardianAccountStatuses(1, 50, buyers[1].Username)
+				require.NoError(t, err)
+				require.Len(t, linkedList, 1)
+				assert.Equal(t, "all_three", linkedList[0].HistoricalCategory)
+				require.Equal(t, true, decode(request("PUT", linkPath, tokens[1], cleared))["success"])
+				require.NoError(t, db.Model(&orders[2]).Update("status", "in_progress").Error)
+				assert.Equal(t, beforeLink.PurchasedUsers, snapshot().PurchasedUsers)
+				require.Equal(t, true, decode(request("PUT", historyPath, tokens[1], `{}`))["success"])
+				require.NoError(t, db.Model(&historicalService).Update("base_sales", originalHistoryBase).Error)
+			})
 			orderBody := fmt.Sprintf(`{"service_id":%d,"payment_method":"alipay","route":"vps","os":"linux","contact_type":"email","contact":" reader@example.test ","note":"部署"}`, id)
 			payment.ComplianceConfirmed = false
 			assert.Equal(t, false, decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)["purchase_enabled"])
@@ -315,7 +621,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Equal(t, "进度说明", change["before"].(map[string]any)["admin_note"])
 			assert.Equal(t, "refund note", change["after"].(map[string]any)["admin_note"])
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
 			}
 			var persistedAnomaly model.GuardianPaymentAnomaly
 			require.NoError(t, db.Where("order_id = ?", order.ID).First(&persistedAnomaly).Error)
@@ -390,7 +696,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.NotContains(t, accessLog.String(), operation_setting.EpayKey)
 			// Repeated migrations preserve rows, zero-valued fields, JSON arrays and unique order numbers.
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
 			}
 			require.NoError(t, db.First(&order, order.ID).Error)
 			replacement := strings.Replace(payload, `"enabled":true,`, ``, 1)

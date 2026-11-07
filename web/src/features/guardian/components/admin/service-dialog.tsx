@@ -34,6 +34,8 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { saveGuardianService } from '../../api'
@@ -51,6 +53,7 @@ const FORM_ID = 'guardian-service'
 function toFormValues(service?: GuardianService): GuardianServiceForm {
   if (!service) {
     return {
+      base_sales: 0,
       title: '',
       subtitle: '',
       description: '',
@@ -64,6 +67,7 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     }
   }
   return {
+    base_sales: service.base_sales ?? 0,
     title: service.title,
     subtitle: service.subtitle,
     description: service.description,
@@ -82,7 +86,8 @@ export function GuardianServiceDialog(props: {
   onClose: () => void
   onSaved: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
   const form = useForm<GuardianServiceForm>({
     resolver: zodResolver(guardianServiceSchema),
@@ -92,6 +97,7 @@ export function GuardianServiceDialog(props: {
     mutationFn: (values: GuardianServiceForm) =>
       saveGuardianService(
         {
+          base_sales: values.base_sales,
           title: values.title,
           subtitle: values.subtitle,
           description: values.description,
@@ -112,6 +118,8 @@ export function GuardianServiceDialog(props: {
     },
     onError: (error) => handleServerError(error, t('Failed to save service')),
   })
+  const baseSales = form.watch('base_sales')
+  const actualSales = props.service ? props.service.actual_sales : 0
   const errors = form.formState.errors
   const fieldError = (message?: string) =>
     message ? <FieldError>{t(message)}</FieldError> : null
@@ -175,6 +183,46 @@ export function GuardianServiceDialog(props: {
             {fieldError(errors.price?.message)}
           </Field>
         </div>
+
+        <Field data-invalid={!!errors.base_sales}>
+          <FieldLabel htmlFor='guardian-service-base-sales'>
+            {t('Base sales')}
+          </FieldLabel>
+          <Input
+            id='guardian-service-base-sales'
+            type='number'
+            min={0}
+            max={1000000000}
+            step={1}
+            aria-invalid={!!errors.base_sales}
+            {...form.register('base_sales', { valueAsNumber: true })}
+          />
+          <FieldDescription>
+            {t('Added to valid paid orders for display only.')}
+          </FieldDescription>
+          {errors.base_sales && (
+            <FieldError>
+              {t('Enter a whole number from 0 to 1,000,000,000')}
+            </FieldError>
+          )}
+          <p className='text-muted-foreground text-sm'>
+            {t('Actual sales: {{total}}', {
+              total: formatNumber(actualSales, locale),
+            })}
+            {' · '}
+            {t('Displayed sales: {{total}}', {
+              total: formatNumber(
+                actualSales == null ||
+                  !Number.isInteger(baseSales) ||
+                  baseSales < 0 ||
+                  baseSales > 1000000000
+                  ? undefined
+                  : actualSales + baseSales,
+                locale
+              ),
+            })}
+          </p>
+        </Field>
 
         <Field data-invalid={!!errors.subtitle}>
           <FieldLabel htmlFor='guardian-service-subtitle'>

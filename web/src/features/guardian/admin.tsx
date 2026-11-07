@@ -24,6 +24,8 @@ import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import { GuardianAccountStatusPanel } from './components/admin/account-status-panel'
+import { GuardianHistoricalAccountsPanel } from './components/admin/historical-accounts-panel'
 import { GuardianOrdersPanel } from './components/admin/orders-panel'
 import { GuardianQueuePanel } from './components/admin/queue-panel'
 import { GuardianServicesPanel } from './components/admin/services-panel'
@@ -52,12 +54,19 @@ export function GuardianAdmin() {
             <TabsTrigger value='orders'>{t('Orders')}</TabsTrigger>
             <TabsTrigger value='queue'>{t('Queue')}</TabsTrigger>
             <TabsTrigger value='services'>{t('Service catalog')}</TabsTrigger>
+            <TabsTrigger value='account-status'>
+              {t('Account status')}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value='orders' className='mt-4'>
             <GuardianOrdersPanel />
           </TabsContent>
           <TabsContent value='queue' className='mt-4'>
             <GuardianQueuePanel />
+          </TabsContent>
+          <TabsContent value='account-status' className='mt-4 space-y-4'>
+            <GuardianHistoricalAccountsPanel />
+            <GuardianAccountStatusPanel />
           </TabsContent>
           <TabsContent value='services' className='mt-4'>
             <GuardianServicesPanel />

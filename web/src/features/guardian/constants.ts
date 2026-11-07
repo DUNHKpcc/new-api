@@ -41,6 +41,9 @@ export const GUARDIAN_INSTALL_COMMAND = `git clone https://github.com/DUNHKpcc/C
 )`
 
 export const GUARDIAN_QUERY_KEYS = {
+  historicalAccounts: ['guardian', 'historical-accounts'],
+  accountStatistics: ['guardian', 'account-statistics'] as const,
+  adminAccountStatuses: ['guardian', 'admin', 'account-statuses'] as const,
   catalog: ['guardian', 'catalog'] as const,
   myOrders: ['guardian', 'orders', 'self'] as const,
   adminServices: ['guardian', 'admin', 'services'] as const,

@@ -34,6 +34,9 @@ func GetGuardianCatalog(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.PopulateGuardianSales(services); err != nil {
+		common.SysError("Guardian sales statistics unavailable: " + err.Error())
+	}
 	methods := guardianPayMethods()
 	common.ApiSuccess(c, gin.H{"services": services, "pay_methods": methods, "purchase_enabled": GetEpayClient() != nil && operation_setting.IsPaymentComplianceConfirmed() && len(methods) > 0})
 }
@@ -42,6 +45,9 @@ func AdminListGuardianServices(c *gin.Context) {
 	if err := model.DB.Order("sort_order, id").Find(&services).Error; err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if err := model.PopulateGuardianSales(services); err != nil {
+		common.SysError("Guardian sales statistics unavailable: " + err.Error())
 	}
 	common.ApiSuccess(c, services)
 }
@@ -62,7 +68,11 @@ func AdminCreateGuardianService(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, service)
+	services := []model.GuardianService{service}
+	if err := model.PopulateGuardianSales(services); err != nil {
+		common.SysError("Guardian sales statistics unavailable: " + err.Error())
+	}
+	common.ApiSuccess(c, services[0])
 }
 
 // The payload replaces the whole service, so an omitted enabled means delisted.
@@ -87,13 +97,21 @@ func AdminUpdateGuardianService(c *gin.Context) {
 		return
 	}
 	service.ID = id
-	service.CreatedAt = previous.CreatedAt
-	service.UpdatedAt = time.Now().Unix()
-	if err := model.DB.Model(&previous).Select("title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
+	if err := model.ValidateGuardianBaseSalesChange(previous.BaseSales, service.BaseSales); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, service)
+	service.CreatedAt = previous.CreatedAt
+	service.UpdatedAt = time.Now().Unix()
+	if err := model.DB.Model(&previous).Select("base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	services := []model.GuardianService{service}
+	if err := model.PopulateGuardianSales(services); err != nil {
+		common.SysError("Guardian sales statistics unavailable: " + err.Error())
+	}
+	common.ApiSuccess(c, services[0])
 }
 
 // New and resumed payments sign the same cashier arguments for the order.

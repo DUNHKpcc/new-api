@@ -24,6 +24,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { GuardianServiceDialog } from '../components/admin/service-dialog'
 import { ServicesSection } from '../components/services-section'
 import type { GuardianCatalog } from '../types'
 
@@ -105,4 +106,62 @@ it('reopens checkout for the requested service once the visitor is signed in', a
     await screen.findByRole('dialog', { name: 'VM route setup' })
   ).toBeVisible()
   await waitFor(() => expect(onRequestHandled).toHaveBeenCalledTimes(1))
+})
+
+it('shows sales to guests, including zero, and hides an unavailable count', async () => {
+  catalog.services[0].sold_count = 1280
+  renderSection({})
+  expect((await screen.findByText('1,280')).parentElement).toHaveTextContent(
+    'Sold: 1,280'
+  )
+  cleanup()
+  catalog.services[0].sold_count = 0
+  renderSection({})
+  expect((await screen.findByText('0')).parentElement).toHaveTextContent(
+    'Sold: 0'
+  )
+  cleanup()
+  delete catalog.services[0].sold_count
+  renderSection({})
+  await screen.findByRole('button', { name: 'Book this service' })
+  expect(screen.queryByText(/^Sold:/)).not.toBeInTheDocument()
+})
+
+it('previews the base sales adjustment and saves zero without submitting derived totals', async () => {
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: {} } })
+  const onSaved = vi.fn()
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <GuardianServiceDialog
+        service={{
+          ...catalog.services[0],
+          base_sales: 5,
+          actual_sales: 12,
+          sold_count: 17,
+        }}
+        onClose={() => undefined}
+        onSaved={onSaved}
+      />
+    </QueryClientProvider>
+  )
+  expect(screen.getByText(/Actual sales: 12/)).toBeVisible()
+  expect(screen.getByText(/Displayed sales: 17/)).toBeVisible()
+  const input = screen.getByRole('spinbutton', { name: 'Base sales' })
+  await userEvent.clear(input)
+  await userEvent.type(input, '-1')
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(
+    await screen.findByText('Enter a whole number from 0 to 1,000,000,000')
+  ).toBeVisible()
+  expect(put).not.toHaveBeenCalled()
+  await userEvent.clear(input)
+  await userEvent.type(input, '0')
+  expect(screen.getByText(/Displayed sales: 12/)).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce())
+  expect(put.mock.calls[0][1]).toMatchObject({ base_sales: 0 })
+  expect(put.mock.calls[0][1]).not.toHaveProperty('actual_sales')
+  expect(put.mock.calls[0][1]).not.toHaveProperty('sold_count')
 })

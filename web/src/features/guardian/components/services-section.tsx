@@ -20,12 +20,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, Clock } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -69,9 +70,26 @@ function ServiceCard(props: {
           {props.service.subtitle}
         </p>
       )}
-      <p className='g-display mt-5 text-4xl'>
-        {formatCny(props.service.price_cents, locale)}
-      </p>
+      <div className='mt-5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
+        <p className='g-display text-4xl'>
+          {formatCny(props.service.price_cents, locale)}
+        </p>
+        {props.service.sold_count != null && (
+          <p className='text-sm text-[var(--g-ink-soft)]'>
+            <Trans
+              t={t}
+              i18nKey='Sold: {{total}}'
+              defaults='Sold: <highlight>{{total}}</highlight>'
+              values={{ total: formatNumber(props.service.sold_count, locale) }}
+              components={{
+                highlight: (
+                  <span className='font-semibold text-[var(--g-accent)]' />
+                ),
+              }}
+            />
+          </p>
+        )}
+      </div>
       {props.service.delivery_note && (
         <p className='mt-2 flex items-center gap-1.5 text-sm text-[var(--g-ink-soft)]'>
           <Clock className='size-3.5' aria-hidden='true' />

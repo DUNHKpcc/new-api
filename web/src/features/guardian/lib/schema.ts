@@ -61,6 +61,7 @@ export function splitFeatureLines(value: string): string[] {
 }
 
 export const guardianServiceSchema = z.object({
+  base_sales: z.number().int().min(0).max(1000000000),
   title: z
     .string()
     .trim()
@@ -134,3 +135,31 @@ export const guardianQueueSettingSchema = z
 export type GuardianQueueSettingForm = z.infer<
   typeof guardianQueueSettingSchema
 >
+
+const historicalCount = z.number().int().min(0).max(1000000000)
+export const guardianHistoricalAccountsSchema = z
+  .object({
+    total_users: historicalCount,
+    banned_only: historicalCount,
+    kyc_only: historicalCount,
+    phone_only: historicalCount,
+    banned_kyc: historicalCount,
+    banned_phone: historicalCount,
+    kyc_phone: historicalCount,
+    all_three: historicalCount,
+  })
+  .refine(
+    (v) =>
+      v.banned_only +
+        v.kyc_only +
+        v.phone_only +
+        v.banned_kyc +
+        v.banned_phone +
+        v.kyc_phone +
+        v.all_three <=
+      v.total_users,
+    {
+      path: ['total_users'],
+      message: 'Combined issue counts cannot exceed historical users',
+    }
+  )
