@@ -79,6 +79,22 @@ export function OrderCard(props: {
   const labels = useGuardianLabels()
   const order = props.order
   const details = [
+    ...((order.claude_max_price_cents ?? 0) > 0
+      ? [
+          {
+            label: t('Claude MAX first month'),
+            value: formatCny(order.claude_max_price_cents ?? 0, locale),
+          },
+        ]
+      : []),
+    ...(order.billing_period
+      ? [
+          {
+            label: t('Billing period'),
+            value: labels.billingPeriod[order.billing_period],
+          },
+        ]
+      : []),
     { label: t('Route'), value: labels.orderRoute[order.route] ?? order.route },
     { label: t('Operating system'), value: labels.os[order.os] ?? order.os },
     {

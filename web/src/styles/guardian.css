@@ -500,3 +500,17 @@ html .guardian-root.guardian-root [data-slot='button'].g-pill {
     display: none;
   }
 }
+.g-mac-mini-cutout {
+  clip-path: polygon(
+    0.8% 2%,
+    3% 1.4%,
+    97% 1.4%,
+    99.2% 2%,
+    99.2% 85.8%,
+    92% 85.8%,
+    87% 97.5%,
+    13% 97.5%,
+    8% 85.8%,
+    0.8% 85.8%
+  );
+}

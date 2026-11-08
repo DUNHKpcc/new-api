@@ -29,7 +29,11 @@ import { GuardianSection, SectionHeading } from './section-heading'
 
 type FaqItem = { q: string; a: string }
 
-function FaqList(props: { id: string; title: string; items: FaqItem[] }) {
+export function FaqList(props: {
+  id: string
+  title: string
+  items: FaqItem[]
+}) {
   return (
     <GuardianSection id={props.id} tone='sunk'>
       <div className='grid gap-12 lg:grid-cols-[0.8fr_1.2fr]'>

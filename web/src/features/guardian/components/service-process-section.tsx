@@ -22,9 +22,14 @@ import { AnimateInView } from '@/components/animate-in-view'
 
 import { GuardianSection, SectionHeading } from './section-heading'
 
-export function ServiceProcessSection() {
+export function ServiceProcessSection(
+  props: {
+    title?: string
+    steps?: { title: string; body: string }[]
+  } = {}
+) {
   const { t } = useTranslation()
-  const steps = [
+  const steps = props.steps ?? [
     {
       title: t('Book and pay'),
       body: t(
@@ -56,7 +61,7 @@ export function ServiceProcessSection() {
       <SectionHeading
         id='process'
         eyebrow={t('How a service works')}
-        title={t('From booking to a working setup.')}
+        title={props.title ?? t('From booking to a working setup.')}
       />
       <ol className='mt-14 grid gap-x-10 gap-y-10 md:grid-cols-2 lg:grid-cols-4'>
         {steps.map((step, index) => (

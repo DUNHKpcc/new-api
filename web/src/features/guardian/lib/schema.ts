@@ -36,7 +36,7 @@ const SECRET_MESSAGE = 'Do not include passwords, keys or subscription links'
 
 export const guardianOrderSchema = z.object({
   payment_method: z.string().min(1, 'Choose a payment method'),
-  route: z.enum(['local', 'vm', 'vps', 'unsure']),
+  route: z.enum(['local', 'vm', 'vps', 'unsure', 'mac_mini']),
   os: z.enum(['macos', 'windows', 'linux', 'other']),
   contact_type: z.enum(['telegram', 'qq', 'wechat', 'email']),
   contact: z
@@ -60,7 +60,21 @@ export function splitFeatureLines(value: string): string[] {
     .filter(Boolean)
 }
 
+const optionalPeriodPrice = z
+  .string()
+  .trim()
+  .refine(
+    (value) => value === '' || yuanToCents(value) !== null,
+    'Enter a price between 0.01 and 100000 yuan'
+  )
+
 export const guardianServiceSchema = z.object({
+  claude_max_price: optionalPeriodPrice,
+  quarter_price: optionalPeriodPrice,
+  annual_price: optionalPeriodPrice,
+  chip: z.enum(['', 'm4', 'm6']),
+  region: z.enum(['', 'kr_seoul', 'au_sydney']),
+  hardware_config: z.enum(['', '16_256']),
   base_sales: z.number().int().min(0).max(1000000000),
   title: z
     .string()
@@ -96,7 +110,7 @@ export const guardianServiceSchema = z.object({
     .trim()
     .max(128, 'Delivery note must be at most 128 characters'),
   badge: z.string().trim().max(32, 'Badge must be at most 32 characters'),
-  route: z.enum(['any', 'local', 'vm', 'vps']),
+  route: z.enum(['any', 'local', 'vm', 'vps', 'mac_mini']),
   enabled: z.boolean(),
   sort_order: z
     .number({ message: 'Enter a whole number' })

@@ -41,6 +41,11 @@ function useSectionLinks() {
   const { t } = useTranslation()
   return [
     { to: '/guardian/services', label: t('Pricing') },
+    {
+      to: '/guardian/services',
+      search: { category: 'mac_mini' },
+      label: t('Overseas Mac mini'),
+    },
     { to: '/guardian', hash: 'faq', label: t('FAQ') },
   ] as const
 }
@@ -68,6 +73,7 @@ function GuardianHeader() {
             <Link
               key={section.label}
               to={section.to}
+              search={'search' in section ? section.search : {}}
               hash={'hash' in section ? section.hash : undefined}
               activeOptions={{ exact: true, includeHash: true }}
               className='rounded-md px-3 py-1.5 text-sm text-[var(--g-ink-soft)] transition-colors hover:text-[var(--g-ink)] data-[status=active]:text-[var(--g-ink)]'
@@ -124,6 +130,7 @@ function GuardianHeader() {
                   render={
                     <Link
                       to={section.to}
+                      search={'search' in section ? section.search : {}}
                       hash={'hash' in section ? section.hash : undefined}
                     />
                   }

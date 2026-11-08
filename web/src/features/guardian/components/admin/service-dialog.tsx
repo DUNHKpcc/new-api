@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toIntlLocale } from '@/i18n/languages'
@@ -47,18 +48,25 @@ import {
   type GuardianServiceForm,
 } from '../../lib/schema'
 import type { GuardianService } from '../../types'
+import { MacChipIcon } from '../mac-chip-icon'
 
 const FORM_ID = 'guardian-service'
 
 function toFormValues(service?: GuardianService): GuardianServiceForm {
   if (!service) {
     return {
+      chip: 'm4',
+      region: '',
+      hardware_config: '16_256',
       base_sales: 0,
       title: '',
       subtitle: '',
       description: '',
       features: '',
       price: '',
+      claude_max_price: '',
+      quarter_price: '',
+      annual_price: '',
       delivery_note: '',
       badge: '',
       route: 'any',
@@ -67,12 +75,24 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     }
   }
   return {
+    chip: service.chip ?? '',
+    region: service.region ?? '',
+    hardware_config: service.hardware_config ?? '',
     base_sales: service.base_sales ?? 0,
     title: service.title,
     subtitle: service.subtitle,
     description: service.description,
     features: service.features.join('\n'),
     price: centsToYuanInput(service.price_cents),
+    claude_max_price: service.claude_max_price_cents
+      ? centsToYuanInput(service.claude_max_price_cents)
+      : '',
+    quarter_price: service.quarter_price_cents
+      ? centsToYuanInput(service.quarter_price_cents)
+      : '',
+    annual_price: service.annual_price_cents
+      ? centsToYuanInput(service.annual_price_cents)
+      : '',
     delivery_note: service.delivery_note,
     badge: service.badge,
     route: service.route,
@@ -97,11 +117,27 @@ export function GuardianServiceDialog(props: {
     mutationFn: (values: GuardianServiceForm) =>
       saveGuardianService(
         {
+          chip: values.route === 'mac_mini' ? values.chip : '',
+          region: values.route === 'mac_mini' ? values.region : '',
+          hardware_config:
+            values.route === 'mac_mini' ? values.hardware_config : '',
           base_sales: values.base_sales,
           title: values.title,
           subtitle: values.subtitle,
           description: values.description,
           features: splitFeatureLines(values.features),
+          claude_max_price_cents:
+            values.route === 'mac_mini'
+              ? (yuanToCents(values.claude_max_price) ?? 0)
+              : 0,
+          quarter_price_cents:
+            values.route === 'mac_mini'
+              ? (yuanToCents(values.quarter_price) ?? 0)
+              : 0,
+          annual_price_cents:
+            values.route === 'mac_mini'
+              ? (yuanToCents(values.annual_price) ?? 0)
+              : 0,
           price_cents: yuanToCents(values.price) ?? 0,
           delivery_note: values.delivery_note,
           badge: values.badge,
@@ -118,6 +154,7 @@ export function GuardianServiceDialog(props: {
     },
     onError: (error) => handleServerError(error, t('Failed to save service')),
   })
+  const route = form.watch('route')
   const baseSales = form.watch('base_sales')
   const actualSales = props.service ? props.service.actual_sales : 0
   const errors = form.formState.errors
@@ -171,7 +208,9 @@ export function GuardianServiceDialog(props: {
           </Field>
           <Field data-invalid={!!errors.price}>
             <FieldLabel htmlFor='guardian-service-price'>
-              {t('Price (CNY)')}
+              {route === 'mac_mini'
+                ? t('Monthly price (CNY)')
+                : t('Price (CNY)')}
             </FieldLabel>
             <Input
               id='guardian-service-price'
@@ -184,6 +223,49 @@ export function GuardianServiceDialog(props: {
           </Field>
         </div>
 
+        {route === 'mac_mini' && (
+          <div className='grid gap-4 sm:grid-cols-2'>
+            {(['quarter_price', 'annual_price'] as const).map((field) => (
+              <Field key={field} data-invalid={!!errors[field]}>
+                <FieldLabel htmlFor={`guardian-service-${field}`}>
+                  {field === 'quarter_price'
+                    ? t('Quarterly total (CNY)')
+                    : t('Yearly total (CNY)')}
+                </FieldLabel>
+                <Input
+                  id={`guardian-service-${field}`}
+                  inputMode='decimal'
+                  {...form.register(field)}
+                  aria-invalid={!!errors[field]}
+                />
+                <FieldDescription>
+                  {t('Leave blank to disable this period.')}
+                </FieldDescription>
+                {fieldError(errors[field]?.message)}
+              </Field>
+            ))}
+          </div>
+        )}
+
+        {route === 'mac_mini' && (
+          <Field data-invalid={!!errors.claude_max_price}>
+            <FieldLabel htmlFor='guardian-service-claude-max'>
+              {t('Claude MAX first-month add-on (CNY)')}
+            </FieldLabel>
+            <Input
+              id='guardian-service-claude-max'
+              inputMode='decimal'
+              {...form.register('claude_max_price')}
+              aria-invalid={!!errors.claude_max_price}
+            />
+            <FieldDescription>
+              {t(
+                'Set the CNY charge for the US$149 first-month offer. Charged once with the hosting order. Leave blank to disable.'
+              )}
+            </FieldDescription>
+            {fieldError(errors.claude_max_price?.message)}
+          </Field>
+        )}
         <Field data-invalid={!!errors.base_sales}>
           <FieldLabel htmlFor='guardian-service-base-sales'>
             {t('Base sales')}
@@ -317,6 +399,76 @@ export function GuardianServiceDialog(props: {
             </NativeSelect>
           </Field>
         </div>
+
+        {route === 'mac_mini' && (
+          <Field>
+            <FieldLabel id='guardian-chip-label'>{t('Mac chip')}</FieldLabel>
+            <Controller
+              control={form.control}
+              name='chip'
+              render={({ field }) => (
+                <RadioGroup
+                  aria-labelledby='guardian-chip-label'
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  className='grid-cols-2'
+                >
+                  {(['m4', 'm6'] as const).map((chip) => (
+                    <label
+                      key={chip}
+                      className='border-input has-data-checked:border-primary has-data-checked:bg-muted flex cursor-pointer items-center justify-center gap-3 rounded-lg border p-3'
+                    >
+                      <RadioGroupItem
+                        value={chip}
+                        aria-label={`Apple ${chip.toUpperCase()}`}
+                      />
+                      <span aria-hidden='true'>
+                        <MacChipIcon chip={chip} />
+                      </span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              )}
+            />
+          </Field>
+        )}
+
+        {route === 'mac_mini' && (
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <Field>
+              <FieldLabel htmlFor='guardian-service-region'>
+                {t('Hosting region')}
+              </FieldLabel>
+              <NativeSelect
+                id='guardian-service-region'
+                {...form.register('region')}
+              >
+                <NativeSelectOption value=''>{t('Not set')}</NativeSelectOption>
+                {Object.entries(labels.macRegion).map(([value, label]) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor='guardian-service-config'>
+                {t('Hardware configuration')}
+              </FieldLabel>
+              <NativeSelect
+                id='guardian-service-config'
+                {...form.register('hardware_config')}
+              >
+                <NativeSelectOption value=''>{t('Not set')}</NativeSelectOption>
+                {Object.entries(labels.macConfig).map(([value, label]) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          </div>
+        )}
 
         <div className='grid items-end gap-4 sm:grid-cols-2'>
           <Field data-invalid={!!errors.sort_order}>

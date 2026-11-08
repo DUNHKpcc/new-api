@@ -32,14 +32,17 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/context/theme-provider'
 import { api } from '@/lib/api'
+import { Route as legacyStatisticsRoute } from '@/routes/guardian/account-statistics'
+import { Route as servicesRoute } from '@/routes/guardian/services'
 
-import { GuardianAccountStatisticsPage } from '../account-statistics'
 import { GuardianAccountStatusDialog } from '../components/admin/account-status-dialog'
 import { GuardianHistoricalAccountsForm } from '../components/admin/historical-accounts-panel'
+import { GuardianServices } from '../services'
 import type { GuardianAccountStatistics } from '../types'
 
 const clients: QueryClient[] = []
@@ -54,7 +57,7 @@ function renderStatistics(data: GuardianAccountStatistics) {
   vi.spyOn(api, 'get').mockImplementation(async (url) => ({
     data: {
       success: true,
-      data: url === '/api/guardian/account-statistics' ? data : {},
+      data: url === '/api/guardian/account-statistics' ? data : [],
     },
   }))
   const client = new QueryClient({
@@ -64,12 +67,23 @@ function renderStatistics(data: GuardianAccountStatistics) {
   const root = createRootRoute()
   const route = createRoute({
     getParentRoute: () => root,
-    path: '/',
-    component: GuardianAccountStatisticsPage,
+    path: '/guardian/services',
+    validateSearch: servicesRoute.options.validateSearch,
+    component: function ServicesTestRoute(): ReactElement {
+      const search = route.useSearch()
+      return <GuardianServices category={search.category} />
+    },
+  })
+  const legacyRoute = createRoute({
+    getParentRoute: () => root,
+    path: '/guardian/account-statistics',
+    beforeLoad: legacyStatisticsRoute.options.beforeLoad as () => never,
   })
   const router = createRouter({
-    routeTree: root.addChildren([route]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    routeTree: root.addChildren([route, legacyRoute]),
+    history: createMemoryHistory({
+      initialEntries: ['/guardian/account-statistics'],
+    }),
   })
   render(
     <QueryClientProvider client={client}>
@@ -106,6 +120,32 @@ it('distinguishes unrecorded purchasers from confirmed zero issues', async () =>
   )
   expect(screen.getByText('No account statuses recorded yet')).toBeVisible()
   expect(screen.getAllByText('—')).toHaveLength(3)
+})
+
+it('redirects the old URL into the pricing tabs and switches statistics in place', async () => {
+  renderStatistics(empty)
+  const statusTab = await screen.findByRole('tab', {
+    name: 'Purchased user account status',
+  })
+  expect(statusTab).toHaveAttribute('aria-selected', 'true')
+  expect(
+    screen.queryByRole('button', {
+      name: 'Click to view purchased user account status',
+    })
+  ).not.toBeInTheDocument()
+  await screen.findByRole('region', { name: 'Account status matrix' })
+  await userEvent.click(screen.getByRole('tab', { name: 'Environment setup' }))
+  expect(
+    screen.queryByRole('region', { name: 'Account status matrix' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('tab', { name: 'Environment setup' })
+  ).toHaveAttribute('aria-selected', 'true')
+  await userEvent.click(statusTab)
+  expect(
+    await screen.findByRole('region', { name: 'Account status matrix' })
+  ).toBeVisible()
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
 })
 
 it('shows independent counts and updates when fresh statistics arrive', async () => {

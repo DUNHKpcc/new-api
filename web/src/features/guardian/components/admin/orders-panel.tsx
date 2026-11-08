@@ -188,6 +188,17 @@ export function GuardianOrdersPanel() {
                   </TableCell>
                   <TableCell className='max-w-56 break-words whitespace-normal'>
                     {order.service_title}
+                    {(order.claude_max_price_cents ?? 0) > 0 && (
+                      <span className='block text-xs text-[var(--g-accent)]'>
+                        {t('Claude MAX first month')} ·{' '}
+                        {formatCny(order.claude_max_price_cents ?? 0, locale)}
+                      </span>
+                    )}
+                    {order.billing_period && (
+                      <span className='text-muted-foreground block text-xs'>
+                        {labels.billingPeriod[order.billing_period]}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>{formatCny(order.amount_cents, locale)}</TableCell>
                   <TableCell>

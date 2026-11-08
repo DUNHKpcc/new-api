@@ -16,19 +16,45 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link, useNavigate } from '@tanstack/react-router'
-import { useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useNavigate } from '@tanstack/react-router'
+import { gsap } from 'gsap'
+import { useCallback, useLayoutEffect, useRef } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
+import { SiApple } from 'react-icons/si'
 
-import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
+import { GuardianAccountStatisticsPanel } from './account-statistics'
 import { ServicesFaqSection } from './components/faq-section'
 import { GuardianShell } from './components/guardian-shell'
+import { MacMiniDelivery } from './components/mac-mini-delivery'
 import { ServiceProcessSection } from './components/service-process-section'
 import { ServicesSection } from './components/services-section'
+import type { GuardianBillingPeriod } from './types'
 
-function ServicesIntro() {
+function ServicesIntro(props: { macMini: boolean; accountStatus: boolean }) {
   const { t } = useTranslation()
+  const macMiniRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const product = macMiniRef.current
+    if (!props.macMini || !product) return
+
+    const media = gsap.matchMedia()
+    media.add('(prefers-reduced-motion: no-preference)', () => {
+      gsap.from(product.children, {
+        autoAlpha: 0,
+        y: 28,
+        scale: 0.97,
+        duration: 0.85,
+        stagger: 0.12,
+        ease: 'power3.out',
+        clearProps: 'transform,opacity,visibility',
+      })
+    })
+    return () => media.revert()
+  }, [props.macMini])
+
   const promises = [
     t('Payment and sign-in stay with you'),
     t('No passwords in the order form'),
@@ -37,49 +63,116 @@ function ServicesIntro() {
 
   return (
     <div className='flex flex-col items-center text-center'>
-      <h1
-        id='services-title'
-        className='g-display max-w-5xl text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem]'
-      >
-        <span className='block'>
-          {t('Rather have someone do it with you?')}
-        </span>
-        <span className='g-fade-text block'>
-          {t('We set it up together, on your machine.')}
-        </span>
-      </h1>
-      <Button
-        variant='outline'
-        className='mt-5 border-[var(--g-accent)] bg-[var(--g-accent-wash)] font-semibold text-[var(--g-accent)] hover:bg-[var(--g-accent-wash)] hover:text-[var(--g-accent)]'
-        render={<Link to='/guardian/account-statistics' />}
-      >
-        {t('Click to view purchased user account status')}
-      </Button>
-      <ul className='mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[var(--g-ink-soft)]'>
-        {promises.map((promise) => (
-          <li key={promise} className='flex items-center gap-2'>
-            <span
+      {props.accountStatus && (
+        <h1
+          id='services-title'
+          className='g-display text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem]'
+        >
+          {t('Purchased user account status')}
+        </h1>
+      )}
+      {!props.accountStatus && (
+        <h1
+          id='services-title'
+          className='g-display max-w-5xl text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem]'
+        >
+          <span className='block'>
+            {props.macMini ? (
+              <Trans
+                t={t}
+                i18nKey='Claude on an overseas Mac mini'
+                components={{
+                  brand: (
+                    <span className='inline-flex items-center gap-2 align-baseline whitespace-nowrap' />
+                  ),
+                  logo: (
+                    <img
+                      src='/images/guardian/claude-color.png'
+                      alt=''
+                      aria-hidden='true'
+                      width={640}
+                      height={640}
+                      className='size-[0.85em] shrink-0 object-contain'
+                    />
+                  ),
+                }}
+              />
+            ) : (
+              t('Rather have someone do it with you?')
+            )}
+          </span>
+          <span className='g-fade-text block'>
+            {props.macMini
+              ? t('Remote access. Hosted overseas.')
+              : t('We set it up together, on your machine.')}
+          </span>
+        </h1>
+      )}
+      {props.macMini && (
+        <div
+          ref={macMiniRef}
+          className='mt-8 flex w-full max-w-2xl flex-col items-center gap-4'
+        >
+          <p className='flex items-center gap-2 text-sm font-medium tracking-wide text-[var(--g-ink-soft)]'>
+            <SiApple
               aria-hidden='true'
-              className='w-3 border-t border-[var(--g-accent)]'
+              className='size-4 text-[var(--g-ink)]'
             />
-            {promise}
-          </li>
-        ))}
-      </ul>
+            <span>Mac mini M4/M6</span>
+          </p>
+          <img
+            src='/images/guardian/mac-mini-front.jpg'
+            alt='Mac mini'
+            width={1048}
+            height={420}
+            className='g-mac-mini-cutout h-auto w-full'
+            fetchPriority='high'
+          />
+        </div>
+      )}
+      <TabsList
+        className='mt-5 max-w-full flex-wrap group-data-horizontal/tabs:h-auto'
+        aria-label={t('Service category')}
+      >
+        <TabsTrigger value='account_status'>
+          {t('Purchased user account status')}
+        </TabsTrigger>
+        <TabsTrigger value='setup'>{t('Environment setup')}</TabsTrigger>
+        <TabsTrigger value='mac_mini'>{t('Overseas Mac mini')}</TabsTrigger>
+      </TabsList>
+      {!props.accountStatus && !props.macMini && (
+        <ul className='mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[var(--g-ink-soft)]'>
+          {promises.map((promise) => (
+            <li key={promise} className='flex items-center gap-2'>
+              <span
+                aria-hidden='true'
+                className='w-3 border-t border-[var(--g-accent)]'
+              />
+              {promise}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
-export function GuardianServices(props: { requestedServiceId?: number }) {
+export function GuardianServices(props: {
+  requestedBillingPeriod?: GuardianBillingPeriod
+  requestedClaudeMax?: boolean
+  requestedServiceId?: number
+  category?: 'setup' | 'mac_mini' | 'account_status'
+}) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const clearRequest = useCallback(() => {
     void navigate({
       to: '/guardian/services',
-      search: {},
+      search: { category: props.category },
       hash: 'catalog',
       replace: true,
     })
-  }, [navigate])
+  }, [navigate, props.category])
 
   return (
     <GuardianShell>
@@ -88,14 +181,53 @@ export function GuardianServices(props: { requestedServiceId?: number }) {
         aria-labelledby='services-title'
         className='mx-auto flex max-w-6xl flex-col justify-center gap-10 px-4 py-14 sm:px-6 lg:min-h-[calc(100svh-4rem)] lg:py-10 2xl:max-w-7xl'
       >
-        <ServicesIntro />
-        <ServicesSection
-          requestedServiceId={props.requestedServiceId}
-          onRequestHandled={clearRequest}
-        />
+        <Tabs
+          className='gap-10'
+          value={props.category ?? 'setup'}
+          onValueChange={(value) => {
+            void navigate({
+              to: '/guardian/services',
+              search: {
+                category: value as 'setup' | 'mac_mini' | 'account_status',
+              },
+              replace: true,
+            })
+          }}
+        >
+          <ServicesIntro
+            macMini={props.category === 'mac_mini'}
+            accountStatus={props.category === 'account_status'}
+          />
+          <TabsContent value='account_status'>
+            <GuardianAccountStatisticsPanel />
+          </TabsContent>
+          {(['setup', 'mac_mini'] as const).map((category) => (
+            <TabsContent key={category} value={category}>
+              {category === 'mac_mini' && (
+                <p className='mb-6 text-center text-sm text-[var(--g-ink-soft)]'>
+                  {t(
+                    'Choose a hosting plan. Hardware, location and service period are listed in each plan.'
+                  )}
+                </p>
+              )}
+              <ServicesSection
+                category={category}
+                requestedBillingPeriod={props.requestedBillingPeriod}
+                requestedClaudeMax={props.requestedClaudeMax}
+                requestedServiceId={props.requestedServiceId}
+                onRequestHandled={clearRequest}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
       </section>
-      <ServiceProcessSection />
-      <ServicesFaqSection />
+      {props.category === 'mac_mini' && <MacMiniDelivery />}
+      {(!props.category || props.category === 'setup') && (
+        <>
+          <ServiceProcessSection />
+          <ServicesFaqSection />
+        </>
+      )}
     </GuardianShell>
   )
 }

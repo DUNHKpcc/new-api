@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { GuardianBillingPeriod, GuardianService } from '../types'
+
 const MAX_PRICE_CENTS = 10_000_000
 
 /**
@@ -50,4 +52,30 @@ export function centsToYuanInput(cents: number): string {
   return fraction === 0
     ? String(whole)
     : `${whole}.${String(fraction).padStart(2, '0')}`
+}
+
+export const GUARDIAN_PERIOD_MONTHS = {
+  monthly: 1,
+  quarterly: 3,
+  yearly: 12,
+} as const
+
+export function guardianPeriodPrice(
+  service: GuardianService,
+  period: GuardianBillingPeriod
+) {
+  let total = service.price_cents
+  if (period === 'yearly') total = service.annual_price_cents ?? 0
+  if (period === 'quarterly') total = service.quarter_price_cents ?? 0
+  const months = GUARDIAN_PERIOD_MONTHS[period]
+  const baseline = service.price_cents * months
+  const savings = Math.max(0, baseline - total)
+  return {
+    total,
+    months,
+    monthly: Math.round(total / months),
+    baseline,
+    savings,
+    discount: Math.round((savings / baseline) * 100),
+  }
 }

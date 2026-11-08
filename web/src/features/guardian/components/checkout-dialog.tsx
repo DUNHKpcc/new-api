@@ -20,6 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ShieldAlert } from 'lucide-react'
+import { useState } from 'react'
 import { Controller, FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -36,14 +37,21 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import { createGuardianOrder } from '../api'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
-import { formatCny } from '../lib/price'
+import { formatCny, guardianPeriodPrice } from '../lib/price'
 import { guardianOrderSchema, type GuardianOrderForm } from '../lib/schema'
-import type { GuardianPayMethod, GuardianService } from '../types'
+import type {
+  GuardianBillingPeriod,
+  GuardianPayMethod,
+  GuardianService,
+} from '../types'
+import { ClaudeMaxAddon } from './claude-max-addon'
 import { GuardianContactFields } from './contact-fields'
 
 const FORM_ID = 'guardian-checkout'
 
 export function CheckoutDialog(props: {
+  billingPeriod?: GuardianBillingPeriod
+  addClaudeMax?: boolean
   service: GuardianService
   payMethods: GuardianPayMethod[]
   onClose: () => void
@@ -52,6 +60,11 @@ export function CheckoutDialog(props: {
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
   const navigate = useNavigate()
+  const [addClaudeMax, setAddClaudeMax] = useState(!!props.addClaudeMax)
+  const addonPrice =
+    props.service.route === 'mac_mini' && addClaudeMax
+      ? (props.service.claude_max_price_cents ?? 0)
+      : 0
   const form = useForm<GuardianOrderForm>({
     resolver: zodResolver(guardianOrderSchema),
     defaultValues: {
@@ -65,7 +78,16 @@ export function CheckoutDialog(props: {
   })
   const checkout = useMutation({
     mutationFn: (values: GuardianOrderForm) =>
-      createGuardianOrder({ service_id: props.service.id, ...values }),
+      createGuardianOrder({
+        service_id: props.service.id,
+        ...values,
+        ...(props.service.route === 'mac_mini'
+          ? {
+              billing_period: props.billingPeriod ?? 'monthly',
+              ...(addClaudeMax ? { add_claude_max: true } : {}),
+            }
+          : {}),
+      }),
     onSuccess: (result) => {
       submitPaymentForm(result.pay_url, result.pay_params)
       toast.success(t('Payment page opened'))
@@ -75,7 +97,12 @@ export function CheckoutDialog(props: {
     onError: (error) => handleServerError(error, t('Payment request failed')),
   })
   const errors = form.formState.errors
-  const price = formatCny(props.service.price_cents, locale)
+  const hostingPrice =
+    props.service.route === 'mac_mini'
+      ? guardianPeriodPrice(props.service, props.billingPeriod ?? 'monthly')
+          .total
+      : props.service.price_cents
+  const price = formatCny(hostingPrice + addonPrice, locale)
 
   return (
     <Dialog
@@ -110,6 +137,19 @@ export function CheckoutDialog(props: {
         noValidate
         onSubmit={form.handleSubmit((values) => checkout.mutate(values))}
       >
+        {props.service.route === 'mac_mini' && (
+          <p className='text-sm font-medium'>
+            {labels.billingPeriod[props.billingPeriod ?? 'monthly']} ·{' '}
+            {formatCny(hostingPrice, locale)}
+          </p>
+        )}
+        {props.service.route === 'mac_mini' && (
+          <ClaudeMaxAddon
+            priceCents={props.service.claude_max_price_cents ?? 0}
+            checked={addClaudeMax}
+            onCheckedChange={setAddClaudeMax}
+          />
+        )}
         {props.service.description && (
           <div className='max-h-40 space-y-3 overflow-y-auto rounded-lg bg-[var(--g-paper-sunk)] p-4 text-sm leading-6 text-[var(--g-ink-soft)]'>
             {props.service.description.split(/\n{2,}/).map((paragraph) => (
@@ -120,30 +160,34 @@ export function CheckoutDialog(props: {
           </div>
         )}
 
-        <div className='grid gap-4 sm:grid-cols-2'>
-          <Field>
-            <FieldLabel htmlFor='guardian-route'>{t('Route')}</FieldLabel>
-            <NativeSelect id='guardian-route' {...form.register('route')}>
-              {Object.entries(labels.orderRoute).map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor='guardian-os'>
-              {t('Operating system')}
-            </FieldLabel>
-            <NativeSelect id='guardian-os' {...form.register('os')}>
-              {Object.entries(labels.os).map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-        </div>
+        {props.service.route !== 'mac_mini' && (
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <Field>
+              <FieldLabel htmlFor='guardian-route'>{t('Route')}</FieldLabel>
+              <NativeSelect id='guardian-route' {...form.register('route')}>
+                {Object.entries(labels.orderRoute)
+                  .filter(([value]) => value !== 'mac_mini')
+                  .map(([value, label]) => (
+                    <NativeSelectOption key={value} value={value}>
+                      {label}
+                    </NativeSelectOption>
+                  ))}
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor='guardian-os'>
+                {t('Operating system')}
+              </FieldLabel>
+              <NativeSelect id='guardian-os' {...form.register('os')}>
+                {Object.entries(labels.os).map(([value, label]) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          </div>
+        )}
 
         <FormProvider {...form}>
           <GuardianContactFields />

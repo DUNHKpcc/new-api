@@ -64,6 +64,9 @@ afterEach(() => {
 })
 
 function renderSection(props: {
+  category?: 'setup' | 'mac_mini'
+  requestedBillingPeriod?: 'monthly' | 'quarterly' | 'yearly'
+  requestedClaudeMax?: boolean
   requestedServiceId?: number
   onRequestHandled?: () => void
 }) {
@@ -76,7 +79,10 @@ function renderSection(props: {
   return render(
     <QueryClientProvider client={client}>
       <ServicesSection
+        category={props.category}
         requestedServiceId={props.requestedServiceId}
+        requestedBillingPeriod={props.requestedBillingPeriod}
+        requestedClaudeMax={props.requestedClaudeMax}
         onRequestHandled={props.onRequestHandled ?? (() => undefined)}
       />
     </QueryClientProvider>
@@ -164,4 +170,140 @@ it('previews the base sales adjustment and saves zero without submitting derived
   expect(put.mock.calls[0][1]).toMatchObject({ base_sales: 0 })
   expect(put.mock.calls[0][1]).not.toHaveProperty('actual_sales')
   expect(put.mock.calls[0][1]).not.toHaveProperty('sold_count')
+})
+
+it('separates Mac mini plans and preserves the category through sign-in', async () => {
+  const mac = {
+    ...catalog.services[0],
+    id: 8,
+    title: 'Hosted Mac mini',
+    chip: 'm6' as const,
+    region: 'kr_seoul' as const,
+    hardware_config: '16_256' as const,
+    price_cents: 10000,
+    quarter_price_cents: 27000,
+    annual_price_cents: 96000,
+    claude_max_price_cents: 100000,
+    route: 'mac_mini' as const,
+  }
+  catalog.services.push(mac)
+  try {
+    renderSection({})
+    await screen.findByText('VM route setup')
+    expect(screen.queryByText('Hosted Mac mini')).not.toBeInTheDocument()
+    cleanup()
+    renderSection({ category: 'mac_mini' })
+    await screen.findByText('Hosted Mac mini')
+    expect(screen.getByRole('img', { name: 'Apple M6' })).toBeVisible()
+    expect(screen.queryByText('VM route setup')).not.toBeInTheDocument()
+    expect(screen.getByText('South Korea · Seoul')).toBeVisible()
+    expect(screen.getByText('16GB memory + 256GB storage')).toBeVisible()
+    const addon = screen.getByRole('checkbox', {
+      name: 'Add Claude MAX for the first month',
+    })
+    expect(addon).not.toBeChecked()
+    await userEvent.click(addon)
+    await userEvent.click(screen.getByText('Yearly', { exact: true }))
+    expect(screen.getByText(/Equivalent to ¥80\/month/)).toBeVisible()
+    expect(
+      screen.getByText('Save ¥240 (20%) vs monthly payments')
+    ).toBeVisible()
+    expect(screen.getByText('Total: ¥1,960')).toBeVisible()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Book this service' })
+    )
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/sign-in',
+      search: {
+        redirect:
+          '/guardian/services?service=8&category=mac_mini&billing_period=yearly&claude_max=yes',
+      },
+    })
+    cleanup()
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'alice', role: 1 })
+    renderSection({
+      category: 'mac_mini',
+      requestedServiceId: 8,
+      requestedBillingPeriod: 'yearly',
+      requestedClaudeMax: true,
+    })
+    expect(
+      await screen.findByRole('button', { name: 'Pay ¥1,960' })
+    ).toBeVisible()
+    cleanup()
+    mac.claude_max_price_cents = 0
+    mac.quarter_price_cents = 0
+    mac.annual_price_cents = 130000
+    renderSection({ category: 'mac_mini' })
+    expect(
+      await screen.findByRole('radio', { name: /^Quarterly/ })
+    ).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(screen.getByRole('radio', { name: /^Yearly/ }))
+    expect(screen.queryByText(/vs monthly payments/)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Add Claude MAX for the first month',
+      })
+    ).toHaveAttribute('aria-disabled', 'true')
+  } finally {
+    catalog.services.pop()
+  }
+})
+
+it('edits the fixed Mac chip choices and clears the chip for environment services', async () => {
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: {} } })
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <GuardianServiceDialog
+        service={{ ...catalog.services[0], route: 'mac_mini', chip: 'm4' }}
+        onClose={() => undefined}
+        onSaved={() => undefined}
+      />
+    </QueryClientProvider>
+  )
+  expect(screen.getByRole('radio', { name: 'Apple M4' })).toBeChecked()
+  expect(screen.getAllByRole('radio')).toHaveLength(2)
+  await userEvent.click(screen.getByRole('radio', { name: 'Apple M6' }))
+  await userEvent.selectOptions(
+    screen.getByLabelText('Hosting region'),
+    'au_sydney'
+  )
+  await userEvent.selectOptions(
+    screen.getByLabelText('Hardware configuration'),
+    '16_256'
+  )
+  await userEvent.type(screen.getByLabelText('Quarterly total (CNY)'), '270')
+  await userEvent.type(screen.getByLabelText('Yearly total (CNY)'), '960')
+  await userEvent.type(
+    screen.getByLabelText('Claude MAX first-month add-on (CNY)'),
+    '1000'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+  expect(put.mock.calls[0][1]).toMatchObject({
+    chip: 'm6',
+    route: 'mac_mini',
+    region: 'au_sydney',
+    hardware_config: '16_256',
+    quarter_price_cents: 27000,
+    annual_price_cents: 96000,
+    claude_max_price_cents: 100000,
+  })
+  await userEvent.selectOptions(screen.getByLabelText('Route'), 'vm')
+  expect(
+    screen.queryByRole('radio', { name: 'Apple M6' })
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledTimes(2))
+  expect(put.mock.calls[1][1]).toMatchObject({
+    chip: '',
+    route: 'vm',
+    region: '',
+    hardware_config: '',
+    quarter_price_cents: 0,
+    annual_price_cents: 0,
+    claude_max_price_cents: 0,
+  })
 })

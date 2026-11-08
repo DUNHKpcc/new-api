@@ -72,55 +72,65 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('creates the order with the chosen service and opens the epay form on submit', async () => {
-  const post = vi.spyOn(api, 'post').mockResolvedValue({
-    data: {
-      success: true,
-      message: '',
+it.each(['vps', 'mac_mini'] as const)(
+  'creates the %s order and opens the epay form on submit',
+  async (route) => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
       data: {
-        trade_no: 'SVCUSR1NOabc1761500000',
-        pay_url: 'https://pay.example.com/submit.php',
-        pay_params: { pid: '1001', sign: 'signed' },
+        success: true,
+        message: '',
+        data: {
+          trade_no: 'SVCUSR1NOabc1761500000',
+          pay_url: 'https://pay.example.com/submit.php',
+          pay_params: { pid: '1001', sign: 'signed' },
+        },
       },
-    },
-  })
-  const submit = vi
-    .spyOn(HTMLFormElement.prototype, 'submit')
-    .mockImplementation(() => undefined)
-  const onClose = vi.fn()
-  renderDialog(
-    <CheckoutDialog
-      service={service}
-      payMethods={payMethods}
-      onClose={onClose}
-    />
-  )
-
-  await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
-  await userEvent.click(screen.getByRole('radio', { name: 'WeChat Pay' }))
-  await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
-
-  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
-  expect(post).toHaveBeenCalledWith('/api/guardian/orders', {
-    service_id: 4,
-    payment_method: 'wxpay',
-    route: 'vps',
-    os: 'macos',
-    contact_type: 'telegram',
-    contact: '@guardian_user',
-    note: '',
-  })
-  const form = submit.mock.contexts[0] as HTMLFormElement
-  expect(form.action).toBe('https://pay.example.com/submit.php')
-  expect(form.method).toBe('post')
-  expect(
-    Object.fromEntries(
-      new FormData(form) as unknown as Iterable<[string, string]>
+    })
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, 'submit')
+      .mockImplementation(() => undefined)
+    const onClose = vi.fn()
+    renderDialog(
+      <CheckoutDialog
+        service={{ ...service, route, annual_price_cents: 500000 }}
+        billingPeriod='yearly'
+        payMethods={payMethods}
+        onClose={onClose}
+      />
     )
-  ).toEqual({ pid: '1001', sign: 'signed' })
-  expect(onClose).toHaveBeenCalled()
-  expect(navigate).toHaveBeenCalledWith({ to: '/guardian/orders' })
-})
+
+    expect(
+      screen.getByRole('button', {
+        name: route === 'mac_mini' ? 'Pay ¥5,000' : 'Pay ¥599',
+      })
+    ).toBeVisible()
+    await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
+    await userEvent.click(screen.getByRole('radio', { name: 'WeChat Pay' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
+
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
+    expect(post).toHaveBeenCalledWith('/api/guardian/orders', {
+      ...(route === 'mac_mini' ? { billing_period: 'yearly' } : {}),
+      service_id: 4,
+      payment_method: 'wxpay',
+      route,
+      os: 'macos',
+      contact_type: 'telegram',
+      contact: '@guardian_user',
+      note: '',
+    })
+    const form = submit.mock.contexts[0] as HTMLFormElement
+    expect(form.action).toBe('https://pay.example.com/submit.php')
+    expect(form.method).toBe('post')
+    expect(
+      Object.fromEntries(
+        new FormData(form) as unknown as Iterable<[string, string]>
+      )
+    ).toEqual({ pid: '1001', sign: 'signed' })
+    expect(onClose).toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith({ to: '/guardian/orders' })
+  }
+)
 
 it('blocks submission and flags the note when it contains a subscription link', async () => {
   const post = vi.spyOn(api, 'post')
@@ -160,5 +170,68 @@ it('preselects the route the service was built for', () => {
     />
   )
   expect(screen.getByLabelText('Route')).toHaveValue('vm')
+  expect(
+    screen.queryByRole('option', { name: 'Overseas Mac mini' })
+  ).not.toBeInTheDocument()
   expect(screen.getByRole('radio', { name: 'Alipay' })).toBeChecked()
+})
+
+it('uses the Mac mini route and macOS without showing environment selectors', () => {
+  renderDialog(
+    <CheckoutDialog
+      service={{ ...service, route: 'mac_mini' }}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  expect(screen.queryByLabelText('Route')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Operating system')).not.toBeInTheDocument()
+  expect(screen.getByRole('dialog')).toBeVisible()
+})
+
+it('adds the first-month subscription once to a yearly order and lets the buyer remove it', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        trade_no: 'MAX-ORDER',
+        pay_url: 'https://pay.example.com/submit.php',
+        pay_params: {},
+      },
+    },
+  })
+  vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(
+    () => undefined
+  )
+  renderDialog(
+    <CheckoutDialog
+      service={{
+        ...service,
+        route: 'mac_mini',
+        annual_price_cents: 500000,
+        claude_max_price_cents: 100000,
+      }}
+      billingPeriod='yearly'
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  const addon = screen.getByRole('checkbox', {
+    name: 'Add Claude MAX for the first month',
+  })
+  expect(addon).not.toBeChecked()
+  await userEvent.click(screen.getByText('First month +US$149'))
+  expect(screen.getByRole('button', { name: 'Pay ¥6,000' })).toBeVisible()
+  addon.focus()
+  await userEvent.keyboard('[Space]')
+  expect(screen.getByRole('button', { name: 'Pay ¥5,000' })).toBeVisible()
+  await userEvent.click(addon)
+  await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
+  await userEvent.click(screen.getByRole('button', { name: 'Pay ¥6,000' }))
+  await waitFor(() => expect(post).toHaveBeenCalledOnce())
+  expect(post.mock.calls[0][1]).toMatchObject({
+    billing_period: 'yearly',
+    add_claude_max: true,
+  })
+  expect(post.mock.calls[0][1]).not.toHaveProperty('claude_max_price_cents')
 })

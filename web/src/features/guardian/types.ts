@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export type GuardianServiceRoute = 'any' | 'local' | 'vm' | 'vps'
-export type GuardianOrderRoute = 'local' | 'vm' | 'vps' | 'unsure'
+export type GuardianServiceRoute = 'any' | 'local' | 'vm' | 'vps' | 'mac_mini'
+export type GuardianOrderRoute = 'local' | 'vm' | 'vps' | 'unsure' | 'mac_mini'
 export type GuardianOs = 'macos' | 'windows' | 'linux' | 'other'
 export type GuardianContactType = 'telegram' | 'qq' | 'wechat' | 'email'
 export type GuardianOrderStatus =
@@ -30,7 +30,18 @@ export type GuardianOrderStatus =
   | 'cancelled'
   | 'refunded'
 
+export type GuardianBillingPeriod = 'monthly' | 'quarterly' | 'yearly'
+
+export type GuardianMacChip = 'm4' | 'm6'
+
+export type GuardianMacRegion = 'kr_seoul' | 'au_sydney'
+export type GuardianMacConfig = '16_256'
+
 export interface GuardianService {
+  claude_max_price_cents?: number
+  region?: GuardianMacRegion | ''
+  hardware_config?: GuardianMacConfig | ''
+  chip?: GuardianMacChip | ''
   base_sales?: number
   actual_sales?: number
   sold_count?: number
@@ -41,6 +52,8 @@ export interface GuardianService {
   features: string[]
   /** CNY in fen (1/100 yuan). */
   price_cents: number
+  quarter_price_cents?: number
+  annual_price_cents?: number
   delivery_note: string
   badge: string
   route: GuardianServiceRoute
@@ -67,6 +80,8 @@ export interface GuardianCatalog {
 }
 
 export interface GuardianOrderRequest {
+  add_claude_max?: boolean
+  billing_period?: GuardianBillingPeriod
   service_id: number
   payment_method: string
   route: GuardianOrderRoute
@@ -83,6 +98,8 @@ export interface GuardianOrderCheckout {
 }
 
 export interface GuardianOrder {
+  claude_max_price_cents?: number
+  billing_period?: GuardianBillingPeriod | ''
   id: number
   trade_no: string
   service_id: number

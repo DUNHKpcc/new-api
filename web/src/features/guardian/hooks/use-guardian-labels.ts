@@ -20,7 +20,10 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type {
+  GuardianBillingPeriod,
   GuardianContactType,
+  GuardianMacRegion,
+  GuardianMacConfig,
   GuardianOrderRoute,
   GuardianOrderStatus,
   GuardianOs,
@@ -36,6 +39,7 @@ export function useGuardianLabels() {
       local: t('Local machine'),
       vm: t('Virtual machine'),
       vps: t('Remote server'),
+      mac_mini: t('Overseas Mac mini'),
       unsure: t('Not sure yet'),
     }
     const serviceRoute: Record<GuardianServiceRoute, string> = {
@@ -43,6 +47,7 @@ export function useGuardianLabels() {
       local: t('Local machine'),
       vm: t('Virtual machine'),
       vps: t('Remote server'),
+      mac_mini: t('Overseas Mac mini'),
     }
     const os: Record<GuardianOs, string> = {
       macos: 'macOS',
@@ -66,6 +71,27 @@ export function useGuardianLabels() {
       cancelled: t('Cancelled'),
       refunded: t('Refunded'),
     }
-    return { orderRoute, serviceRoute, os, contactType, status }
+    const macRegion: Record<GuardianMacRegion, string> = {
+      kr_seoul: t('South Korea · Seoul'),
+      au_sydney: t('Australia · Sydney'),
+    }
+    const macConfig: Record<GuardianMacConfig, string> = {
+      '16_256': t('16GB memory + 256GB storage'),
+    }
+    const billingPeriod: Record<GuardianBillingPeriod, string> = {
+      monthly: t('Monthly payment'),
+      quarterly: t('Quarterly'),
+      yearly: t('Yearly'),
+    }
+    return {
+      billingPeriod,
+      orderRoute,
+      serviceRoute,
+      os,
+      contactType,
+      status,
+      macRegion,
+      macConfig,
+    }
   }, [t])
 }

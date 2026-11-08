@@ -16,10 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute } from '@tanstack/react-router'
-
-import { GuardianAccountStatisticsPage } from '@/features/guardian/account-statistics'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/guardian/account-statistics')({
-  component: GuardianAccountStatisticsPage,
+  beforeLoad: () => {
+    throw redirect({
+      to: '/guardian/services',
+      search: { category: 'account_status' },
+      replace: true,
+    })
+  },
 })
