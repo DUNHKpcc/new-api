@@ -103,7 +103,7 @@ func AdminUpdateGuardianService(c *gin.Context) {
 	}
 	service.CreatedAt = previous.CreatedAt
 	service.UpdatedAt = time.Now().Unix()
-	if err := model.DB.Model(&previous).Select("base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
+	if err := model.DB.Model(&previous).Select("claude_max_price_cents", "quarter_price_cents", "annual_price_cents", "region", "hardware_config", "chip", "base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}

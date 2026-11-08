@@ -31,7 +31,8 @@ import (
 )
 
 // Released rc.48 service schema, retained as an upgrade fixture.
-type guardianServiceRC48 struct {
+type guardianServiceBeforeChip struct {
+	BaseSales    int64
 	ID           int
 	Title        string                 `gorm:"type:varchar(128);not null"`
 	Subtitle     string                 `gorm:"type:varchar(255)"`
@@ -47,7 +48,34 @@ type guardianServiceRC48 struct {
 	UpdatedAt    int64
 }
 
-func (guardianServiceRC48) TableName() string { return "guardian_services" }
+func (guardianServiceBeforeChip) TableName() string { return "guardian_services" }
+
+type guardianOrderBeforePeriod struct {
+	RefundedAt        int64  `json:"refunded_at"`
+	HasPaymentAnomaly bool   `json:"-" gorm:"index"`
+	ID                int    `json:"id"`
+	TradeNo           string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
+	UserID            int    `json:"-" gorm:"index"`
+	ServiceID         int    `json:"service_id" gorm:"index"`
+	ServiceTitle      string `json:"service_title" gorm:"type:varchar(128)"`
+	AmountCents       int64  `json:"amount_cents"`
+	PaymentMethod     string `json:"payment_method" gorm:"type:varchar(32)"`
+	Status            string `json:"status" gorm:"type:varchar(24);index"`
+	Route             string `json:"route" gorm:"type:varchar(16)"`
+	OS                string `json:"os" gorm:"type:varchar(32)"`
+	ContactType       string `json:"contact_type" gorm:"type:varchar(16)"`
+	Contact           string `json:"contact" gorm:"type:varchar(128)"`
+	Note              string `json:"note" gorm:"type:text"`
+	AdminNote         string `json:"admin_note" gorm:"type:text"`
+	ProviderPayload   string `json:"-" gorm:"type:text"`
+	CreatedAt         int64  `json:"created_at"`
+	PaidAt            int64  `json:"paid_at"`
+	QueueSeq          int64  `json:"-" gorm:"index"`
+	DeliveredAt       int64  `json:"delivered_at"`
+	UpdatedAt         int64  `json:"updated_at"`
+}
+
+func (guardianOrderBeforePeriod) TableName() string { return "guardian_service_orders" }
 
 type guardianAccountStatusBeforeLinks struct {
 	UserID        int `gorm:"primaryKey;autoIncrement:false"`
@@ -132,13 +160,13 @@ func TestGuardianLifecycle(t *testing.T) {
 			suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 			users := []model.User{{Username: "buyer-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "a" + suffix}, {Username: "admin-" + suffix, Password: "unused", Role: common.RoleAdminUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "b" + suffix}, {Username: "other-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "c" + suffix}}
 			require.NoError(t, db.Create(&users).Error)
-			var legacy guardianServiceRC48
+			var legacy guardianServiceBeforeChip
 			if os.Getenv("TEST_GUARDIAN_UPGRADE") == "1" {
-				require.NoError(t, db.AutoMigrate(&guardianServiceRC48{}, &model.GuardianServiceOrder{}, &guardianAccountStatusBeforeLinks{}))
+				require.NoError(t, db.AutoMigrate(&guardianServiceBeforeChip{}, &guardianOrderBeforePeriod{}, &guardianAccountStatusBeforeLinks{}))
 				require.NoError(t, db.Create(&guardianAccountStatusBeforeLinks{UserID: users[2].Id, Banned: true, UpdatedAt: 123, UpdatedBy: users[1].Id}).Error)
-				legacy = guardianServiceRC48{Title: "Historical service", PriceCents: 19900, Features: model.GuardianFeatures{"Existing feature"}, Route: "any"}
+				legacy = guardianServiceBeforeChip{BaseSales: 5, Title: "Historical service", PriceCents: 19900, Features: model.GuardianFeatures{"Existing feature"}, Route: "any"}
 				require.NoError(t, db.Create(&legacy).Error)
-				require.NoError(t, db.Create(&model.GuardianServiceOrder{TradeNo: "historical-" + suffix, ServiceID: legacy.ID, Status: "delivered"}).Error)
+				require.NoError(t, db.Create(&guardianOrderBeforePeriod{AmountCents: 19900, TradeNo: "historical-" + suffix, ServiceID: legacy.ID, Status: "delivered"}).Error)
 			}
 			for range 2 {
 				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
@@ -154,10 +182,21 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.Equal(t, legacy.Title, migrated.Title)
 				assert.Equal(t, legacy.Features, migrated.Features)
 				assert.Equal(t, legacy.PriceCents, migrated.PriceCents)
-				assert.Zero(t, migrated.BaseSales)
+				assert.Equal(t, legacy.BaseSales, migrated.BaseSales)
+				assert.Empty(t, migrated.Chip)
+				assert.Empty(t, migrated.Region)
+				assert.Empty(t, migrated.HardwareConfig)
+				assert.Zero(t, migrated.QuarterPriceCents)
+				assert.Zero(t, migrated.AnnualPriceCents)
+				assert.Zero(t, migrated.ClaudeMaxPriceCents)
+				var historicalOrder model.GuardianServiceOrder
+				require.NoError(t, db.Where("trade_no = ?", "historical-"+suffix).First(&historicalOrder).Error)
+				assert.Empty(t, historicalOrder.BillingPeriod)
+				assert.Zero(t, historicalOrder.ClaudeMaxPriceCents)
+				assert.EqualValues(t, 19900, historicalOrder.AmountCents)
 				services := []model.GuardianService{migrated}
 				require.NoError(t, model.PopulateGuardianSales(services))
-				assert.EqualValues(t, 1, *services[0].SoldCount)
+				assert.EqualValues(t, 6, *services[0].SoldCount)
 			}
 			var preserved model.User
 			require.NoError(t, db.First(&preserved, users[0].Id).Error)
@@ -228,6 +267,134 @@ func TestGuardianLifecycle(t *testing.T) {
 			catalog := decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)
 			assert.Equal(t, true, catalog["purchase_enabled"])
 			assert.Len(t, catalog["pay_methods"], 1)
+
+			t.Run("mac mini uses existing service and order storage", func(t *testing.T) {
+				macPayload := strings.Replace(payload, `"route":"vps"`, `"route":"mac_mini","chip":"m4","region":"kr_seoul","hardware_config":"16_256","quarter_price_cents":150000,"annual_price_cents":500000,"claude_max_price_cents":100000`, 1)
+				result := decode(request("POST", "/api/guardian/admin/services", tokens[1], macPayload))
+				require.Equal(t, true, result["success"])
+				macID := int(result["data"].(map[string]any)["id"].(float64))
+				defer db.Delete(&model.GuardianService{}, macID)
+				assert.Equal(t, "m4", result["data"].(map[string]any)["chip"])
+				servicePath := fmt.Sprintf("/api/guardian/admin/services/%d", macID)
+				updated := strings.Replace(macPayload, `"chip":"m4"`, `"chip":"m6"`, 1)
+				require.Equal(t, true, decode(request("PUT", servicePath, tokens[1], updated))["success"])
+				updated = strings.Replace(updated, `"region":"kr_seoul"`, `"region":"au_sydney"`, 1)
+				require.Equal(t, true, decode(request("PUT", servicePath, tokens[1], updated))["success"])
+				var storedService model.GuardianService
+				require.NoError(t, db.First(&storedService, macID).Error)
+				assert.Equal(t, "m6", storedService.Chip)
+				assert.Equal(t, "au_sydney", storedService.Region)
+				assert.Equal(t, "16_256", storedService.HardwareConfig)
+				assert.EqualValues(t, 150000, storedService.QuarterPriceCents)
+				assert.EqualValues(t, 500000, storedService.AnnualPriceCents)
+				assert.EqualValues(t, 100000, storedService.ClaudeMaxPriceCents)
+				public := decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)["services"].([]any)
+				var publicChip any
+				for _, item := range public {
+					entry := item.(map[string]any)
+					if int(entry["id"].(float64)) == macID {
+						publicChip = entry["chip"]
+						assert.Equal(t, "au_sydney", entry["region"])
+						assert.Equal(t, "16_256", entry["hardware_config"])
+						assert.Equal(t, float64(500000), entry["annual_price_cents"])
+						assert.Equal(t, float64(100000), entry["claude_max_price_cents"])
+					}
+				}
+				assert.Equal(t, "m6", publicChip)
+				invalid := strings.Replace(updated, `"chip":"m6"`, `"chip":"m5"`, 1)
+				assert.Equal(t, false, decode(request("PUT", servicePath, tokens[1], invalid))["success"])
+				require.NoError(t, db.First(&storedService, macID).Error)
+				assert.Equal(t, "m6", storedService.Chip)
+				cleared := strings.Replace(updated, `"chip":"m6"`, `"chip":""`, 1)
+				require.Equal(t, true, decode(request("PUT", servicePath, tokens[1], cleared))["success"])
+				require.NoError(t, db.First(&storedService, macID).Error)
+				assert.Empty(t, storedService.Chip)
+
+				for _, invalid := range []struct{ from, to string }{
+					{`"region":"au_sydney"`, `"region":"unknown"`},
+					{`"hardware_config":"16_256"`, `"hardware_config":"64_1024"`},
+					{`"quarter_price_cents":150000`, `"quarter_price_cents":-1`},
+					{`"annual_price_cents":500000`, `"annual_price_cents":10000001`},
+					{`"claude_max_price_cents":100000`, `"claude_max_price_cents":-1`},
+					{`"claude_max_price_cents":100000`, `"claude_max_price_cents":10000001`},
+				} {
+					assert.Equal(t, false, decode(request("PUT", servicePath, tokens[1], strings.Replace(updated, invalid.from, invalid.to, 1)))["success"])
+				}
+				for _, tc := range []struct {
+					period string
+					amount int64
+					addon  int64
+				}{
+					{"monthly", 59901, 0}, {"quarterly", 150000, 0}, {"yearly", 500000, 0},
+					{"monthly", 159901, 100000}, {"quarterly", 250000, 100000}, {"yearly", 600000, 100000},
+				} {
+					body := fmt.Sprintf(`{"service_id":%d,"billing_period":%q,"add_claude_max":%t,"claude_max_price_cents":1,"amount_cents":1,"payment_method":"alipay","route":"mac_mini","os":"macos","contact_type":"email","contact":"buyer@example.com"}`, macID, tc.period, tc.addon > 0)
+					result := decode(request("POST", "/api/guardian/orders", tokens[0], body))
+					require.Equal(t, true, result["success"], result)
+					var saved model.GuardianServiceOrder
+					require.NoError(t, db.Where("trade_no = ?", result["data"].(map[string]any)["trade_no"]).First(&saved).Error)
+					assert.Equal(t, tc.period, saved.BillingPeriod)
+					assert.Equal(t, tc.amount, saved.AmountCents)
+					assert.Equal(t, tc.addon, saved.ClaudeMaxPriceCents)
+					assert.Equal(t, fmt.Sprintf("%.2f", float64(tc.amount)/100), result["data"].(map[string]any)["pay_params"].(map[string]any)["money"])
+					require.NoError(t, db.Model(&storedService).Updates(map[string]any{"annual_price_cents": 400000, "claude_max_price_cents": 50000}).Error)
+					require.NoError(t, db.First(&saved, saved.ID).Error)
+					assert.Equal(t, tc.amount, saved.AmountCents)
+					assert.Equal(t, tc.addon, saved.ClaudeMaxPriceCents)
+					require.NoError(t, db.Model(&storedService).Updates(map[string]any{"annual_price_cents": 500000, "claude_max_price_cents": 100000}).Error)
+					if tc.addon > 0 {
+						require.Error(t, model.CompleteGuardianOrder(saved.TradeNo, "{}", fmt.Sprintf("%.2f", float64(tc.amount-tc.addon)/100), "alipay"))
+						require.NoError(t, model.CompleteGuardianOrder(saved.TradeNo, "{}", fmt.Sprintf("%.2f", float64(tc.amount)/100), "alipay"))
+						require.NoError(t, db.First(&saved, saved.ID).Error)
+						assert.Equal(t, "paid", saved.Status)
+					}
+					require.NoError(t, db.Where("order_id = ?", saved.ID).Delete(&model.GuardianOrderEvent{}).Error)
+					require.NoError(t, db.Delete(&saved).Error)
+				}
+				baseRequest := model.GuardianOrderRequest{ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com"}
+				for _, mismatch := range []struct {
+					serviceID int
+					route     string
+				}{
+					{macID, "vps"}, {id, "mac_mini"},
+				} {
+					body := fmt.Sprintf(`{"service_id":%d,"payment_method":"alipay","route":%q,"os":"macos","contact_type":"email","contact":"buyer@example.com"}`, mismatch.serviceID, mismatch.route)
+					assert.Equal(t, false, decode(request("POST", "/api/guardian/orders", tokens[0], body))["success"])
+				}
+				for _, period := range []string{"weekly", "yearly"} {
+					baseRequest.BillingPeriod = period
+					require.NoError(t, db.Model(&storedService).Update("annual_price_cents", 0).Error)
+					_, err := model.CreateGuardianOrder(users[0].Id, baseRequest)
+					require.Error(t, err)
+				}
+				baseRequest.ServiceID = id
+				_, err := model.CreateGuardianOrder(users[0].Id, baseRequest)
+				require.Error(t, err)
+
+				baseRequest.BillingPeriod = ""
+				baseRequest.AddClaudeMax = true
+				_, err = model.CreateGuardianOrder(users[0].Id, baseRequest)
+				require.Error(t, err)
+				baseRequest.ServiceID = macID
+				disabledAddon := strings.Replace(updated, `"claude_max_price_cents":100000`, `"claude_max_price_cents":0`, 1)
+				require.Equal(t, true, decode(request("PUT", servicePath, tokens[1], disabledAddon))["success"])
+				_, err = model.CreateGuardianOrder(users[0].Id, baseRequest)
+				require.Error(t, err)
+
+				order, err := model.CreateGuardianOrder(users[0].Id, model.GuardianOrderRequest{
+					ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com",
+				})
+				require.NoError(t, err)
+				defer db.Delete(order)
+				defer db.Where("order_id = ?", order.ID).Delete(&model.GuardianOrderEvent{})
+				var stored model.GuardianServiceOrder
+				require.NoError(t, db.First(&stored, order.ID).Error)
+				assert.Equal(t, "monthly", stored.BillingPeriod)
+				assert.EqualValues(t, 59901, stored.AmountCents)
+				assert.Equal(t, "mac_mini", stored.Route)
+				assert.Equal(t, "macos", stored.OS)
+				assert.Equal(t, "pending_payment", stored.Status)
+			})
 			t.Run("sales", func(t *testing.T) {
 				servicePath := fmt.Sprintf("/api/guardian/admin/services/%d", id)
 				for _, invalid := range []string{"-1", "1.5", "1000000001"} {

@@ -37,25 +37,43 @@ func (f *GuardianFeatures) Scan(value any) error {
 }
 
 type GuardianService struct {
-	BaseSales    int64            `json:"base_sales"`
-	ActualSales  *int64           `json:"actual_sales,omitempty" gorm:"-"`
-	SoldCount    *int64           `json:"sold_count,omitempty" gorm:"-"`
-	ID           int              `json:"id"`
-	Title        string           `json:"title" gorm:"type:varchar(128);not null"`
-	Subtitle     string           `json:"subtitle" gorm:"type:varchar(255)"`
-	Description  string           `json:"description" gorm:"type:text"`
-	Features     GuardianFeatures `json:"features" gorm:"type:text"`
-	PriceCents   int64            `json:"price_cents" gorm:"not null"`
-	DeliveryNote string           `json:"delivery_note" gorm:"type:varchar(128)"`
-	Badge        string           `json:"badge" gorm:"type:varchar(32)"`
-	Route        string           `json:"route" gorm:"type:varchar(16)"`
-	Enabled      bool             `json:"enabled"`
-	SortOrder    int              `json:"sort_order"`
-	CreatedAt    int64            `json:"created_at"`
-	UpdatedAt    int64            `json:"updated_at"`
+	ClaudeMaxPriceCents int64            `json:"claude_max_price_cents"`
+	QuarterPriceCents   int64            `json:"quarter_price_cents"`
+	AnnualPriceCents    int64            `json:"annual_price_cents"`
+	Region              string           `json:"region" gorm:"type:varchar(16)"`
+	HardwareConfig      string           `json:"hardware_config" gorm:"type:varchar(16)"`
+	Chip                string           `json:"chip" gorm:"type:varchar(8)"`
+	BaseSales           int64            `json:"base_sales"`
+	ActualSales         *int64           `json:"actual_sales,omitempty" gorm:"-"`
+	SoldCount           *int64           `json:"sold_count,omitempty" gorm:"-"`
+	ID                  int              `json:"id"`
+	Title               string           `json:"title" gorm:"type:varchar(128);not null"`
+	Subtitle            string           `json:"subtitle" gorm:"type:varchar(255)"`
+	Description         string           `json:"description" gorm:"type:text"`
+	Features            GuardianFeatures `json:"features" gorm:"type:text"`
+	PriceCents          int64            `json:"price_cents" gorm:"not null"`
+	DeliveryNote        string           `json:"delivery_note" gorm:"type:varchar(128)"`
+	Badge               string           `json:"badge" gorm:"type:varchar(32)"`
+	Route               string           `json:"route" gorm:"type:varchar(16)"`
+	Enabled             bool             `json:"enabled"`
+	SortOrder           int              `json:"sort_order"`
+	CreatedAt           int64            `json:"created_at"`
+	UpdatedAt           int64            `json:"updated_at"`
 }
 
 func (s *GuardianService) Validate() error {
+	if !slices.Contains([]string{"", "m4", "m6"}, s.Chip) {
+		return errors.New("芯片型号仅支持 M4 或 M6")
+	}
+	if !slices.Contains([]string{"", "kr_seoul", "au_sydney"}, s.Region) || !slices.Contains([]string{"", "16_256"}, s.HardwareConfig) {
+		return errors.New("Mac mini 地区或配置无效")
+	}
+	if s.ClaudeMaxPriceCents < 0 || s.ClaudeMaxPriceCents > 10000000 {
+		return errors.New("Claude MAX 首月加购价须在 0 至 100000 元之间")
+	}
+	if s.QuarterPriceCents < 0 || s.QuarterPriceCents > 10000000 || s.AnnualPriceCents < 0 || s.AnnualPriceCents > 10000000 {
+		return errors.New("周期价格须在 0 至 100000 元之间")
+	}
 	if s.BaseSales < 0 || s.BaseSales > 1000000000 {
 		return errors.New("基础销量须为 0 至 1000000000 的整数")
 	}
@@ -70,7 +88,12 @@ func (s *GuardianService) Validate() error {
 			return errors.New("服务信息超过长度限制")
 		}
 	}
-	if s.Title == "" || s.PriceCents < 1 || s.PriceCents > 10000000 || !slices.Contains([]string{"any", "local", "vm", "vps"}, s.Route) {
+	if s.Route != "mac_mini" {
+		s.Chip, s.Region, s.HardwareConfig = "", "", ""
+		s.QuarterPriceCents, s.AnnualPriceCents = 0, 0
+		s.ClaudeMaxPriceCents = 0
+	}
+	if s.Title == "" || s.PriceCents < 1 || s.PriceCents > 10000000 || !slices.Contains([]string{"any", "local", "vm", "vps", "mac_mini"}, s.Route) {
 		return errors.New("服务名称、价格或适用路线无效")
 	}
 	features := GuardianFeatures{}
@@ -119,7 +142,33 @@ func PopulateGuardianSales(services []GuardianService) error {
 	return nil
 }
 
+// PriceForPeriod resolves the configured total; old Mac mini clients default to monthly.
+func (s GuardianService) PriceForPeriod(period string) (int64, string, error) {
+	if s.Route != "mac_mini" {
+		if period != "" {
+			return 0, "", errors.New("该服务不支持按周期付款")
+		}
+		return s.PriceCents, "", nil
+	}
+	if period == "" {
+		period = "monthly"
+	}
+	amount := s.PriceCents
+	switch period {
+	case "quarterly":
+		amount = s.QuarterPriceCents
+	case "yearly":
+		amount = s.AnnualPriceCents
+	}
+	if amount <= 0 {
+		return 0, "", errors.New("该付款周期尚未开放")
+	}
+	return amount, period, nil
+}
+
 type GuardianOrderRequest struct {
+	AddClaudeMax  bool   `json:"add_claude_max"`
+	BillingPeriod string `json:"billing_period"`
 	ServiceID     int    `json:"service_id"`
 	PaymentMethod string `json:"payment_method"`
 	Route         string `json:"route"`
@@ -130,8 +179,11 @@ type GuardianOrderRequest struct {
 }
 
 func (r *GuardianOrderRequest) Validate() error {
+	if !slices.Contains([]string{"", "monthly", "quarterly", "yearly"}, r.BillingPeriod) {
+		return errors.New("付款周期无效")
+	}
 	r.Contact = strings.TrimSpace(r.Contact)
-	if r.ServiceID <= 0 || !slices.Contains([]string{"local", "vm", "vps", "unsure"}, r.Route) || !slices.Contains([]string{"macos", "windows", "linux", "other"}, r.OS) {
+	if r.ServiceID <= 0 || !slices.Contains([]string{"local", "vm", "vps", "unsure", "mac_mini"}, r.Route) || !slices.Contains([]string{"macos", "windows", "linux", "other"}, r.OS) {
 		return errors.New("服务或环境参数无效")
 	}
 	contact := GuardianContactUpdate{ContactType: r.ContactType, Contact: r.Contact, Note: r.Note}
@@ -143,28 +195,30 @@ func (r *GuardianOrderRequest) Validate() error {
 }
 
 type GuardianServiceOrder struct {
-	RefundedAt        int64  `json:"refunded_at"`
-	HasPaymentAnomaly bool   `json:"-" gorm:"index"`
-	ID                int    `json:"id"`
-	TradeNo           string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
-	UserID            int    `json:"-" gorm:"index"`
-	ServiceID         int    `json:"service_id" gorm:"index"`
-	ServiceTitle      string `json:"service_title" gorm:"type:varchar(128)"`
-	AmountCents       int64  `json:"amount_cents"`
-	PaymentMethod     string `json:"payment_method" gorm:"type:varchar(32)"`
-	Status            string `json:"status" gorm:"type:varchar(24);index"`
-	Route             string `json:"route" gorm:"type:varchar(16)"`
-	OS                string `json:"os" gorm:"type:varchar(32)"`
-	ContactType       string `json:"contact_type" gorm:"type:varchar(16)"`
-	Contact           string `json:"contact" gorm:"type:varchar(128)"`
-	Note              string `json:"note" gorm:"type:text"`
-	AdminNote         string `json:"admin_note" gorm:"type:text"`
-	ProviderPayload   string `json:"-" gorm:"type:text"`
-	CreatedAt         int64  `json:"created_at"`
-	PaidAt            int64  `json:"paid_at"`
-	QueueSeq          int64  `json:"-" gorm:"index"`
-	DeliveredAt       int64  `json:"delivered_at"`
-	UpdatedAt         int64  `json:"updated_at"`
+	ClaudeMaxPriceCents int64  `json:"claude_max_price_cents"`
+	BillingPeriod       string `json:"billing_period" gorm:"type:varchar(16)"`
+	RefundedAt          int64  `json:"refunded_at"`
+	HasPaymentAnomaly   bool   `json:"-" gorm:"index"`
+	ID                  int    `json:"id"`
+	TradeNo             string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
+	UserID              int    `json:"-" gorm:"index"`
+	ServiceID           int    `json:"service_id" gorm:"index"`
+	ServiceTitle        string `json:"service_title" gorm:"type:varchar(128)"`
+	AmountCents         int64  `json:"amount_cents"`
+	PaymentMethod       string `json:"payment_method" gorm:"type:varchar(32)"`
+	Status              string `json:"status" gorm:"type:varchar(24);index"`
+	Route               string `json:"route" gorm:"type:varchar(16)"`
+	OS                  string `json:"os" gorm:"type:varchar(32)"`
+	ContactType         string `json:"contact_type" gorm:"type:varchar(16)"`
+	Contact             string `json:"contact" gorm:"type:varchar(128)"`
+	Note                string `json:"note" gorm:"type:text"`
+	AdminNote           string `json:"admin_note" gorm:"type:text"`
+	ProviderPayload     string `json:"-" gorm:"type:text"`
+	CreatedAt           int64  `json:"created_at"`
+	PaidAt              int64  `json:"paid_at"`
+	QueueSeq            int64  `json:"-" gorm:"index"`
+	DeliveredAt         int64  `json:"delivered_at"`
+	UpdatedAt           int64  `json:"updated_at"`
 }
 
 type AdminGuardianOrder struct {
@@ -202,8 +256,23 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		if !service.Enabled || service.PriceCents < 1 {
 			return errors.New("服务已下架或价格无效")
 		}
+		if (service.Route == "mac_mini") != (req.Route == "mac_mini") {
+			return errors.New("所选路线与服务分类不一致")
+		}
+		amount, period, err := service.PriceForPeriod(req.BillingPeriod)
+		if err != nil {
+			return err
+		}
+		var addonPrice int64
+		if req.AddClaudeMax {
+			if service.Route != "mac_mini" || service.ClaudeMaxPriceCents <= 0 {
+				return errors.New("该服务尚未开放 Claude MAX 首月加购")
+			}
+			addonPrice = service.ClaudeMaxPriceCents
+			amount += addonPrice
+		}
 		now := time.Now().Unix()
-		*order = GuardianServiceOrder{TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: service.PriceCents, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
+		*order = GuardianServiceOrder{TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: amount, ClaudeMaxPriceCents: addonPrice, BillingPeriod: period, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(order).Error; err != nil {
 			return err
 		}
