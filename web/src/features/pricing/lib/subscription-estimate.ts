@@ -20,6 +20,7 @@ import type { SubscriptionPlan } from '@/features/subscriptions/types'
 
 import { QUOTA_TYPE_VALUES } from '../constants'
 import type { PricingModel } from '../types'
+import type { ParsedTier } from './billing-expr'
 import {
   getDynamicPricingTiers,
   hasDynamicRequestRules,
@@ -27,7 +28,6 @@ import {
 } from './dynamic-price'
 import { getDisplayGroupRatio, isTokenBasedModel } from './model-helpers'
 import { getTokenPricesPerMillion } from './price'
-import type { ParsedTier } from './billing-expr'
 
 export const SUBSCRIPTION_ESTIMATE_INPUT_TOKENS = 1_000
 export const SUBSCRIPTION_ESTIMATE_OUTPUT_TOKENS = 4_000

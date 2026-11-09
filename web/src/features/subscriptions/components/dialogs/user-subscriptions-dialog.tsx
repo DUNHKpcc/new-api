@@ -303,7 +303,7 @@ export function UserSubscriptionsDialog(props: Props) {
                           {planTitleMap.get(sub.plan_id) || `#${sub.plan_id}`}
                         </div>
                         <div className='text-muted-foreground text-sm'>
-                          {t('Source')}: {' '}
+                          {t('Source')}:{' '}
                           {isPccAgentGiftSubscription(sub)
                             ? t('PccAgent Gift')
                             : sub.source || '-'}
