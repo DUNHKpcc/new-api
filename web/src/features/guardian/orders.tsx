@@ -30,6 +30,7 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 
 import { listMyGuardianOrders } from './api'
+import { GuardianCustomerServices } from './components/customer-services'
 import { GuardianShell } from './components/guardian-shell'
 import { OrderCard } from './components/order-card'
 import { GUARDIAN_QUERY_KEYS } from './constants'
@@ -100,6 +101,7 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
           )}
         </p>
 
+        <GuardianCustomerServices />
         {props.payResult && <PayResultBanner result={props.payResult} />}
 
         <div className='mt-10 space-y-5' aria-busy={orders.isFetching}>

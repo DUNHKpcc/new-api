@@ -25,6 +25,7 @@ export type VerificationMethod =
   | 'oauth'
   | 'session'
 export type SecurityProofScope =
+  | 'guardian.withdrawal'
   | 'channel.key.read'
   | 'passkey.register'
   | 'passkey.delete'
@@ -51,6 +52,15 @@ export type SecurityProofScope =
 export type AdminUserManageAction = 'disable' | 'enable' | 'promote' | 'demote'
 
 export type VerificationOperation =
+  | {
+      scope: 'guardian.withdrawal'
+      context: {
+        amount_cents: number
+        account: string
+        payee_name: string
+        request_key: string
+      }
+    }
   | { scope: 'channel.key.read'; context: { channel_id: number } }
   | {
       scope: 'account.binding.bind'
@@ -91,6 +101,7 @@ export type VerificationOperation =
   | {
       scope: Exclude<
         SecurityProofScope,
+        | 'guardian.withdrawal'
         | 'channel.key.read'
         | 'account.binding.bind'
         | 'account.binding.unbind'

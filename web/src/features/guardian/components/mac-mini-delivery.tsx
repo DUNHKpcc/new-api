@@ -24,7 +24,11 @@ import { Button } from '@/components/ui/button'
 import { FaqList } from './faq-section'
 import { ServiceProcessSection } from './service-process-section'
 
-export function MacMiniDelivery() {
+export function MacMiniDelivery({
+  resellerSale = false,
+}: {
+  resellerSale?: boolean
+}) {
   const { t } = useTranslation()
   return (
     <>
@@ -110,9 +114,13 @@ export function MacMiniDelivery() {
           },
           {
             q: t('Refund assessment'),
-            a: t(
-              'Support reviews the cause and the affected service. For an eligible refund, calculate each item separately: amount actually paid \u00d7 unused time \u00f7 paid period, less prior refunds. Account restrictions alone do not establish that the device service failed; confirmed commitments and statutory rights still apply.'
-            ),
+            a: resellerSale
+              ? t(
+                  'Reseller orders support whole-order refunds only, with the actual unreturned channel fee deducted from the customer refund.'
+                )
+              : t(
+                  'Support reviews the cause and the affected service. For an eligible refund, calculate each item separately: amount actually paid \u00d7 unused time \u00f7 paid period, less prior refunds. Account restrictions alone do not establish that the device service failed; confirmed commitments and statutory rights still apply.'
+                ),
           },
           {
             q: t('Backups and returning the Mac'),

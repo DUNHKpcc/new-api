@@ -87,6 +87,14 @@ export function OrderCard(props: {
           },
         ]
       : []),
+    ...((order.claude_ultra_price_cents ?? 0) > 0
+      ? [
+          {
+            label: t('Claude Ultra first month'),
+            value: formatCny(order.claude_ultra_price_cents ?? 0, locale),
+          },
+        ]
+      : []),
     ...(order.billing_period
       ? [
           {

@@ -88,6 +88,15 @@ type guardianAccountStatusBeforeLinks struct {
 
 func (guardianAccountStatusBeforeLinks) TableName() string { return "guardian_account_statuses" }
 
+// rc.51 order schema immediately before reseller support.
+type guardianOrderBeforeReseller struct {
+	Legacy              guardianOrderBeforePeriod `gorm:"embedded"`
+	BillingPeriod       string                    `gorm:"type:varchar(16)"`
+	ClaudeMaxPriceCents int64
+}
+
+func (guardianOrderBeforeReseller) TableName() string { return "guardian_service_orders" }
+
 func TestGuardianLifecycle(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -156,7 +165,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				*payment = oldPayment
 				_ = sqlDB.Close()
 			})
-			require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.UserAccessToken{}, &model.Option{}, &model.AuditLog{}))
+			require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.UserAccessToken{}, &model.Option{}, &model.AuditLog{}, &model.AuthFlow{}, &model.TwoFA{}, &model.PasskeyCredential{}))
 			suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 			users := []model.User{{Username: "buyer-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "a" + suffix}, {Username: "admin-" + suffix, Password: "unused", Role: common.RoleAdminUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "b" + suffix}, {Username: "other-" + suffix, Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1, AffCode: "c" + suffix}}
 			require.NoError(t, db.Create(&users).Error)
@@ -168,10 +177,23 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.NoError(t, db.Create(&legacy).Error)
 				require.NoError(t, db.Create(&guardianOrderBeforePeriod{AmountCents: 19900, TradeNo: "historical-" + suffix, ServiceID: legacy.ID, Status: "delivered"}).Error)
 			}
+			if os.Getenv("TEST_GUARDIAN_UPGRADE") == "1" {
+				require.NoError(t, db.AutoMigrate(&guardianOrderBeforeReseller{}))
+				require.NoError(t, db.Create(&guardianOrderBeforeReseller{Legacy: guardianOrderBeforePeriod{TradeNo: "rc51-" + suffix, AmountCents: 180000, Status: "delivered"}, BillingPeriod: "quarterly", ClaudeMaxPriceCents: 30000}).Error)
+			}
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 			}
 			if legacy.ID != 0 {
+				var released model.GuardianServiceOrder
+				require.NoError(t, db.Where("trade_no = ?", "rc51-"+suffix).First(&released).Error)
+				assert.EqualValues(t, 180000, released.AmountCents)
+				assert.Equal(t, "quarterly", released.BillingPeriod)
+				assert.EqualValues(t, 30000, released.ClaudeMaxPriceCents)
+				assert.Zero(t, released.ClaudeUltraPriceCents)
+				assert.Empty(t, released.ResellerCode)
+				assert.Zero(t, released.CustomerServiceID)
+
 				var migratedStatus model.GuardianAccountStatus
 				require.NoError(t, db.First(&migratedStatus, "user_id = ?", users[2].Id).Error)
 				assert.True(t, migratedStatus.Banned)
@@ -189,10 +211,12 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.Zero(t, migrated.QuarterPriceCents)
 				assert.Zero(t, migrated.AnnualPriceCents)
 				assert.Zero(t, migrated.ClaudeMaxPriceCents)
+				assert.Zero(t, migrated.ClaudeUltraPriceCents)
 				var historicalOrder model.GuardianServiceOrder
 				require.NoError(t, db.Where("trade_no = ?", "historical-"+suffix).First(&historicalOrder).Error)
 				assert.Empty(t, historicalOrder.BillingPeriod)
 				assert.Zero(t, historicalOrder.ClaudeMaxPriceCents)
+				assert.Zero(t, historicalOrder.ClaudeUltraPriceCents)
 				assert.EqualValues(t, 19900, historicalOrder.AmountCents)
 				services := []model.GuardianService{migrated}
 				require.NoError(t, model.PopulateGuardianSales(services))
@@ -269,7 +293,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Len(t, catalog["pay_methods"], 1)
 
 			t.Run("mac mini uses existing service and order storage", func(t *testing.T) {
-				macPayload := strings.Replace(payload, `"route":"vps"`, `"route":"mac_mini","chip":"m4","region":"kr_seoul","hardware_config":"16_256","quarter_price_cents":150000,"annual_price_cents":500000,"claude_max_price_cents":100000`, 1)
+				macPayload := strings.Replace(payload, `"route":"vps"`, `"route":"mac_mini","chip":"m4","region":"kr_seoul","hardware_config":"16_256","quarter_price_cents":150000,"annual_price_cents":500000,"claude_max_price_cents":100000,"claude_ultra_price_cents":250000`, 1)
 				result := decode(request("POST", "/api/guardian/admin/services", tokens[1], macPayload))
 				require.Equal(t, true, result["success"])
 				macID := int(result["data"].(map[string]any)["id"].(float64))
@@ -288,6 +312,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.EqualValues(t, 150000, storedService.QuarterPriceCents)
 				assert.EqualValues(t, 500000, storedService.AnnualPriceCents)
 				assert.EqualValues(t, 100000, storedService.ClaudeMaxPriceCents)
+				assert.EqualValues(t, 250000, storedService.ClaudeUltraPriceCents)
 				public := decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)["services"].([]any)
 				var publicChip any
 				for _, item := range public {
@@ -298,6 +323,7 @@ func TestGuardianLifecycle(t *testing.T) {
 						assert.Equal(t, "16_256", entry["hardware_config"])
 						assert.Equal(t, float64(500000), entry["annual_price_cents"])
 						assert.Equal(t, float64(100000), entry["claude_max_price_cents"])
+						assert.Equal(t, float64(250000), entry["claude_ultra_price_cents"])
 					}
 				}
 				assert.Equal(t, "m6", publicChip)
@@ -316,6 +342,8 @@ func TestGuardianLifecycle(t *testing.T) {
 					{`"quarter_price_cents":150000`, `"quarter_price_cents":-1`},
 					{`"annual_price_cents":500000`, `"annual_price_cents":10000001`},
 					{`"claude_max_price_cents":100000`, `"claude_max_price_cents":-1`},
+					{`"claude_ultra_price_cents":250000`, `"claude_ultra_price_cents":-1`},
+					{`"claude_ultra_price_cents":250000`, `"claude_ultra_price_cents":10000001`},
 					{`"claude_max_price_cents":100000`, `"claude_max_price_cents":10000001`},
 				} {
 					assert.Equal(t, false, decode(request("PUT", servicePath, tokens[1], strings.Replace(updated, invalid.from, invalid.to, 1)))["success"])
@@ -324,11 +352,13 @@ func TestGuardianLifecycle(t *testing.T) {
 					period string
 					amount int64
 					addon  int64
+					ultra  int64
 				}{
-					{"monthly", 59901, 0}, {"quarterly", 150000, 0}, {"yearly", 500000, 0},
-					{"monthly", 159901, 100000}, {"quarterly", 250000, 100000}, {"yearly", 600000, 100000},
+					{"monthly", 59901, 0, 0}, {"quarterly", 150000, 0, 0}, {"yearly", 500000, 0, 0},
+					{"monthly", 159901, 100000, 0}, {"quarterly", 250000, 100000, 0}, {"yearly", 600000, 100000, 0},
+					{"monthly", 309901, 0, 250000}, {"quarterly", 400000, 0, 250000}, {"yearly", 750000, 0, 250000},
 				} {
-					body := fmt.Sprintf(`{"service_id":%d,"billing_period":%q,"add_claude_max":%t,"claude_max_price_cents":1,"amount_cents":1,"payment_method":"alipay","route":"mac_mini","os":"macos","contact_type":"email","contact":"buyer@example.com"}`, macID, tc.period, tc.addon > 0)
+					body := fmt.Sprintf(`{"service_id":%d,"billing_period":%q,"add_claude_max":%t,"add_claude_ultra":%t,"claude_ultra_price_cents":1,"claude_max_price_cents":1,"amount_cents":1,"payment_method":"alipay","route":"mac_mini","os":"macos","contact_type":"email","contact":"buyer@example.com"}`, macID, tc.period, tc.addon > 0, tc.ultra > 0)
 					result := decode(request("POST", "/api/guardian/orders", tokens[0], body))
 					require.Equal(t, true, result["success"], result)
 					var saved model.GuardianServiceOrder
@@ -336,14 +366,16 @@ func TestGuardianLifecycle(t *testing.T) {
 					assert.Equal(t, tc.period, saved.BillingPeriod)
 					assert.Equal(t, tc.amount, saved.AmountCents)
 					assert.Equal(t, tc.addon, saved.ClaudeMaxPriceCents)
+					assert.Equal(t, tc.ultra, saved.ClaudeUltraPriceCents)
 					assert.Equal(t, fmt.Sprintf("%.2f", float64(tc.amount)/100), result["data"].(map[string]any)["pay_params"].(map[string]any)["money"])
-					require.NoError(t, db.Model(&storedService).Updates(map[string]any{"annual_price_cents": 400000, "claude_max_price_cents": 50000}).Error)
+					require.NoError(t, db.Model(&storedService).Updates(map[string]any{"annual_price_cents": 400000, "claude_max_price_cents": 50000, "claude_ultra_price_cents": 200000}).Error)
 					require.NoError(t, db.First(&saved, saved.ID).Error)
 					assert.Equal(t, tc.amount, saved.AmountCents)
 					assert.Equal(t, tc.addon, saved.ClaudeMaxPriceCents)
-					require.NoError(t, db.Model(&storedService).Updates(map[string]any{"annual_price_cents": 500000, "claude_max_price_cents": 100000}).Error)
-					if tc.addon > 0 {
-						require.Error(t, model.CompleteGuardianOrder(saved.TradeNo, "{}", fmt.Sprintf("%.2f", float64(tc.amount-tc.addon)/100), "alipay"))
+					assert.Equal(t, tc.ultra, saved.ClaudeUltraPriceCents)
+					require.NoError(t, db.Model(&storedService).Updates(map[string]any{"annual_price_cents": 500000, "claude_max_price_cents": 100000, "claude_ultra_price_cents": 250000}).Error)
+					if tc.addon+tc.ultra > 0 {
+						require.Error(t, model.CompleteGuardianOrder(saved.TradeNo, "{}", fmt.Sprintf("%.2f", float64(tc.amount-tc.addon-tc.ultra)/100), "alipay"))
 						require.NoError(t, model.CompleteGuardianOrder(saved.TradeNo, "{}", fmt.Sprintf("%.2f", float64(tc.amount)/100), "alipay"))
 						require.NoError(t, db.First(&saved, saved.ID).Error)
 						assert.Equal(t, "paid", saved.Status)
@@ -379,6 +411,17 @@ func TestGuardianLifecycle(t *testing.T) {
 				disabledAddon := strings.Replace(updated, `"claude_max_price_cents":100000`, `"claude_max_price_cents":0`, 1)
 				require.Equal(t, true, decode(request("PUT", servicePath, tokens[1], disabledAddon))["success"])
 				_, err = model.CreateGuardianOrder(users[0].Id, baseRequest)
+				require.Error(t, err)
+
+				ultraRequest := model.GuardianOrderRequest{ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com", AddClaudeUltra: true, AddClaudeMax: true}
+				_, err = model.CreateGuardianOrder(users[0].Id, ultraRequest)
+				require.ErrorContains(t, err, "只能选择一项")
+				ultraRequest.AddClaudeMax = false
+				require.NoError(t, db.Model(&storedService).Update("claude_ultra_price_cents", 0).Error)
+				_, err = model.CreateGuardianOrder(users[0].Id, ultraRequest)
+				require.ErrorContains(t, err, "尚未开放")
+				ultraRequest.ServiceID, ultraRequest.Route = id, "vps"
+				_, err = model.CreateGuardianOrder(users[0].Id, ultraRequest)
 				require.Error(t, err)
 
 				order, err := model.CreateGuardianOrder(users[0].Id, model.GuardianOrderRequest{
@@ -798,7 +841,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Equal(t, "进度说明", change["before"].(map[string]any)["admin_note"])
 			assert.Equal(t, "refund note", change["after"].(map[string]any)["admin_note"])
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 			}
 			var persistedAnomaly model.GuardianPaymentAnomaly
 			require.NoError(t, db.Where("order_id = ?", order.ID).First(&persistedAnomaly).Error)
@@ -873,7 +916,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.NotContains(t, accessLog.String(), operation_setting.EpayKey)
 			// Repeated migrations preserve rows, zero-valued fields, JSON arrays and unique order numbers.
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 			}
 			require.NoError(t, db.First(&order, order.ID).Error)
 			replacement := strings.Replace(payload, `"enabled":true,`, ``, 1)
@@ -967,6 +1010,265 @@ func TestGuardianLifecycle(t *testing.T) {
 			rows, _ = myQueue(tokens[0])
 			assert.Equal(t, "", rows[queued["second"].ID]["queue_start_date"])
 			assert.Equal(t, false, setQueue(`{"daily_capacity":-1,"extra_slots":0,"paused":false,"resume_at":0}`)["success"])
+
+			t.Run("reseller money permissions renewals and full refund", func(t *testing.T) {
+				adminID, resellerID, buyerID := users[1].Id, users[2].Id, users[0].Id
+				accessPath := fmt.Sprintf("/api/guardian/admin/resellers/%d", resellerID)
+				assert.Equal(t, http.StatusForbidden, request("PUT", accessPath, tokens[2], `{"status":"active","reason":"unauthorized"}`).Code)
+				assert.Equal(t, http.StatusForbidden, request("PUT", accessPath, pat, `{"status":"active","reason":"token"}`).Code)
+				require.Equal(t, true, decode(request("PUT", accessPath, tokens[1], `{"status":"active","reason":"Approved reseller"}`))["success"])
+				resellerList := request("GET", "/api/guardian/admin/resellers", tokens[1], "")
+				resellerListData := decode(resellerList)
+				require.Equal(t, true, resellerListData["success"])
+				resellers := resellerListData["data"].([]any)
+				require.Len(t, resellers, 1)
+				assert.Equal(t, users[2].Username, resellers[0].(map[string]any)["username"])
+				assert.EqualValues(t, resellerID, resellers[0].(map[string]any)["user_id"])
+				assert.NotContains(t, resellerList.Body.String(), "password")
+				assert.Equal(t, http.StatusForbidden, request("GET", "/api/guardian/admin/resellers", tokens[0], "").Code)
+				assert.Equal(t, http.StatusForbidden, request("GET", "/api/guardian/admin/resellers", pat, "").Code)
+				reseller, err := model.GetGuardianReseller(resellerID)
+				require.NoError(t, err)
+				require.NotNil(t, reseller)
+				require.NoError(t, model.SaveGuardianResellerSetting(adminID, 60))
+				product := model.GuardianService{Title: "Reseller Mac", Route: "mac_mini", Enabled: true, PriceCents: 30000, QuarterPriceCents: 90000, AnnualPriceCents: 300000, ClaudeMaxPriceCents: 10000, ClaudeUltraPriceCents: 250000}
+				require.NoError(t, db.Create(&product).Error)
+				require.NoError(t, model.SaveGuardianSupply(resellerID, product.ID, adminID, model.GuardianSupplyRequest{Granted: true, SupplyCents: 20000, QuarterSupplyCents: 60000, AnnualSupplyCents: 240000, MaxSupplyCents: 7000, UltraSupplyCents: 200000}))
+				require.Error(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 20000}))
+				require.NoError(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 26000, QuarterRetailCents: 78000, AnnualRetailCents: 280000, MaxRetailCents: 8000, UltraRetailCents: 250000}))
+				catalogResponse := request("GET", "/api/guardian/resellers/"+reseller.Code, "", "")
+				require.Equal(t, true, decode(catalogResponse)["success"])
+				assert.NotContains(t, catalogResponse.Body.String(), "supply_cents")
+				assert.NotContains(t, catalogResponse.Body.String(), "fee_bps")
+				expected := int64(26000)
+				req := model.GuardianOrderRequest{ServiceID: product.ID, Route: "mac_mini", BillingPeriod: "monthly", PaymentMethod: "alipay", OS: "macos", ContactType: "telegram", Contact: "@buyer-private", Note: "private-note", ResellerCode: reseller.Code, ExpectedAmountCents: &expected, AcceptRefundFee: true}
+				_, err = model.CreateGuardianOrder(resellerID, req)
+				require.ErrorContains(t, err, "自己")
+				for _, variant := range []struct {
+					period         string
+					addon          bool
+					amount, supply int64
+				}{
+					{"quarterly", false, 78000, 60000}, {"yearly", true, 288000, 247000},
+				} {
+					variantReq := req
+					variantReq.BillingPeriod, variantReq.AddClaudeMax, variantReq.ExpectedAmountCents = variant.period, variant.addon, &variant.amount
+					variantOrder, err := model.CreateGuardianOrder(buyerID, variantReq)
+					require.NoError(t, err)
+					var snapshot model.GuardianResellerSale
+					require.NoError(t, db.First(&snapshot, variantOrder.ID).Error)
+					assert.Equal(t, variant.amount, variantOrder.AmountCents)
+					assert.Equal(t, variant.supply, snapshot.SupplyCents)
+					assert.Equal(t, "deduct_channel_fee_v1", snapshot.RefundTermsVersion)
+					_, err = model.CancelGuardianOrder(buyerID, variantOrder.ID)
+					require.NoError(t, err)
+				}
+
+				ultraReq := req
+				ultraTotal := int64(276000)
+				ultraReq.AddClaudeUltra, ultraReq.ExpectedAmountCents = true, &ultraTotal
+				ultraOrder, err := model.CreateGuardianOrder(buyerID, ultraReq)
+				require.NoError(t, err)
+				var ultraSale model.GuardianResellerSale
+				require.NoError(t, db.First(&ultraSale, ultraOrder.ID).Error)
+				assert.EqualValues(t, 250000, ultraOrder.ClaudeUltraPriceCents)
+				assert.Zero(t, ultraOrder.ClaudeMaxPriceCents)
+				assert.EqualValues(t, 220000, ultraSale.SupplyCents)
+				assert.EqualValues(t, 200000, ultraSale.UltraSupplyCents)
+				assert.Zero(t, ultraSale.MaxSupplyCents)
+				assert.EqualValues(t, 1656, ultraSale.EstimatedFeeCents)
+				require.Error(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 26000, UltraRetailCents: 200000}))
+				require.NoError(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 26000}))
+				_, err = model.CreateGuardianOrder(buyerID, ultraReq)
+				require.ErrorContains(t, err, "Ultra")
+				require.NoError(t, db.First(&ultraSale, ultraOrder.ID).Error)
+				assert.EqualValues(t, 220000, ultraSale.SupplyCents)
+				_, err = model.CancelGuardianOrder(buyerID, ultraOrder.ID)
+				require.NoError(t, err)
+				wrong := req
+				wrong.AcceptRefundFee = false
+				_, err = model.CreateGuardianOrder(buyerID, wrong)
+				require.Error(t, err)
+				wrongPrice := int64(1)
+				wrong = req
+				wrong.ExpectedAmountCents = &wrongPrice
+				_, err = model.CreateGuardianOrder(buyerID, wrong)
+				require.ErrorContains(t, err, "报价")
+				order, err := model.CreateGuardianOrder(buyerID, req)
+				require.NoError(t, err)
+				require.NoError(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 27000}))
+				require.NoError(t, model.CompleteGuardianOrder(order.TradeNo, "fixture", "260.00", "alipay"))
+				require.NoError(t, model.CompleteGuardianOrder(order.TradeNo, "fixture-replay", "260.00", "alipay"))
+				var saleCount int64
+				require.NoError(t, db.Model(&model.GuardianResellerSale{}).Where("order_id = ?", order.ID).Count(&saleCount).Error)
+				assert.EqualValues(t, 1, saleCount)
+				financePath := fmt.Sprintf("/api/guardian/admin/orders/%d/reseller", order.ID)
+				finance := decode(request("GET", financePath, tokens[1], ""))
+				require.Equal(t, true, finance["success"])
+				financeData := finance["data"].(map[string]any)
+				assert.EqualValues(t, order.ID, financeData["order_id"])
+				assert.EqualValues(t, resellerID, financeData["reseller_id"])
+				assert.EqualValues(t, 20000, financeData["supply_cents"])
+				assert.EqualValues(t, 26000, financeData["amount_cents"])
+				assert.Equal(t, http.StatusForbidden, request("GET", financePath, tokens[2], "").Code)
+				assert.Equal(t, http.StatusForbidden, request("GET", financePath, pat, "").Code)
+				assert.Equal(t, false, decode(request("GET", "/api/guardian/admin/orders/999999/reseller", tokens[1], ""))["success"])
+				view := request("GET", "/api/guardian/reseller/orders", tokens[2], "")
+				require.Equal(t, true, decode(view)["success"])
+				for _, secret := range []string{"buyer-private", "private-note", "admin_note", "contact_type", "contact", "user_id"} {
+					assert.NotContains(t, view.Body.String(), secret)
+				}
+				assert.Equal(t, http.StatusForbidden, request("GET", "/api/guardian/reseller/orders", tokens[0], "").Code)
+				_, err = model.UpdateGuardianOrder(order.ID, adminID, "in_progress", "Internal note")
+				require.NoError(t, err)
+				delivered, err := model.UpdateGuardianOrder(order.ID, adminID, "delivered", "Internal note")
+				require.NoError(t, err)
+				require.Positive(t, delivered.CustomerServiceID)
+				balance, err := model.GetGuardianResellerBalance(resellerID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 5844, balance.PendingCents)
+				assert.Zero(t, balance.AvailableCents)
+				missingFee := decode(request("PUT", fmt.Sprintf("/api/guardian/admin/reseller-orders/%d/fee", order.ID), tokens[1], `{"reference":"missing-fee"}`))
+				assert.Equal(t, false, missingFee["success"])
+				require.NoError(t, model.ConfirmGuardianResellerFee(order.ID, adminID, model.GuardianFeeConfirmation{FeeCents: 156, Reference: "channel-bill"}))
+				require.NoError(t, db.Model(order).Update("delivered_at", time.Now().Unix()-8*86400).Error)
+				balance, err = model.GetGuardianResellerBalance(resellerID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 5844, balance.AvailableCents)
+				quote, err := model.GetGuardianRenewalQuote(buyerID, delivered.CustomerServiceID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 27000, quote.Service.PriceCents)
+				assert.Equal(t, reseller.Code, quote.ResellerCode)
+				_, err = model.GetGuardianRenewalQuote(resellerID, delivered.CustomerServiceID)
+				require.Error(t, err)
+				renewal := req
+				renewal.CustomerServiceID = delivered.CustomerServiceID
+				renewal.ResellerCode = "forged-other-code"
+				renewPrice := int64(27000)
+				renewal.ExpectedAmountCents = &renewPrice
+				renewed, err := model.CreateGuardianOrder(buyerID, renewal)
+				require.NoError(t, err)
+				assert.Equal(t, reseller.Code, renewed.ResellerCode)
+				_, err = model.CancelGuardianOrder(buyerID, renewed.ID)
+				require.NoError(t, err)
+
+				withdrawal := model.GuardianWithdrawalRequest{AmountCents: 5000, Account: "test-recipient", PayeeName: "Test payee", RequestKey: "reseller-withdrawal-" + suffix}
+				require.NoError(t, withdrawal.Validate())
+				body, err := common.Marshal(withdrawal)
+				require.NoError(t, err)
+				assert.NotEqual(t, true, decode(request("POST", "/api/guardian/reseller/withdrawals", tokens[2], string(body)))["success"])
+				identity, err := service.ParseAccessToken(tokens[2])
+				require.NoError(t, err)
+				operation := service.VerificationOperation{Scope: service.VerificationScopeGuardianWithdrawal, Context: body}
+				binding, err := service.BindVerificationOperation(operation)
+				require.NoError(t, err)
+				proof, _, err := service.IssueSecurityProof(identity, service.VerificationMethodPassword, binding)
+				require.NoError(t, err)
+				sendWithdrawal := func(payload string, proofToken string) *httptest.ResponseRecorder {
+					req := httptest.NewRequest("POST", "/api/guardian/reseller/withdrawals", strings.NewReader(payload))
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("Authorization", "Bearer "+tokens[2])
+					req.Header.Set("X-Security-Proof", proofToken)
+					response := httptest.NewRecorder()
+					engine.ServeHTTP(response, req)
+					return response
+				}
+				changed := withdrawal
+				changed.Account = "different-recipient"
+				changedBody, err := common.Marshal(changed)
+				require.NoError(t, err)
+				assert.NotEqual(t, true, decode(sendWithdrawal(string(changedBody), proof))["success"])
+				accepted := decode(sendWithdrawal(string(body), proof))
+				require.Equal(t, true, accepted["success"], accepted)
+				assert.NotEqual(t, true, decode(sendWithdrawal(string(body), proof))["success"], "one-use proof cannot be replayed")
+				expiredProof, _, err := service.IssueSecurityProof(identity, service.VerificationMethodPassword, binding)
+				require.NoError(t, err)
+				require.NoError(t, db.Model(&model.AuthFlow{}).Where("user_id = ? AND purpose = ?", resellerID, model.AuthFlowPurposeSecurityProof).Update("expires_at", time.Now().Add(-time.Second)).Error)
+				assert.NotEqual(t, true, decode(sendWithdrawal(string(body), expiredProof))["success"])
+				passwordProof, _, err := service.IssueSecurityProof(identity, service.VerificationMethodPassword, binding)
+				require.NoError(t, err)
+				factor := model.TwoFA{UserId: resellerID, IsEnabled: true}
+				require.NoError(t, db.Create(&factor).Error)
+				assert.NotEqual(t, true, decode(sendWithdrawal(string(body), passwordProof))["success"], "enrolled MFA must not fall back to password")
+				require.NoError(t, db.Delete(&factor).Error)
+				wID := int(accepted["data"].(map[string]any)["id"].(float64))
+				duplicate, err := model.CreateGuardianWithdrawal(resellerID, withdrawal)
+				require.NoError(t, err)
+				assert.Equal(t, wID, duplicate.ID)
+				overdraw := withdrawal
+				overdraw.RequestKey += "-2"
+				_, err = model.CreateGuardianWithdrawal(resellerID, overdraw)
+				require.Error(t, err)
+				require.Error(t, model.UpdateGuardianWithdrawal(wID, buyerID, false, model.GuardianWithdrawalUpdate{Status: "cancelled", Note: "wrong owner"}))
+				refund := model.GuardianResellerRefundRequest{Action: "start", Reason: "Customer refund"}
+				require.Error(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund), "reserve must be resolved first")
+				require.NoError(t, model.UpdateGuardianWithdrawal(wID, adminID, true, model.GuardianWithdrawalUpdate{Status: "processing", FeeCents: 50, Note: "Verified recipient"}))
+				require.Error(t, model.UpdateGuardianWithdrawal(wID, resellerID, false, model.GuardianWithdrawalUpdate{Status: "cancelled", Note: "too late"}))
+				require.NoError(t, model.UpdateGuardianWithdrawal(wID, adminID, true, model.GuardianWithdrawalUpdate{Status: "paid", Reference: "transfer-" + suffix, Note: "Sent 49.50"}))
+				require.Error(t, model.UpdateGuardianWithdrawal(wID, adminID, true, model.GuardianWithdrawalUpdate{Status: "paid", Reference: "duplicate-" + suffix, Note: "Repeat"}))
+				balance, err = model.GetGuardianResellerBalance(resellerID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 844, balance.AvailableCents)
+				assert.EqualValues(t, 5000, balance.PaidCents)
+				_, err = model.UpdateGuardianOrder(order.ID, adminID, "refunded", "bypass")
+				require.Error(t, err)
+				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
+				held, err := model.GetGuardianResellerBalance(resellerID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 5844, held.HeldCents)
+				assert.Zero(t, held.AvailableCents)
+				assert.Zero(t, held.DebtCents)
+				cancelledRefund := refund
+				cancelledRefund.Action = "cancel"
+				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, cancelledRefund))
+				restored, err := model.GetGuardianResellerBalance(resellerID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 844, restored.AvailableCents)
+				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
+				refund.Action, refund.Reference = "complete", "refund-"+suffix
+				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
+				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
+				var sale model.GuardianResellerSale
+				require.NoError(t, db.First(&sale, order.ID).Error)
+				assert.EqualValues(t, 25844, sale.RefundCents)
+				balance, err = model.GetGuardianResellerBalance(resellerID)
+				require.NoError(t, err)
+				assert.Zero(t, balance.AvailableCents)
+				assert.EqualValues(t, 5000, balance.DebtCents)
+				_, err = model.SetGuardianResellerAccess(resellerID, adminID, model.GuardianResellerAccessRequest{Status: "suspended", Reason: "Pause"})
+				require.NoError(t, err)
+				require.Equal(t, true, decode(request("GET", "/api/guardian/reseller/orders", tokens[2], ""))["success"])
+				require.Error(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 28000}))
+				quote, err = model.GetGuardianRenewalQuote(buyerID, delivered.CustomerServiceID)
+				require.NoError(t, err)
+				assert.True(t, quote.DirectConfirmationRequired)
+				directPrice := int64(30000)
+				renewal.ExpectedAmountCents = &directPrice
+				_, err = model.CreateGuardianOrder(buyerID, renewal)
+				require.ErrorContains(t, err, "明确确认")
+				renewal.AcceptDirectRenewal = true
+				direct, err := model.CreateGuardianOrder(buyerID, renewal)
+				require.NoError(t, err)
+				assert.Empty(t, direct.ResellerCode)
+				require.NoError(t, model.CompleteGuardianOrder(direct.TradeNo, "fixture", "300.00", "alipay"))
+				quote, err = model.GetGuardianRenewalQuote(buyerID, delivered.CustomerServiceID)
+				require.NoError(t, err)
+				assert.Empty(t, quote.ResellerCode)
+				assert.False(t, quote.DirectConfirmationRequired)
+				for range 2 {
+					require.NoError(t, db.AutoMigrate(&model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
+				}
+				var preservedSale model.GuardianResellerSale
+				require.NoError(t, db.First(&preservedSale, order.ID).Error)
+				assert.Equal(t, sale, preservedSale)
+				duplicateOffer := model.GuardianResellerOffer{ResellerID: resellerID, ServiceID: product.ID}
+				assert.Error(t, db.Create(&duplicateOffer).Error)
+				var original model.GuardianServiceOrder
+				require.NoError(t, db.First(&original, order.ID).Error)
+				assert.Equal(t, reseller.Code, original.ResellerCode)
+				assert.Equal(t, http.StatusNotFound, request("PUT", fmt.Sprintf("/api/guardian/admin/customer-services/%d/reseller", delivered.CustomerServiceID), tokens[1], `{"reseller_id":0,"reason":"Removed feature"}`).Code)
+
+			})
 		})
 	}
 }

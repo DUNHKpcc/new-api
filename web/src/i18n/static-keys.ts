@@ -961,4 +961,6 @@ export const STATIC_I18N_KEYS = [
   'Verification method',
   'Admin permissions updated',
   'Provider ID',
+  'Claude Ultra first-month add-on (CNY)',
+  'Ultra add-on price (CNY)',
 ] as const

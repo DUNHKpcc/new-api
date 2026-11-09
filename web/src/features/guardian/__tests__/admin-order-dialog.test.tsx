@@ -74,7 +74,7 @@ afterEach(() => {
 })
 
 function statusOptions() {
-  return within(screen.getByLabelText('Status'))
+  return within(within(screen.getByRole('dialog')).getByLabelText('Status'))
     .getAllByRole('option')
     .map((option) => (option as HTMLOptionElement).value)
 }
@@ -223,4 +223,131 @@ it('shows payment anomaly amounts and repeated callback count', async () => {
     await screen.findByText(/Callback amount.*0.01 CNY/)
   ).toBeInTheDocument()
   expect(screen.getByText(/Occurrences.*3/)).toBeInTheDocument()
+})
+
+it('manages direct and reseller orders together and reconciles the selected reseller order', async () => {
+  const { GuardianOrdersPanel } =
+    await import('../components/admin/orders-panel')
+  const sale = {
+    order_id: 10,
+    reseller_id: 7,
+    trade_no: 'RESELLER-10',
+    amount_cents: 26000,
+    supply_cents: 20000,
+    estimated_fee_cents: 156,
+    actual_fee_cents: 0,
+    fee_confirmed_at: 0,
+    paid_at: 1761500100,
+    refund_state: '',
+  }
+  const get = vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data:
+        url === '/api/guardian/admin/orders/10/reseller'
+          ? sale
+          : {
+              items: [
+                order,
+                {
+                  ...order,
+                  id: 10,
+                  trade_no: sale.trade_no,
+                  reseller_code: 'agent-seven',
+                  amount_cents: sale.amount_cents,
+                },
+              ],
+              total: 2,
+            },
+    },
+  }))
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  renderDialog(<GuardianOrdersPanel />)
+  const resellerRow = await screen.findByRole('row', { name: /RESELLER-10/ })
+  expect(within(resellerRow).getByText('Reseller')).toBeVisible()
+  const directRow = screen.getByRole('row', {
+    name: new RegExp(order.trade_no),
+  })
+  expect(within(directRow).getByText('Platform direct')).toBeVisible()
+  await userEvent.click(
+    within(resellerRow).getByRole('button', { name: 'Manage' })
+  )
+  expect(await screen.findByText('¥200')).toBeVisible()
+  expect(screen.getByText('¥58.44')).toBeVisible()
+  expect(statusOptions()).not.toContain('refunded')
+  expect(get).toHaveBeenCalledWith('/api/guardian/admin/orders/10/reseller')
+  await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }))
+  await userEvent.type(
+    screen.getByLabelText('Channel statement reference'),
+    'statement-10'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/guardian/admin/reseller-orders/10/fee',
+      { fee_cents: 156, reference: 'statement-10' },
+      undefined
+    )
+  )
+  expect(
+    await screen.findByRole('dialog', { name: order.service_title })
+  ).toBeVisible()
+})
+
+it('records a reseller refund inside the order and closes its stale status form', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        order_id: order.id,
+        reseller_id: 7,
+        trade_no: order.trade_no,
+        amount_cents: 26000,
+        supply_cents: 20000,
+        estimated_fee_cents: 156,
+        actual_fee_cents: 156,
+        fee_confirmed_at: 1761500200,
+        paid_at: order.paid_at,
+        refund_state: 'processing',
+      },
+    },
+  })
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValue({ data: { success: true } })
+  const onClose = vi.fn()
+  const onSaved = vi.fn()
+  renderDialog(
+    <GuardianOrderDialog
+      order={{ ...order, reseller_code: 'agent-seven' }}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  )
+  await userEvent.click(
+    await screen.findByRole('button', { name: 'Record completed refund' })
+  )
+  expect(
+    screen.getByText('Confirm actual customer refund: ¥258.44')
+  ).toBeVisible()
+  await userEvent.type(
+    screen.getByLabelText('Refund transaction reference'),
+    'refund-9'
+  )
+  await userEvent.type(screen.getByLabelText('Reason'), 'Customer request')
+  await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+  expect(onSaved).toHaveBeenCalledOnce()
+  expect(post).toHaveBeenCalledWith(
+    '/api/guardian/admin/reseller-orders/9/refund',
+    {
+      action: 'complete',
+      returned_fee_cents: 0,
+      reference: 'refund-9',
+      reason: 'Customer request',
+    },
+    undefined
+  )
 })

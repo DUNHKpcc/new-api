@@ -71,6 +71,7 @@ var accessTokenExemptRoutes = []string{
 	"GET /api/site-doc-images/:hash",
 	"GET /api/site-docs",
 	"GET /api/site-docs/:slug",
+	"GET /api/guardian/resellers/:code",
 	"GET /api/guardian/services",
 	"GET /api/guardian/epay/notify",
 	"POST /api/guardian/epay/notify",

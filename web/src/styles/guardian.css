@@ -89,6 +89,13 @@ For commercial licensing, please contact support@quantumnous.com
   --g-code-bg: #0f0e0c;
 }
 
+.guardian-root .guardian-reseller-center {
+  --g-rule: color-mix(in srgb, var(--g-ink) 35%, var(--g-paper));
+  --g-rule-strong: color-mix(in srgb, var(--g-ink) 45%, var(--g-paper));
+  --border: var(--g-rule);
+  --input: var(--g-rule-strong);
+}
+
 /*
  * Site theme presets (operator, anthropic, ...) restyle headings, buttons and
  * form controls globally with selectors up to (0,3,0). `html` plus the doubled

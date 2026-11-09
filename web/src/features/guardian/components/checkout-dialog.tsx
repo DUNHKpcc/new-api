@@ -28,6 +28,7 @@ import { toast } from 'sonner'
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -44,14 +45,18 @@ import type {
   GuardianPayMethod,
   GuardianService,
 } from '../types'
-import { ClaudeMaxAddon } from './claude-max-addon'
+import { ClaudeSubscriptionAddon } from './claude-subscription-addon'
 import { GuardianContactFields } from './contact-fields'
 
 const FORM_ID = 'guardian-checkout'
 
 export function CheckoutDialog(props: {
+  resellerCode?: string
+  customerServiceId?: number
+  directConfirmationRequired?: boolean
   billingPeriod?: GuardianBillingPeriod
   addClaudeMax?: boolean
+  addClaudeUltra?: boolean
   service: GuardianService
   payMethods: GuardianPayMethod[]
   onClose: () => void
@@ -60,10 +65,18 @@ export function CheckoutDialog(props: {
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
   const navigate = useNavigate()
+  const [accepted, setAccepted] = useState(false)
+  const needsConsent =
+    !!props.resellerCode || !!props.directConfirmationRequired
   const [addClaudeMax, setAddClaudeMax] = useState(!!props.addClaudeMax)
+  const [addClaudeUltra, setAddClaudeUltra] = useState(!!props.addClaudeUltra)
   const addonPrice =
     props.service.route === 'mac_mini' && addClaudeMax
       ? (props.service.claude_max_price_cents ?? 0)
+      : 0
+  const ultraPrice =
+    props.service.route === 'mac_mini' && addClaudeUltra
+      ? (props.service.claude_ultra_price_cents ?? 0)
       : 0
   const form = useForm<GuardianOrderForm>({
     resolver: zodResolver(guardianOrderSchema),
@@ -80,11 +93,22 @@ export function CheckoutDialog(props: {
     mutationFn: (values: GuardianOrderForm) =>
       createGuardianOrder({
         service_id: props.service.id,
+        ...(props.resellerCode || props.customerServiceId
+          ? {
+              reseller_code: props.resellerCode,
+              customer_service_id: props.customerServiceId,
+              expected_amount_cents: hostingPrice + addonPrice + ultraPrice,
+              accept_refund_fee: accepted,
+              accept_direct_renewal:
+                !!props.directConfirmationRequired && accepted,
+            }
+          : {}),
         ...values,
         ...(props.service.route === 'mac_mini'
           ? {
               billing_period: props.billingPeriod ?? 'monthly',
               ...(addClaudeMax ? { add_claude_max: true } : {}),
+              ...(addClaudeUltra ? { add_claude_ultra: true } : {}),
             }
           : {}),
       }),
@@ -102,7 +126,7 @@ export function CheckoutDialog(props: {
       ? guardianPeriodPrice(props.service, props.billingPeriod ?? 'monthly')
           .total
       : props.service.price_cents
-  const price = formatCny(hostingPrice + addonPrice, locale)
+  const price = formatCny(hostingPrice + addonPrice + ultraPrice, locale)
 
   return (
     <Dialog
@@ -123,7 +147,11 @@ export function CheckoutDialog(props: {
           >
             {t('Cancel')}
           </Button>
-          <Button type='submit' form={FORM_ID} disabled={checkout.isPending}>
+          <Button
+            type='submit'
+            form={FORM_ID}
+            disabled={checkout.isPending || (needsConsent && !accepted)}
+          >
             {checkout.isPending
               ? t('Opening payment...')
               : t('Pay {{price}}', { price })}
@@ -135,7 +163,9 @@ export function CheckoutDialog(props: {
         id={FORM_ID}
         className='space-y-5'
         noValidate
-        onSubmit={form.handleSubmit((values) => checkout.mutate(values))}
+        onSubmit={form.handleSubmit((values) => {
+          if (!needsConsent || accepted) checkout.mutate(values)
+        })}
       >
         {props.service.route === 'mac_mini' && (
           <p className='text-sm font-medium'>
@@ -144,11 +174,26 @@ export function CheckoutDialog(props: {
           </p>
         )}
         {props.service.route === 'mac_mini' && (
-          <ClaudeMaxAddon
-            priceCents={props.service.claude_max_price_cents ?? 0}
-            checked={addClaudeMax}
-            onCheckedChange={setAddClaudeMax}
-          />
+          <div className='grid grid-cols-2 gap-3'>
+            <ClaudeSubscriptionAddon
+              variant='max'
+              priceCents={props.service.claude_max_price_cents ?? 0}
+              checked={addClaudeMax}
+              onCheckedChange={(checked) => {
+                setAddClaudeMax(checked)
+                if (checked) setAddClaudeUltra(false)
+              }}
+            />
+            <ClaudeSubscriptionAddon
+              variant='ultra'
+              priceCents={props.service.claude_ultra_price_cents ?? 0}
+              checked={addClaudeUltra}
+              onCheckedChange={(checked) => {
+                setAddClaudeUltra(checked)
+                if (checked) setAddClaudeMax(false)
+              }}
+            />
+          </div>
         )}
         {props.service.description && (
           <div className='max-h-40 space-y-3 overflow-y-auto rounded-lg bg-[var(--g-paper-sunk)] p-4 text-sm leading-6 text-[var(--g-ink-soft)]'>
@@ -189,6 +234,23 @@ export function CheckoutDialog(props: {
           </div>
         )}
 
+        {needsConsent && (
+          <label className='flex items-start gap-3 rounded-lg border p-3 text-sm'>
+            <Checkbox
+              checked={accepted}
+              onCheckedChange={(v) => setAccepted(!!v)}
+            />
+            <span>
+              {props.directConfirmationRequired
+                ? t(
+                    'The original reseller is suspended. I agree to renew directly with the platform; future renewals will also be direct.'
+                  )
+                : t(
+                    'I agree that all refunds deduct the actual payment fee not returned by the channel. The platform handles delivery and support.'
+                  )}
+            </span>
+          </label>
+        )}
         <FormProvider {...form}>
           <GuardianContactFields />
         </FormProvider>

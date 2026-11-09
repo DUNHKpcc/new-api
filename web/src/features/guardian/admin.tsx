@@ -28,6 +28,7 @@ import { GuardianAccountStatusPanel } from './components/admin/account-status-pa
 import { GuardianHistoricalAccountsPanel } from './components/admin/historical-accounts-panel'
 import { GuardianOrdersPanel } from './components/admin/orders-panel'
 import { GuardianQueuePanel } from './components/admin/queue-panel'
+import { GuardianResellerAdminPanel } from './components/admin/reseller-panel'
 import { GuardianServicesPanel } from './components/admin/services-panel'
 
 export function GuardianAdmin() {
@@ -51,13 +52,17 @@ export function GuardianAdmin() {
       <SectionPageLayout.Content>
         <Tabs defaultValue='orders'>
           <TabsList>
-            <TabsTrigger value='orders'>{t('Orders')}</TabsTrigger>
+            <TabsTrigger value='orders'>{t('Order')}</TabsTrigger>
+            <TabsTrigger value='resellers'>{t('Resellers')}</TabsTrigger>
             <TabsTrigger value='queue'>{t('Queue')}</TabsTrigger>
             <TabsTrigger value='services'>{t('Service catalog')}</TabsTrigger>
             <TabsTrigger value='account-status'>
               {t('Account status')}
             </TabsTrigger>
           </TabsList>
+          <TabsContent value='resellers' className='mt-4'>
+            <GuardianResellerAdminPanel />
+          </TabsContent>
           <TabsContent value='orders' className='mt-4'>
             <GuardianOrdersPanel />
           </TabsContent>

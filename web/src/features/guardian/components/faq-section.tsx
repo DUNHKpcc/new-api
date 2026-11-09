@@ -86,7 +86,11 @@ export function FaqSection() {
   )
 }
 
-export function ServicesFaqSection() {
+export function ServicesFaqSection({
+  resellerSale = false,
+}: {
+  resellerSale?: boolean
+}) {
   const { t } = useTranslation()
   const items = [
     {
@@ -103,9 +107,13 @@ export function ServicesFaqSection() {
     },
     {
       q: t('How do refunds work?'),
-      a: t(
-        'Refunds are handled by support. Contact us with your order number and the order will be marked as refunded once processed.'
-      ),
+      a: resellerSale
+        ? t(
+            'Reseller orders support whole-order refunds only, with the actual unreturned channel fee deducted from the customer refund.'
+          )
+        : t(
+            'Refunds are handled by support. Contact us with your order number and the order will be marked as refunded once processed.'
+          ),
     },
   ]
   return (

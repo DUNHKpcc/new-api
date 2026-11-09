@@ -22,6 +22,7 @@ import { z } from 'zod'
 import { GuardianServices } from '@/features/guardian/services'
 
 const searchSchema = z.object({
+  reseller: z.string().max(32).optional(),
   category: z
     .enum(['setup', 'mac_mini', 'account_status'])
     .optional()
@@ -31,6 +32,7 @@ const searchSchema = z.object({
     .optional()
     .catch(undefined),
   claude_max: z.literal('yes').optional().catch(undefined),
+  claude_ultra: z.literal('yes').optional().catch(undefined),
   service: z.number().int().positive().optional().catch(undefined),
 })
 
@@ -43,8 +45,10 @@ function GuardianServicesRoute() {
   const search = Route.useSearch()
   return (
     <GuardianServices
+      resellerCode={search.reseller}
       requestedBillingPeriod={search.billing_period}
       requestedClaudeMax={search.claude_max === 'yes'}
+      requestedClaudeUltra={search.claude_ultra === 'yes'}
       requestedServiceId={search.service}
       category={search.category}
     />

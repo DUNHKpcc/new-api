@@ -35,9 +35,10 @@ import { getGuardianCatalog } from '../api'
 import { GUARDIAN_QUERY_KEYS } from '../constants'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny, guardianPeriodPrice } from '../lib/price'
+import { getResellerCatalog } from '../reseller-api'
 import type { GuardianService, GuardianBillingPeriod } from '../types'
 import { CheckoutDialog } from './checkout-dialog'
-import { ClaudeMaxAddon } from './claude-max-addon'
+import { ClaudeSubscriptionAddon } from './claude-subscription-addon'
 import { MacChipIcon } from './mac-chip-icon'
 
 /**
@@ -45,20 +46,24 @@ import { MacChipIcon } from './mac-chip-icon'
  * stays on the page's centre line and a short last row stays centred too.
  */
 const SERVICE_CARD_WIDTH = 'w-full max-w-[22rem] sm:w-[20rem]'
+const MAC_CARD_WIDTH = 'w-full max-w-[30rem] sm:w-[30rem]'
 
 function ServiceCard(props: {
+  resellerSale?: boolean
   service: GuardianService
   purchaseEnabled: boolean
   onBook: (
     service: GuardianService,
     period: GuardianBillingPeriod,
-    addClaudeMax: boolean
+    addClaudeMax: boolean,
+    addClaudeUltra: boolean
   ) => void
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
   const [addClaudeMax, setAddClaudeMax] = useState(false)
+  const [addClaudeUltra, setAddClaudeUltra] = useState(false)
   const [period, setPeriod] = useState<GuardianBillingPeriod>('monthly')
   const pricing = guardianPeriodPrice(props.service, period)
   const macMini = props.service.route === 'mac_mini'
@@ -207,17 +212,38 @@ function ServiceCard(props: {
       )}
       <div className='mt-auto space-y-4 pt-6'>
         {macMini && (
-          <ClaudeMaxAddon
-            priceCents={props.service.claude_max_price_cents ?? 0}
-            checked={addClaudeMax}
-            onCheckedChange={setAddClaudeMax}
-          />
+          <div className='grid grid-cols-2 gap-3'>
+            <ClaudeSubscriptionAddon
+              variant='max'
+              priceCents={props.service.claude_max_price_cents ?? 0}
+              checked={addClaudeMax}
+              onCheckedChange={(checked) => {
+                setAddClaudeMax(checked)
+                if (checked) setAddClaudeUltra(false)
+              }}
+            />
+            <ClaudeSubscriptionAddon
+              variant='ultra'
+              priceCents={props.service.claude_ultra_price_cents ?? 0}
+              checked={addClaudeUltra}
+              onCheckedChange={(checked) => {
+                setAddClaudeUltra(checked)
+                if (checked) setAddClaudeMax(false)
+              }}
+            />
+          </div>
         )}
-        {macMini && addClaudeMax && (
+        {macMini && (
           <p className='text-sm font-semibold'>
             {t('Total: {{price}}', {
               price: formatCny(
-                pricing.total + (props.service.claude_max_price_cents ?? 0),
+                pricing.total +
+                  (addClaudeUltra
+                    ? (props.service.claude_ultra_price_cents ?? 0)
+                    : 0) +
+                  (addClaudeMax
+                    ? (props.service.claude_max_price_cents ?? 0)
+                    : 0),
                 locale
               ),
             })}
@@ -226,7 +252,9 @@ function ServiceCard(props: {
         <Button
           className='h-10 w-full'
           disabled={!props.purchaseEnabled}
-          onClick={() => props.onBook(props.service, period, addClaudeMax)}
+          onClick={() =>
+            props.onBook(props.service, period, addClaudeMax, addClaudeUltra)
+          }
         >
           {props.purchaseEnabled
             ? t('Book this service')
@@ -258,22 +286,28 @@ function ServicesFallback(props: { title: string; body: string }) {
 }
 
 export function ServicesSection(props: {
+  resellerCode?: string
   category?: 'setup' | 'mac_mini'
   requestedServiceId?: number
   requestedBillingPeriod?: GuardianBillingPeriod
   requestedClaudeMax?: boolean
+  requestedClaudeUltra?: boolean
   onRequestHandled: () => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.auth.user)
   const [addClaudeMax, setAddClaudeMax] = useState(false)
+  const [addClaudeUltra, setAddClaudeUltra] = useState(false)
   const [billingPeriod, setBillingPeriod] =
     useState<GuardianBillingPeriod>('monthly')
   const [selected, setSelected] = useState<GuardianService | null>(null)
   const catalog = useQuery({
-    queryKey: GUARDIAN_QUERY_KEYS.catalog,
-    queryFn: getGuardianCatalog,
+    queryKey: [...GUARDIAN_QUERY_KEYS.catalog, props.resellerCode ?? 'direct'],
+    queryFn: () =>
+      props.resellerCode
+        ? getResellerCatalog(props.resellerCode)
+        : getGuardianCatalog(),
     meta: { errorToast: false },
     retry: 1,
   })
@@ -286,12 +320,13 @@ export function ServicesSection(props: {
     requestedServiceId,
     requestedBillingPeriod,
     requestedClaudeMax,
+    requestedClaudeUltra,
     onRequestHandled,
   } = props
 
   // Resume the booking a visitor started before signing in.
   useEffect(() => {
-    if (!requestedServiceId || !catalog.isSuccess) return
+    if (!requestedServiceId || !catalog.isSuccess || !user) return
     const service = catalog.data.services.find(
       (item) => item.id === requestedServiceId
     )
@@ -304,8 +339,14 @@ export function ServicesSection(props: {
       )
       setAddClaudeMax(
         !!requestedClaudeMax &&
+          !requestedClaudeUltra &&
           service.route === 'mac_mini' &&
           (service.claude_max_price_cents ?? 0) > 0
+      )
+      setAddClaudeUltra(
+        !!requestedClaudeUltra &&
+          service.route === 'mac_mini' &&
+          (service.claude_ultra_price_cents ?? 0) > 0
       )
       setSelected(service)
     }
@@ -314,6 +355,7 @@ export function ServicesSection(props: {
     requestedServiceId,
     requestedBillingPeriod,
     requestedClaudeMax,
+    requestedClaudeUltra,
     catalog.isSuccess,
     catalog.data,
     user,
@@ -323,19 +365,21 @@ export function ServicesSection(props: {
   const book = (
     service: GuardianService,
     period: GuardianBillingPeriod,
-    addon: boolean
+    addon: boolean,
+    ultra: boolean
   ) => {
     if (!user) {
       void navigate({
         to: '/sign-in',
         search: {
-          redirect: `/guardian/services?service=${service.id}${service.route === 'mac_mini' ? `&category=mac_mini&billing_period=${period}${addon ? '&claude_max=yes' : ''}` : ''}`,
+          redirect: `/guardian/services?service=${service.id}${props.resellerCode ? `&reseller=${encodeURIComponent(props.resellerCode)}` : ''}${service.route === 'mac_mini' ? `&category=mac_mini&billing_period=${period}${addon ? '&claude_max=yes' : ''}${ultra ? '&claude_ultra=yes' : ''}` : ''}`,
         },
       })
       return
     }
     setBillingPeriod(period)
     setAddClaudeMax(addon)
+    setAddClaudeUltra(ultra)
     setSelected(service)
   }
 
@@ -346,7 +390,12 @@ export function ServicesSection(props: {
           {[0, 1, 2].map((key) => (
             <Skeleton
               key={key}
-              className={cn('h-96 rounded-2xl', SERVICE_CARD_WIDTH)}
+              className={cn(
+                'h-96 rounded-2xl',
+                props.category === 'mac_mini'
+                  ? MAC_CARD_WIDTH
+                  : SERVICE_CARD_WIDTH
+              )}
             />
           ))}
         </div>
@@ -378,9 +427,14 @@ export function ServicesSection(props: {
               <AnimateInView
                 key={service.id}
                 delay={index * 80}
-                className={SERVICE_CARD_WIDTH}
+                className={
+                  service.route === 'mac_mini'
+                    ? MAC_CARD_WIDTH
+                    : SERVICE_CARD_WIDTH
+                }
               >
                 <ServiceCard
+                  resellerSale={!!props.resellerCode}
                   service={service}
                   purchaseEnabled={purchaseEnabled}
                   onBook={book}
@@ -398,9 +452,11 @@ export function ServicesSection(props: {
 
       {selected && catalog.data && (
         <CheckoutDialog
+          resellerCode={props.resellerCode}
           service={selected}
           billingPeriod={billingPeriod}
           addClaudeMax={addClaudeMax}
+          addClaudeUltra={addClaudeUltra}
           payMethods={catalog.data.pay_methods}
           onClose={() => setSelected(null)}
         />

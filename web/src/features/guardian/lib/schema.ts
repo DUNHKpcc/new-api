@@ -70,6 +70,7 @@ const optionalPeriodPrice = z
 
 export const guardianServiceSchema = z.object({
   claude_max_price: optionalPeriodPrice,
+  claude_ultra_price: optionalPeriodPrice,
   quarter_price: optionalPeriodPrice,
   annual_price: optionalPeriodPrice,
   chip: z.enum(['', 'm4', 'm6']),

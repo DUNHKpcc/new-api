@@ -28,6 +28,7 @@ import {
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -164,6 +165,7 @@ export function GuardianOrdersPanel() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('Order number')}</TableHead>
+                <TableHead>{t('Order source')}</TableHead>
                 <TableHead>{t('User')}</TableHead>
                 <TableHead>{t('Service')}</TableHead>
                 <TableHead>{t('Amount')}</TableHead>
@@ -179,6 +181,15 @@ export function GuardianOrdersPanel() {
                     {order.trade_no}
                   </TableCell>
                   <TableCell>
+                    <Badge
+                      variant={order.reseller_code ? 'secondary' : 'outline'}
+                    >
+                      {order.reseller_code
+                        ? t('Reseller')
+                        : t('Platform direct')}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     <div>{order.username}</div>
                     <div className='text-muted-foreground text-xs'>
                       {labels.contactType[order.contact_type] ??
@@ -192,6 +203,12 @@ export function GuardianOrdersPanel() {
                       <span className='block text-xs text-[var(--g-accent)]'>
                         {t('Claude MAX first month')} ·{' '}
                         {formatCny(order.claude_max_price_cents ?? 0, locale)}
+                      </span>
+                    )}
+                    {(order.claude_ultra_price_cents ?? 0) > 0 && (
+                      <span className='block text-xs text-[var(--g-accent)]'>
+                        {t('Claude Ultra first month')} ·{' '}
+                        {formatCny(order.claude_ultra_price_cents ?? 0, locale)}
                       </span>
                     )}
                     {order.billing_period && (

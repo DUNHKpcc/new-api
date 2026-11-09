@@ -189,49 +189,130 @@ it('uses the Mac mini route and macOS without showing environment selectors', ()
   expect(screen.getByRole('dialog')).toBeVisible()
 })
 
-it('adds the first-month subscription once to a yearly order and lets the buyer remove it', async () => {
-  const post = vi.spyOn(api, 'post').mockResolvedValue({
-    data: {
-      success: true,
+it.each([
+  { name: 'MAX', field: 'add_claude_max', total: '¥6,000' },
+  { name: 'Ultra', field: 'add_claude_ultra', total: '¥7,500' },
+])(
+  'charges $name once, allows removal, and keeps the two add-ons mutually exclusive',
+  async ({ name, field, total }) => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
       data: {
-        trade_no: 'MAX-ORDER',
-        pay_url: 'https://pay.example.com/submit.php',
-        pay_params: {},
+        success: true,
+        data: {
+          trade_no: 'ADDON-ORDER',
+          pay_url: 'https://pay.example.com/submit.php',
+          pay_params: {},
+        },
       },
-    },
-  })
-  vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(
-    () => undefined
-  )
+    })
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(
+      () => undefined
+    )
+    renderDialog(
+      <CheckoutDialog
+        service={{
+          ...service,
+          route: 'mac_mini',
+          annual_price_cents: 500000,
+          claude_max_price_cents: 100000,
+          claude_ultra_price_cents: 250000,
+        }}
+        billingPeriod='yearly'
+        payMethods={payMethods}
+        onClose={() => undefined}
+      />
+    )
+    const addon = screen.getByRole('checkbox', {
+      name: `Add Claude ${name} for the first month`,
+    })
+    const other = screen.getByRole('checkbox', {
+      name: `Add Claude ${name === 'MAX' ? 'Ultra' : 'MAX'} for the first month`,
+    })
+    expect(addon).not.toBeChecked()
+    expect(screen.queryByText(/US\$/)).not.toBeInTheDocument()
+    await userEvent.click(other)
+    await userEvent.click(addon)
+    expect(other).not.toBeChecked()
+    expect(screen.getByRole('button', { name: `Pay ${total}` })).toBeVisible()
+    addon.focus()
+    await userEvent.keyboard('[Space]')
+    expect(screen.getByRole('button', { name: 'Pay ¥5,000' })).toBeVisible()
+    await userEvent.click(addon)
+    await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
+    await userEvent.click(screen.getByRole('button', { name: `Pay ${total}` }))
+    await waitFor(() => expect(post).toHaveBeenCalledOnce())
+    expect(post.mock.calls[0][1]).toMatchObject({
+      billing_period: 'yearly',
+      [field]: true,
+    })
+    expect(post.mock.calls[0][1]).not.toHaveProperty(
+      field === 'add_claude_max' ? 'add_claude_ultra' : 'add_claude_max'
+    )
+    expect(post.mock.calls[0][1]).not.toHaveProperty('claude_max_price_cents')
+    expect(post.mock.calls[0][1]).not.toHaveProperty('claude_ultra_price_cents')
+  }
+)
+
+it('requires reseller refund consent and sends the displayed quote with attribution', async () => {
+  const post = vi
+    .spyOn(api, 'post')
+    .mockRejectedValue(new Error('Payment unavailable'))
   renderDialog(
     <CheckoutDialog
-      service={{
-        ...service,
-        route: 'mac_mini',
-        annual_price_cents: 500000,
-        claude_max_price_cents: 100000,
-      }}
-      billingPeriod='yearly'
-      payMethods={payMethods}
-      onClose={() => undefined}
+      service={service}
+      resellerCode='seller-A'
+      payMethods={[payMethods[0]]}
+      onClose={vi.fn()}
     />
   )
-  const addon = screen.getByRole('checkbox', {
-    name: 'Add Claude MAX for the first month',
-  })
-  expect(addon).not.toBeChecked()
-  await userEvent.click(screen.getByText('First month +US$149'))
-  expect(screen.getByRole('button', { name: 'Pay ¥6,000' })).toBeVisible()
-  addon.focus()
-  await userEvent.keyboard('[Space]')
-  expect(screen.getByRole('button', { name: 'Pay ¥5,000' })).toBeVisible()
-  await userEvent.click(addon)
-  await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
-  await userEvent.click(screen.getByRole('button', { name: 'Pay ¥6,000' }))
-  await waitFor(() => expect(post).toHaveBeenCalledOnce())
-  expect(post.mock.calls[0][1]).toMatchObject({
-    billing_period: 'yearly',
-    add_claude_max: true,
-  })
-  expect(post.mock.calls[0][1]).not.toHaveProperty('claude_max_price_cents')
+  const pay = screen.getByRole('button', { name: /^Pay / })
+  expect(pay).toBeDisabled()
+  await userEvent.type(screen.getByLabelText('Contact'), '@customer')
+  await userEvent.click(
+    screen.getByRole('checkbox', { name: /I agree|original reseller/ })
+  )
+  expect(pay).toBeEnabled()
+  await userEvent.click(pay)
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/guardian/orders',
+      expect.objectContaining({
+        reseller_code: 'seller-A',
+        expected_amount_cents: 59900,
+        accept_refund_fee: true,
+      })
+    )
+  )
+  expect(screen.getByRole('dialog')).toBeVisible()
+})
+
+it('requires explicit direct-renewal consent and sends the owned service ID', async () => {
+  const post = vi
+    .spyOn(api, 'post')
+    .mockRejectedValue(new Error('Payment unavailable'))
+  renderDialog(
+    <CheckoutDialog
+      service={{ ...service, route: 'mac_mini' }}
+      customerServiceId={19}
+      directConfirmationRequired
+      payMethods={[payMethods[0]]}
+      onClose={vi.fn()}
+    />
+  )
+  expect(screen.getByRole('button', { name: /^Pay / })).toBeDisabled()
+  await userEvent.type(screen.getByLabelText('Contact'), '@customer')
+  await userEvent.click(
+    screen.getByRole('checkbox', { name: /I agree|original reseller/ })
+  )
+  await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/guardian/orders',
+      expect.objectContaining({
+        customer_service_id: 19,
+        accept_direct_renewal: true,
+        expected_amount_cents: 59900,
+      })
+    )
+  )
 })

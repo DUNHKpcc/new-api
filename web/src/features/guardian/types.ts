@@ -39,6 +39,7 @@ export type GuardianMacConfig = '16_256'
 
 export interface GuardianService {
   claude_max_price_cents?: number
+  claude_ultra_price_cents?: number
   region?: GuardianMacRegion | ''
   hardware_config?: GuardianMacConfig | ''
   chip?: GuardianMacChip | ''
@@ -80,7 +81,13 @@ export interface GuardianCatalog {
 }
 
 export interface GuardianOrderRequest {
+  reseller_code?: string
+  customer_service_id?: number
+  expected_amount_cents?: number
+  accept_refund_fee?: boolean
+  accept_direct_renewal?: boolean
   add_claude_max?: boolean
+  add_claude_ultra?: boolean
   billing_period?: GuardianBillingPeriod
   service_id: number
   payment_method: string
@@ -98,7 +105,10 @@ export interface GuardianOrderCheckout {
 }
 
 export interface GuardianOrder {
+  reseller_code?: string
+  customer_service_id?: number
   claude_max_price_cents?: number
+  claude_ultra_price_cents?: number
   billing_period?: GuardianBillingPeriod | ''
   id: number
   trade_no: string

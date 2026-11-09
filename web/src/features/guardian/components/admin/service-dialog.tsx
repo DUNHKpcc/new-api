@@ -65,6 +65,7 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
       features: '',
       price: '',
       claude_max_price: '',
+      claude_ultra_price: '2500',
       quarter_price: '',
       annual_price: '',
       delivery_note: '',
@@ -86,6 +87,9 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     price: centsToYuanInput(service.price_cents),
     claude_max_price: service.claude_max_price_cents
       ? centsToYuanInput(service.claude_max_price_cents)
+      : '',
+    claude_ultra_price: service.claude_ultra_price_cents
+      ? centsToYuanInput(service.claude_ultra_price_cents)
       : '',
     quarter_price: service.quarter_price_cents
       ? centsToYuanInput(service.quarter_price_cents)
@@ -129,6 +133,10 @@ export function GuardianServiceDialog(props: {
           claude_max_price_cents:
             values.route === 'mac_mini'
               ? (yuanToCents(values.claude_max_price) ?? 0)
+              : 0,
+          claude_ultra_price_cents:
+            values.route === 'mac_mini'
+              ? (yuanToCents(values.claude_ultra_price) ?? 0)
               : 0,
           quarter_price_cents:
             values.route === 'mac_mini'
@@ -247,25 +255,37 @@ export function GuardianServiceDialog(props: {
           </div>
         )}
 
-        {route === 'mac_mini' && (
-          <Field data-invalid={!!errors.claude_max_price}>
-            <FieldLabel htmlFor='guardian-service-claude-max'>
-              {t('Claude MAX first-month add-on (CNY)')}
-            </FieldLabel>
-            <Input
-              id='guardian-service-claude-max'
-              inputMode='decimal'
-              {...form.register('claude_max_price')}
-              aria-invalid={!!errors.claude_max_price}
-            />
-            <FieldDescription>
-              {t(
-                'Set the CNY charge for the US$149 first-month offer. Charged once with the hosting order. Leave blank to disable.'
-              )}
-            </FieldDescription>
-            {fieldError(errors.claude_max_price?.message)}
-          </Field>
-        )}
+        {route === 'mac_mini' &&
+          (
+            [
+              {
+                field: 'claude_max_price',
+                label: 'Claude MAX first-month add-on (CNY)',
+              },
+              {
+                field: 'claude_ultra_price',
+                label: 'Claude Ultra first-month add-on (CNY)',
+              },
+            ] as const
+          ).map(({ field, label }) => (
+            <Field key={field} data-invalid={!!errors[field]}>
+              <FieldLabel htmlFor={`guardian-service-${field}`}>
+                {t(label)}
+              </FieldLabel>
+              <Input
+                id={`guardian-service-${field}`}
+                inputMode='decimal'
+                {...form.register(field)}
+                aria-invalid={!!errors[field]}
+              />
+              <FieldDescription>
+                {t(
+                  'Charged once with the hosting order. Leave blank to disable. Later subscription renewals are separate.'
+                )}
+              </FieldDescription>
+              {fieldError(errors[field]?.message)}
+            </Field>
+          ))}
         <Field data-invalid={!!errors.base_sales}>
           <FieldLabel htmlFor='guardian-service-base-sales'>
             {t('Base sales')}

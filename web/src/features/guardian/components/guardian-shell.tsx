@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Menu } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -32,28 +33,39 @@ import {
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { GUARDIAN_LINKS } from '../constants'
+
 import '@/styles/guardian.css'
 
-import { GUARDIAN_LINKS } from '../constants'
+import { getGuardianReseller } from '../reseller-api'
 import { PixelField } from './pixel-field'
 
-function useSectionLinks() {
+function useSectionLinks(resellerCode?: string) {
   const { t } = useTranslation()
   return [
-    { to: '/guardian/services', label: t('Pricing') },
     {
       to: '/guardian/services',
-      search: { category: 'mac_mini' },
+      search: { reseller: resellerCode },
+      label: t('Pricing'),
+    },
+    {
+      to: '/guardian/services',
+      search: { category: 'mac_mini', reseller: resellerCode },
       label: t('Overseas Mac mini'),
     },
     { to: '/guardian', hash: 'faq', label: t('FAQ') },
   ] as const
 }
 
-function GuardianHeader() {
+function GuardianHeader(props: { resellerCode?: string }) {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
-  const sections = useSectionLinks()
+  const reseller = useQuery({
+    queryKey: ['guardian', 'reseller', 'self'],
+    queryFn: () => getGuardianReseller(),
+    enabled: !!user,
+  })
+  const sections = useSectionLinks(props.resellerCode)
 
   return (
     <header className='g-rule sticky top-0 z-40 border-b bg-[color-mix(in_srgb,var(--g-paper)_88%,transparent)] backdrop-blur-md'>
@@ -91,6 +103,15 @@ function GuardianHeader() {
             {t('Back to main site')}
           </Link>
           <ThemeSwitch />
+          {reseller.data && (
+            <Button
+              variant='outline'
+              className='hidden lg:inline-flex'
+              render={<Link to='/guardian/reseller' />}
+            >
+              {t('Reseller center')}
+            </Button>
+          )}
           {user ? (
             <Button
               variant='outline'
@@ -138,6 +159,11 @@ function GuardianHeader() {
                   {section.label}
                 </DropdownMenuItem>
               ))}
+              {reseller.data && (
+                <DropdownMenuItem render={<Link to='/guardian/reseller' />}>
+                  {t('Reseller center')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem render={<Link to='/' />}>
                 {t('Back to main site')}
               </DropdownMenuItem>
@@ -210,11 +236,14 @@ function GuardianFooter() {
   )
 }
 
-export function GuardianShell(props: { children: ReactNode }) {
+export function GuardianShell(props: {
+  children: ReactNode
+  resellerCode?: string
+}) {
   return (
     <div className='guardian-root relative isolate flex min-h-svh flex-col'>
       <PixelField />
-      <GuardianHeader />
+      <GuardianHeader resellerCode={props.resellerCode} />
       <main id='main-content' className='relative z-10 flex-1'>
         {props.children}
       </main>

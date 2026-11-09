@@ -128,6 +128,11 @@ export function AffiliateAccessDialog(props: {
             </div>
           ) : null}
           <Select
+            items={[
+              { value: 'inherit', label: t('Follow system threshold') },
+              { value: 'allow', label: t('Allow without threshold') },
+              { value: 'deny', label: t('Deny affiliate access') },
+            ]}
             value={access}
             onValueChange={(value) =>
               value && setAccess(value as 'inherit' | 'allow' | 'deny')

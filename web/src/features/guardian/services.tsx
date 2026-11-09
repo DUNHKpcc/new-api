@@ -158,8 +158,10 @@ function ServicesIntro(props: { macMini: boolean; accountStatus: boolean }) {
 }
 
 export function GuardianServices(props: {
+  resellerCode?: string
   requestedBillingPeriod?: GuardianBillingPeriod
   requestedClaudeMax?: boolean
+  requestedClaudeUltra?: boolean
   requestedServiceId?: number
   category?: 'setup' | 'mac_mini' | 'account_status'
 }) {
@@ -168,14 +170,14 @@ export function GuardianServices(props: {
   const clearRequest = useCallback(() => {
     void navigate({
       to: '/guardian/services',
-      search: { category: props.category },
+      search: { category: props.category, reseller: props.resellerCode },
       hash: 'catalog',
       replace: true,
     })
-  }, [navigate, props.category])
+  }, [navigate, props.category, props.resellerCode])
 
   return (
-    <GuardianShell>
+    <GuardianShell resellerCode={props.resellerCode}>
       {/* The intro and the catalog share one first screen, centred on both axes. */}
       <section
         aria-labelledby='services-title'
@@ -188,6 +190,7 @@ export function GuardianServices(props: {
             void navigate({
               to: '/guardian/services',
               search: {
+                reseller: props.resellerCode,
                 category: value as 'setup' | 'mac_mini' | 'account_status',
               },
               replace: true,
@@ -211,9 +214,11 @@ export function GuardianServices(props: {
                 </p>
               )}
               <ServicesSection
+                resellerCode={props.resellerCode}
                 category={category}
                 requestedBillingPeriod={props.requestedBillingPeriod}
                 requestedClaudeMax={props.requestedClaudeMax}
+                requestedClaudeUltra={props.requestedClaudeUltra}
                 requestedServiceId={props.requestedServiceId}
                 onRequestHandled={clearRequest}
               />
@@ -221,11 +226,13 @@ export function GuardianServices(props: {
           ))}
         </Tabs>
       </section>
-      {props.category === 'mac_mini' && <MacMiniDelivery />}
+      {props.category === 'mac_mini' && (
+        <MacMiniDelivery resellerSale={!!props.resellerCode} />
+      )}
       {(!props.category || props.category === 'setup') && (
         <>
           <ServiceProcessSection />
-          <ServicesFaqSection />
+          <ServicesFaqSection resellerSale={!!props.resellerCode} />
         </>
       )}
     </GuardianShell>

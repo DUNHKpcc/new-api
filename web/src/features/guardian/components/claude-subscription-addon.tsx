@@ -26,7 +26,8 @@ import { cn } from '@/lib/utils'
 
 import { formatCny } from '../lib/price'
 
-export function ClaudeMaxAddon(props: {
+export function ClaudeSubscriptionAddon(props: {
+  variant: 'max' | 'ultra'
   priceCents: number
   checked: boolean
   onCheckedChange: (checked: boolean) => void
@@ -35,10 +36,10 @@ export function ClaudeMaxAddon(props: {
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const id = useId()
   return (
-    <div className='relative'>
+    <div className='relative min-w-0 [&>input]:absolute!'>
       <Checkbox
         id={id}
-        className='peer sr-only absolute'
+        className='peer sr-only absolute top-0 left-0'
         checked={props.checked}
         disabled={props.priceCents === 0}
         onCheckedChange={props.onCheckedChange}
@@ -48,26 +49,29 @@ export function ClaudeMaxAddon(props: {
       <Label
         htmlFor={id}
         className={cn(
-          'g-rule block cursor-pointer space-y-2 rounded-lg border p-3 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--g-accent)] peer-focus-visible:ring-offset-2',
+          'g-rule block h-full cursor-pointer space-y-2 rounded-lg border p-3 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--g-accent)] peer-focus-visible:ring-offset-2',
           props.checked && 'border-[var(--g-accent)] bg-[var(--g-accent-wash)]',
           props.priceCents === 0 && 'cursor-not-allowed opacity-50'
         )}
       >
         <span
           id={`${id}-title`}
-          className='flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm leading-5'
+          className='flex items-start gap-1.5 text-sm leading-5'
         >
           <img
             src='/images/guardian/claude-color.png'
             alt=''
-            className='size-5'
+            className='size-5 shrink-0'
           />
-          {t('Add Claude MAX for the first month')}
+          <span className='min-w-0'>
+            {props.variant === 'ultra'
+              ? t('Add Claude Ultra for the first month')
+              : t('Add Claude MAX for the first month')}
+          </span>
         </span>
         <span className='block text-sm font-medium text-[var(--g-accent)]'>
-          {t('First month +US$149')}
           {props.priceCents > 0 && (
-            <span className='ml-2'>
+            <span>
               {t('Charged: +{{price}}', {
                 price: formatCny(props.priceCents, locale),
               })}

@@ -43,6 +43,7 @@ import { formatCny } from '../../lib/price'
 import type { AdminGuardianOrder, GuardianOrderStatus } from '../../types'
 import { OrderStatusBadge } from '../order-status-badge'
 import { GuardianOrderHistory } from './order-history'
+import { GuardianOrderResellerFinance } from './order-reseller-finance'
 
 const MAX_ADMIN_NOTE = 2000
 
@@ -59,7 +60,9 @@ export function GuardianOrderDialog(props: {
   const [adminNote, setAdminNote] = useState(order.admin_note)
   const statusOptions = [
     order.status,
-    ...GUARDIAN_ADMIN_TRANSITIONS[order.status],
+    ...GUARDIAN_ADMIN_TRANSITIONS[order.status].filter(
+      (next) => !order.reseller_code || next !== 'refunded'
+    ),
   ]
   const noteTooLong = adminNote.length > MAX_ADMIN_NOTE
   const save = useMutation({
@@ -77,6 +80,10 @@ export function GuardianOrderDialog(props: {
   })
   const details = [
     { label: t('Order number'), value: order.trade_no },
+    {
+      label: t('Order source'),
+      value: order.reseller_code ? t('Reseller') : t('Platform direct'),
+    },
     { label: t('User'), value: `${order.username} (#${order.user_id})` },
     { label: t('Amount'), value: formatCny(order.amount_cents, locale) },
     { label: t('Payment method'), value: order.payment_method || '-' },
@@ -136,6 +143,15 @@ export function GuardianOrderDialog(props: {
             </div>
           ))}
         </dl>
+        {order.reseller_code && (
+          <GuardianOrderResellerFinance
+            orderId={order.id}
+            onRefundCompleted={() => {
+              props.onSaved()
+              props.onClose()
+            }}
+          />
+        )}
         {order.note && (
           <div className='bg-muted/50 rounded-lg border p-3 text-sm whitespace-pre-line'>
             {order.note}
