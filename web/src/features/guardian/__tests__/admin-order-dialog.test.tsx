@@ -18,6 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
+  createRootRoute,
+  createRouter,
+  createMemoryHistory,
+  RouterProvider,
+} from '@tanstack/react-router'
+import {
   cleanup,
   render,
   screen,
@@ -56,13 +62,20 @@ const order: AdminGuardianOrder = {
 }
 
 const clients: QueryClient[] = []
-function renderDialog(node: ReactNode) {
+async function renderDialog(node: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   clients.push(client)
+  const router = createRouter({
+    routeTree: createRootRoute({ component: () => node }),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  await router.load()
   return render(
-    <QueryClientProvider client={client}>{node}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   )
 }
 
@@ -79,8 +92,8 @@ function statusOptions() {
     .map((option) => (option as HTMLOptionElement).value)
 }
 
-it('offers only the transitions the backend allows from a paid order', () => {
-  renderDialog(
+it('offers only the transitions the backend allows from a paid order', async () => {
+  await renderDialog(
     <GuardianOrderDialog
       order={order}
       onClose={() => undefined}
@@ -95,8 +108,8 @@ it('offers only the transitions the backend allows from a paid order', () => {
   ])
 })
 
-it('locks the status of a closed order', () => {
-  renderDialog(
+it('locks the status of a closed order', async () => {
+  await renderDialog(
     <GuardianOrderDialog
       order={{ ...order, status: 'expired' }}
       onClose={() => undefined}
@@ -116,7 +129,7 @@ it('warns that marking refunded does not move money, then saves status and trimm
     },
   })
   const onSaved = vi.fn()
-  renderDialog(
+  await renderDialog(
     <GuardianOrderDialog
       order={order}
       onClose={() => undefined}
@@ -173,7 +186,7 @@ it('loads history only when expanded and displays before and after notes', async
       },
     },
   })
-  renderDialog(
+  await renderDialog(
     <GuardianOrderDialog
       order={order}
       onClose={() => undefined}
@@ -209,7 +222,7 @@ it('shows payment anomaly amounts and repeated callback count', async () => {
       },
     },
   })
-  renderDialog(
+  await renderDialog(
     <GuardianOrderDialog
       order={order}
       onClose={() => undefined}
@@ -264,7 +277,7 @@ it('manages direct and reseller orders together and reconciles the selected rese
   const put = vi
     .spyOn(api, 'put')
     .mockResolvedValue({ data: { success: true } })
-  renderDialog(<GuardianOrdersPanel />)
+  await renderDialog(<GuardianOrdersPanel />)
   const resellerRow = await screen.findByRole('row', { name: /RESELLER-10/ })
   expect(within(resellerRow).getByText('Reseller')).toBeVisible()
   const directRow = screen.getByRole('row', {
@@ -319,7 +332,7 @@ it('records a reseller refund inside the order and closes its stale status form'
     .mockResolvedValue({ data: { success: true } })
   const onClose = vi.fn()
   const onSaved = vi.fn()
-  renderDialog(
+  await renderDialog(
     <GuardianOrderDialog
       order={{ ...order, reseller_code: 'agent-seven' }}
       onClose={onClose}

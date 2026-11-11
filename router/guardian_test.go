@@ -97,6 +97,71 @@ type guardianOrderBeforeReseller struct {
 
 func (guardianOrderBeforeReseller) TableName() string { return "guardian_service_orders" }
 
+type guardianRC52ServiceOrder struct {
+	ClaudeUltraPriceCents     int64  `json:"claude_ultra_price_cents"`
+	RenewalPreviousResellerID int    `json:"-"`
+	CustomerServiceID         int    `json:"customer_service_id" gorm:"index"`
+	ResellerCode              string `json:"reseller_code,omitempty" gorm:"type:varchar(32)"`
+	ClaudeMaxPriceCents       int64  `json:"claude_max_price_cents"`
+	BillingPeriod             string `json:"billing_period" gorm:"type:varchar(16)"`
+	RefundedAt                int64  `json:"refunded_at"`
+	HasPaymentAnomaly         bool   `json:"-" gorm:"index"`
+	ID                        int    `json:"id"`
+	TradeNo                   string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
+	UserID                    int    `json:"-" gorm:"index"`
+	ServiceID                 int    `json:"service_id" gorm:"index"`
+	ServiceTitle              string `json:"service_title" gorm:"type:varchar(128)"`
+	AmountCents               int64  `json:"amount_cents"`
+	PaymentMethod             string `json:"payment_method" gorm:"type:varchar(32)"`
+	Status                    string `json:"status" gorm:"type:varchar(24);index"`
+	Route                     string `json:"route" gorm:"type:varchar(16)"`
+	OS                        string `json:"os" gorm:"type:varchar(32)"`
+	ContactType               string `json:"contact_type" gorm:"type:varchar(16)"`
+	Contact                   string `json:"contact" gorm:"type:varchar(128)"`
+	Note                      string `json:"note" gorm:"type:text"`
+	AdminNote                 string `json:"admin_note" gorm:"type:text"`
+	ProviderPayload           string `json:"-" gorm:"type:text"`
+	CreatedAt                 int64  `json:"created_at"`
+	PaidAt                    int64  `json:"paid_at"`
+	QueueSeq                  int64  `json:"-" gorm:"index"`
+	DeliveredAt               int64  `json:"delivered_at"`
+	UpdatedAt                 int64  `json:"updated_at"`
+}
+
+func (guardianRC52ServiceOrder) TableName() string { return "guardian_service_orders" }
+
+type guardianRC52Reseller struct {
+	UserID    int    `json:"user_id" gorm:"primaryKey;autoIncrement:false"`
+	Status    string `json:"status" gorm:"type:varchar(16);not null"`
+	Code      string `json:"code" gorm:"type:varchar(32);not null;uniqueIndex"`
+	CreatedBy int    `json:"created_by"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+func (guardianRC52Reseller) TableName() string { return "guardian_resellers" }
+
+type guardianRC52ResellerOffer struct {
+	UltraSupplyCents   int64 `json:"ultra_supply_cents"`
+	UltraRetailCents   int64 `json:"ultra_retail_cents"`
+	ID                 int   `json:"id"`
+	ResellerID         int   `json:"reseller_id" gorm:"uniqueIndex:ux_guardian_offer,priority:1"`
+	ServiceID          int   `json:"service_id" gorm:"uniqueIndex:ux_guardian_offer,priority:2"`
+	Granted            bool  `json:"granted"`
+	Listed             bool  `json:"listed"`
+	SupplyCents        int64 `json:"supply_cents"`
+	QuarterSupplyCents int64 `json:"quarter_supply_cents"`
+	AnnualSupplyCents  int64 `json:"annual_supply_cents"`
+	MaxSupplyCents     int64 `json:"max_supply_cents"`
+	RetailCents        int64 `json:"retail_cents"`
+	QuarterRetailCents int64 `json:"quarter_retail_cents"`
+	AnnualRetailCents  int64 `json:"annual_retail_cents"`
+	MaxRetailCents     int64 `json:"max_retail_cents"`
+	UpdatedAt          int64 `json:"updated_at"`
+}
+
+func (guardianRC52ResellerOffer) TableName() string { return "guardian_reseller_offers" }
+
 func TestGuardianLifecycle(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -181,10 +246,35 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.NoError(t, db.AutoMigrate(&guardianOrderBeforeReseller{}))
 				require.NoError(t, db.Create(&guardianOrderBeforeReseller{Legacy: guardianOrderBeforePeriod{TradeNo: "rc51-" + suffix, AmountCents: 180000, Status: "delivered"}, BillingPeriod: "quarterly", ClaudeMaxPriceCents: 30000}).Error)
 			}
+			if os.Getenv("TEST_GUARDIAN_UPGRADE") == "1" {
+				require.NoError(t, db.AutoMigrate(&guardianRC52ServiceOrder{}, &guardianRC52Reseller{}, &guardianRC52ResellerOffer{}))
+				require.NoError(t, db.Create(&guardianRC52Reseller{UserID: users[1].Id, Status: "active", Code: "rc52-" + suffix}).Error)
+				require.NoError(t, db.Create(&guardianRC52ResellerOffer{ResellerID: users[1].Id, ServiceID: legacy.ID, Granted: true, Listed: true, SupplyCents: 10000, RetailCents: 19900}).Error)
+				require.NoError(t, db.Create(&guardianRC52ServiceOrder{TradeNo: "rc52-order-" + suffix, UserID: users[1].Id, ServiceID: legacy.ID, ServiceTitle: "rc52 original", AmountCents: 19900, PaidAt: 123, Status: "delivered"}).Error)
+			}
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianTierSupply{}, &model.GuardianReceipt{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 			}
 			if legacy.ID != 0 {
+				var oldReseller model.GuardianReseller
+				require.NoError(t, db.First(&oldReseller, "user_id = ?", users[1].Id).Error)
+				assert.Zero(t, oldReseller.Tier)
+				oldOffers, err := model.ListGuardianResellerOffers(users[1].Id)
+				require.NoError(t, err)
+				require.Len(t, oldOffers, 1)
+				assert.False(t, oldOffers[0].FollowTier)
+				assert.EqualValues(t, 10000, oldOffers[0].SupplyCents)
+				assert.EqualValues(t, 19900, oldOffers[0].RetailCents)
+				var oldOrder model.GuardianServiceOrder
+				require.NoError(t, db.Where("trade_no = ?", "rc52-order-"+suffix).First(&oldOrder).Error)
+				assert.Empty(t, oldOrder.DiscoveryChannel)
+				assert.False(t, oldOrder.ReceiptNotification)
+				assert.EqualValues(t, 19900, oldOrder.AmountCents)
+				assert.EqualValues(t, 123, oldOrder.PaidAt)
+				require.NoError(t, db.Delete(&oldOrder).Error)
+				require.NoError(t, db.Delete(&oldReseller).Error)
+				require.NoError(t, db.Delete(&oldOffers).Error)
+
 				var released model.GuardianServiceOrder
 				require.NoError(t, db.Where("trade_no = ?", "rc51-"+suffix).First(&released).Error)
 				assert.EqualValues(t, 180000, released.AmountCents)
@@ -358,7 +448,7 @@ func TestGuardianLifecycle(t *testing.T) {
 					{"monthly", 159901, 100000, 0}, {"quarterly", 250000, 100000, 0}, {"yearly", 600000, 100000, 0},
 					{"monthly", 309901, 0, 250000}, {"quarterly", 400000, 0, 250000}, {"yearly", 750000, 0, 250000},
 				} {
-					body := fmt.Sprintf(`{"service_id":%d,"billing_period":%q,"add_claude_max":%t,"add_claude_ultra":%t,"claude_ultra_price_cents":1,"claude_max_price_cents":1,"amount_cents":1,"payment_method":"alipay","route":"mac_mini","os":"macos","contact_type":"email","contact":"buyer@example.com"}`, macID, tc.period, tc.addon > 0, tc.ultra > 0)
+					body := fmt.Sprintf(`{"discovery_channel":"github","service_id":%d,"billing_period":%q,"add_claude_max":%t,"add_claude_ultra":%t,"claude_ultra_price_cents":1,"claude_max_price_cents":1,"amount_cents":1,"payment_method":"alipay","route":"mac_mini","os":"macos","contact_type":"email","contact":"buyer@example.com"}`, macID, tc.period, tc.addon > 0, tc.ultra > 0)
 					result := decode(request("POST", "/api/guardian/orders", tokens[0], body))
 					require.Equal(t, true, result["success"], result)
 					var saved model.GuardianServiceOrder
@@ -383,14 +473,14 @@ func TestGuardianLifecycle(t *testing.T) {
 					require.NoError(t, db.Where("order_id = ?", saved.ID).Delete(&model.GuardianOrderEvent{}).Error)
 					require.NoError(t, db.Delete(&saved).Error)
 				}
-				baseRequest := model.GuardianOrderRequest{ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com"}
+				baseRequest := model.GuardianOrderRequest{DiscoveryChannel: "github", ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com"}
 				for _, mismatch := range []struct {
 					serviceID int
 					route     string
 				}{
 					{macID, "vps"}, {id, "mac_mini"},
 				} {
-					body := fmt.Sprintf(`{"service_id":%d,"payment_method":"alipay","route":%q,"os":"macos","contact_type":"email","contact":"buyer@example.com"}`, mismatch.serviceID, mismatch.route)
+					body := fmt.Sprintf(`{"discovery_channel":"github","service_id":%d,"payment_method":"alipay","route":%q,"os":"macos","contact_type":"email","contact":"buyer@example.com"}`, mismatch.serviceID, mismatch.route)
 					assert.Equal(t, false, decode(request("POST", "/api/guardian/orders", tokens[0], body))["success"])
 				}
 				for _, period := range []string{"weekly", "yearly"} {
@@ -413,7 +503,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				_, err = model.CreateGuardianOrder(users[0].Id, baseRequest)
 				require.Error(t, err)
 
-				ultraRequest := model.GuardianOrderRequest{ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com", AddClaudeUltra: true, AddClaudeMax: true}
+				ultraRequest := model.GuardianOrderRequest{DiscoveryChannel: "github", ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com", AddClaudeUltra: true, AddClaudeMax: true}
 				_, err = model.CreateGuardianOrder(users[0].Id, ultraRequest)
 				require.ErrorContains(t, err, "只能选择一项")
 				ultraRequest.AddClaudeMax = false
@@ -424,7 +514,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				_, err = model.CreateGuardianOrder(users[0].Id, ultraRequest)
 				require.Error(t, err)
 
-				order, err := model.CreateGuardianOrder(users[0].Id, model.GuardianOrderRequest{
+				order, err := model.CreateGuardianOrder(users[0].Id, model.GuardianOrderRequest{DiscoveryChannel: "github",
 					ServiceID: macID, PaymentMethod: "alipay", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "buyer@example.com",
 				})
 				require.NoError(t, err)
@@ -683,12 +773,12 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.Equal(t, true, decode(request("PUT", historyPath, tokens[1], `{}`))["success"])
 				require.NoError(t, db.Model(&historicalService).Update("base_sales", originalHistoryBase).Error)
 			})
-			orderBody := fmt.Sprintf(`{"service_id":%d,"payment_method":"alipay","route":"vps","os":"linux","contact_type":"email","contact":" reader@example.test ","note":"部署"}`, id)
+			orderBody := fmt.Sprintf(`{"discovery_channel":"github","service_id":%d,"payment_method":"alipay","route":"vps","os":"linux","contact_type":"email","contact":" reader@example.test ","note":"部署"}`, id)
 			payment.ComplianceConfirmed = false
 			assert.Equal(t, false, decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)["purchase_enabled"])
 			assert.Equal(t, false, decode(request("POST", "/api/guardian/orders", tokens[0], orderBody))["success"])
 			payment.ComplianceConfirmed = true
-			for _, invalid := range []string{strings.Replace(orderBody, "alipay", "stripe", 1), strings.Replace(orderBody, "alipay", "waffo_pancake", 1), strings.Replace(orderBody, "alipay", "missing", 1), strings.Replace(orderBody, `"os":"linux"`, `"os":"unknown"`, 1), strings.Replace(orderBody, "reader@example.test", " ", 1)} {
+			for _, invalid := range []string{strings.Replace(orderBody, `"discovery_channel":"github",`, "", 1), strings.Replace(orderBody, `"discovery_channel":"github"`, `"discovery_channel":"unknown"`, 1), strings.Replace(orderBody, "alipay", "stripe", 1), strings.Replace(orderBody, "alipay", "waffo_pancake", 1), strings.Replace(orderBody, "alipay", "missing", 1), strings.Replace(orderBody, `"os":"linux"`, `"os":"unknown"`, 1), strings.Replace(orderBody, "reader@example.test", " ", 1)} {
 				assert.Equal(t, false, decode(request("POST", "/api/guardian/orders", tokens[0], invalid))["success"])
 			}
 			require.NoError(t, db.Model(&model.GuardianService{}).Where("id = ?", id).Update("enabled", false).Error)
@@ -815,6 +905,28 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.NotContains(t, own.Body.String(), "user_id")
 			assert.NotContains(t, own.Body.String(), "username")
 			assert.Equal(t, float64(0), decode(request("GET", "/api/guardian/orders/self", tokens[2], ""))["data"].(map[string]any)["total"])
+
+			t.Run("my_order_filters", func(t *testing.T) {
+				for _, tc := range []struct {
+					query string
+					total float64
+				}{
+					{"order_number=" + url.QueryEscape(trade), 1},
+					{fmt.Sprintf("order_number=%s&created_after=%d&created_before=%d", trade, order.CreatedAt, order.CreatedAt+1), 1},
+					{fmt.Sprintf("order_number=%s&created_before=%d", trade, order.CreatedAt), 0},
+					{fmt.Sprintf("order_number=%s&created_after=%d", trade, order.CreatedAt+1), 0},
+					{"order_number=missing-order", 0},
+				} {
+					result := decode(request("GET", "/api/guardian/orders/self?"+tc.query, tokens[0], ""))
+					require.Equal(t, true, result["success"])
+					assert.Equal(t, tc.total, result["data"].(map[string]any)["total"], tc.query)
+				}
+				result := decode(request("GET", "/api/guardian/orders/self?order_number="+url.QueryEscape(trade), tokens[2], ""))
+				assert.Equal(t, float64(0), result["data"].(map[string]any)["total"])
+				for _, query := range []string{"created_after=-1", "created_before=invalid", "created_after=20&created_before=10"} {
+					assert.Equal(t, false, decode(request("GET", "/api/guardian/orders/self?"+query, tokens[0], ""))["success"])
+				}
+			})
 			for _, keyword := range []string{trade, users[0].Username, "reader@example.test"} {
 				listed := decode(request("GET", "/api/guardian/admin/orders?keyword="+url.QueryEscape(keyword), tokens[1], ""))
 				require.Equal(t, true, listed["success"])
@@ -841,7 +953,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.Equal(t, "进度说明", change["before"].(map[string]any)["admin_note"])
 			assert.Equal(t, "refund note", change["after"].(map[string]any)["admin_note"])
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianTierSupply{}, &model.GuardianReceipt{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 			}
 			var persistedAnomaly model.GuardianPaymentAnomaly
 			require.NoError(t, db.Where("order_id = ?", order.ID).First(&persistedAnomaly).Error)
@@ -916,7 +1028,7 @@ func TestGuardianLifecycle(t *testing.T) {
 			assert.NotContains(t, accessLog.String(), operation_setting.EpayKey)
 			// Repeated migrations preserve rows, zero-valued fields, JSON arrays and unique order numbers.
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
+				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianTierSupply{}, &model.GuardianReceipt{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 			}
 			require.NoError(t, db.First(&order, order.ID).Error)
 			replacement := strings.Replace(payload, `"enabled":true,`, ``, 1)
@@ -1013,10 +1125,11 @@ func TestGuardianLifecycle(t *testing.T) {
 
 			t.Run("reseller money permissions renewals and full refund", func(t *testing.T) {
 				adminID, resellerID, buyerID := users[1].Id, users[2].Id, users[0].Id
+				require.NoError(t, db.Create(&model.GuardianTierSupply{Tier: 1, ServiceID: id, GuardianSupplyRequest: model.GuardianSupplyRequest{Granted: true, SupplyCents: 10000}}).Error)
 				accessPath := fmt.Sprintf("/api/guardian/admin/resellers/%d", resellerID)
 				assert.Equal(t, http.StatusForbidden, request("PUT", accessPath, tokens[2], `{"status":"active","reason":"unauthorized"}`).Code)
 				assert.Equal(t, http.StatusForbidden, request("PUT", accessPath, pat, `{"status":"active","reason":"token"}`).Code)
-				require.Equal(t, true, decode(request("PUT", accessPath, tokens[1], `{"status":"active","reason":"Approved reseller"}`))["success"])
+				require.Equal(t, true, decode(request("PUT", accessPath, tokens[1], `{"tier":1,"status":"active","reason":"Approved reseller"}`))["success"])
 				resellerList := request("GET", "/api/guardian/admin/resellers", tokens[1], "")
 				resellerListData := decode(resellerList)
 				require.Equal(t, true, resellerListData["success"])
@@ -1041,7 +1154,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.NotContains(t, catalogResponse.Body.String(), "supply_cents")
 				assert.NotContains(t, catalogResponse.Body.String(), "fee_bps")
 				expected := int64(26000)
-				req := model.GuardianOrderRequest{ServiceID: product.ID, Route: "mac_mini", BillingPeriod: "monthly", PaymentMethod: "alipay", OS: "macos", ContactType: "telegram", Contact: "@buyer-private", Note: "private-note", ResellerCode: reseller.Code, ExpectedAmountCents: &expected, AcceptRefundFee: true}
+				req := model.GuardianOrderRequest{DiscoveryChannel: "github", ServiceID: product.ID, Route: "mac_mini", BillingPeriod: "monthly", PaymentMethod: "alipay", OS: "macos", ContactType: "telegram", Contact: "@buyer-private", Note: "private-note", ResellerCode: reseller.Code, ExpectedAmountCents: &expected, AcceptRefundFee: true}
 				_, err = model.CreateGuardianOrder(resellerID, req)
 				require.ErrorContains(t, err, "自己")
 				for _, variant := range []struct {
@@ -1256,7 +1369,7 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.Empty(t, quote.ResellerCode)
 				assert.False(t, quote.DirectConfirmationRequired)
 				for range 2 {
-					require.NoError(t, db.AutoMigrate(&model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
+					require.NoError(t, db.AutoMigrate(&model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianTierSupply{}, &model.GuardianReceipt{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
 				}
 				var preservedSale model.GuardianResellerSale
 				require.NoError(t, db.First(&preservedSale, order.ID).Error)
@@ -1269,6 +1382,189 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.Equal(t, http.StatusNotFound, request("PUT", fmt.Sprintf("/api/guardian/admin/customer-services/%d/reseller", delivered.CustomerServiceID), tokens[1], `{"reseller_id":0,"reason":"Removed feature"}`).Code)
 
 			})
+			t.Run("invoice availability and freeform information", func(t *testing.T) {
+				buyer := model.User{Username: "invoice-" + suffix, Password: "unused", AffCode: "inv" + suffix}
+				require.NoError(t, db.Create(&buyer).Error)
+				product := model.GuardianService{Title: "Invoice product", Route: "vps", Enabled: true, PriceCents: 10000}
+				require.NoError(t, db.Create(&product).Error)
+				req := model.GuardianOrderRequest{ServiceID: product.ID, DiscoveryChannel: "github", Route: "vps", OS: "linux", ContactType: "email", Contact: "invoice@example.test", PaymentMethod: "alipay", InvoiceInformation: "  公司名称\n税号及其他信息  "}
+				_, err := model.CreateGuardianOrder(buyer.Id, req)
+				require.ErrorContains(t, err, "不支持开票")
+				require.NoError(t, db.Model(&product).Update("invoice_enabled", true).Error)
+				order, err := model.CreateGuardianOrder(buyer.Id, req)
+				require.NoError(t, err)
+				assert.Equal(t, "公司名称\n税号及其他信息", order.InvoiceInformation)
+				require.NoError(t, db.Model(&product).Update("invoice_enabled", false).Error)
+				for range 2 {
+					require.NoError(t, db.AutoMigrate(&model.GuardianService{}, &model.GuardianServiceOrder{}))
+				}
+				var stored model.GuardianServiceOrder
+				require.NoError(t, db.First(&stored, order.ID).Error)
+				assert.Equal(t, order.InvoiceInformation, stored.InvoiceInformation)
+				req.InvoiceInformation = ""
+				_, err = model.CreateGuardianOrder(buyer.Id, req)
+				require.NoError(t, err)
+				req.InvoiceInformation = strings.Repeat("字", 2001)
+				_, err = model.CreateGuardianOrder(buyer.Id, req)
+				require.ErrorContains(t, err, "2000")
+			})
+			t.Run("payment receipts remain separate from payment and enforce ownership", func(t *testing.T) {
+				buyerID := users[0].Id
+				require.NoError(t, db.Model(&model.User{}).Where("id = ?", buyerID).Update("email", "buyer@example.test").Error)
+				receiptOrder := model.GuardianServiceOrder{TradeNo: "receipt-" + suffix, UserID: buyerID, ServiceID: id, ServiceTitle: "Original product", AmountCents: 12345, Status: "pending_payment", PaymentMethod: "alipay", CreatedAt: time.Now().Unix(), ReceiptNotification: true, DiscoveryChannel: "github"}
+				require.NoError(t, db.Create(&receiptOrder).Error)
+				_, err := model.GetGuardianReceipt(receiptOrder.ID, buyerID, false)
+				require.Error(t, err)
+				require.NoError(t, model.CompleteGuardianOrder(receiptOrder.TradeNo, "fixture", "123.45", "alipay"))
+				require.NoError(t, model.CompleteGuardianOrder(receiptOrder.TradeNo, "fixture", "123.45", "alipay"))
+				view, err := model.GetGuardianReceipt(receiptOrder.ID, buyerID, false)
+				require.NoError(t, err)
+				assert.EqualValues(t, 12345, view.AmountCents)
+				assert.Equal(t, "b***@example.test", view.Recipient)
+				assert.Equal(t, "pending", view.EmailStatus)
+				contextResponse := decode(request("GET", "/api/guardian/checkout-context", tokens[0], ""))
+				assert.Equal(t, "github", contextResponse["data"].(map[string]any)["discovery_channel"])
+				filtered, _, err := model.ListAdminGuardianOrders("", "", 1, 50, false, "github")
+				require.NoError(t, err)
+				for _, row := range filtered {
+					assert.Equal(t, "github", row.DiscoveryChannel)
+				}
+				require.NoError(t, db.Model(&model.GuardianService{}).Where("id = ?", id).Update("title", "Changed catalog title").Error)
+				again, err := model.GetGuardianReceipt(receiptOrder.ID, buyerID, false)
+				require.NoError(t, err)
+				assert.Equal(t, view.Number, again.Number)
+				assert.Equal(t, "Original product", again.ServiceTitle)
+				endpoint := fmt.Sprintf("/api/guardian/orders/%d/receipt", receiptOrder.ID)
+				assert.Equal(t, false, decode(request("GET", endpoint, tokens[2], ""))["success"])
+				assert.Equal(t, http.StatusForbidden, request("GET", endpoint, pat, "").Code)
+				response := request("GET", endpoint, tokens[0], "")
+				assert.Equal(t, true, decode(response)["success"])
+				assert.NotContains(t, response.Body.String(), "buyer@example.test")
+				assert.Equal(t, true, decode(request("GET", fmt.Sprintf("/api/guardian/admin/orders/%d/receipt", receiptOrder.ID), tokens[1], ""))["success"])
+				require.Error(t, model.RequestGuardianReceiptEmail(receiptOrder.ID, buyerID, false))
+				require.NoError(t, db.Model(&model.GuardianReceipt{}).Where("order_id = ?", receiptOrder.ID).Updates(map[string]any{"email_status": "failed", "requested_at": time.Now().Unix() - 61}).Error)
+				require.NoError(t, model.RequestGuardianReceiptEmail(receiptOrder.ID, buyerID, false))
+				claimed, err := model.ClaimGuardianReceipt(time.Now().Unix())
+				require.NoError(t, err)
+				require.NotNil(t, claimed)
+				message, err := service.BuildGuardianReceiptMessage(*claimed)
+				require.NoError(t, err)
+				assert.Contains(t, message.HTMLBody, "/guardian/receipt?order=")
+				assert.NotContains(t, message.HTMLBody, "supply")
+				require.NoError(t, model.FinishGuardianReceiptEmail(*claimed, "pending"))
+				var retry model.GuardianReceipt
+				require.NoError(t, db.First(&retry, "order_id = ?", claimed.OrderID).Error)
+				assert.Equal(t, "pending", retry.EmailStatus)
+				assert.Greater(t, retry.NextAttemptAt, time.Now().Unix())
+				for attempt := 2; attempt <= 4; attempt++ {
+					require.NoError(t, db.Model(&model.GuardianReceipt{}).Where("order_id = ?", claimed.OrderID).Update("next_attempt_at", 0).Error)
+					claimed, err = model.ClaimGuardianReceipt(time.Now().Unix())
+					require.NoError(t, err)
+					require.NotNil(t, claimed)
+					require.NoError(t, model.FinishGuardianReceiptEmail(*claimed, "pending"))
+				}
+				require.NoError(t, db.First(&retry, "order_id = ?", claimed.OrderID).Error)
+				assert.Equal(t, "failed", retry.EmailStatus)
+				require.NoError(t, db.Model(&model.User{}).Where("id = ?", buyerID).Update("email", "").Error)
+				require.ErrorContains(t, model.RequestGuardianReceiptEmail(receiptOrder.ID, buyerID, false), "稍后")
+				require.NoError(t, db.Model(&model.GuardianReceipt{}).Where("order_id = ?", receiptOrder.ID).Update("requested_at", time.Now().Unix()-61).Error)
+				require.ErrorContains(t, model.RequestGuardianReceiptEmail(receiptOrder.ID, buyerID, false), "绑定邮箱")
+				legacy := receiptOrder
+				legacy.ID = 0
+				legacy.TradeNo = "legacy-receipt-" + suffix
+				legacy.PaidAt = time.Now().Unix() - 86400
+				legacy.Status = "paid"
+				legacy.ReceiptNotification = false
+				require.NoError(t, db.Create(&legacy).Error)
+				require.NoError(t, model.PrepareGuardianReceipts())
+				var count int64
+				require.NoError(t, db.Model(&model.GuardianReceipt{}).Where("order_id = ?", legacy.ID).Count(&count).Error)
+				assert.Zero(t, count)
+				legacyView, err := model.GetGuardianReceipt(legacy.ID, buyerID, false)
+				require.NoError(t, err)
+				assert.Equal(t, "not_requested", legacyView.EmailStatus)
+				require.NoError(t, db.Model(&model.GuardianServiceOrder{}).Where("id = ?", receiptOrder.ID).Updates(map[string]any{"status": "refunded", "refunded_at": time.Now().Unix()}).Error)
+				refunded, err := model.GetGuardianReceipt(receiptOrder.ID, buyerID, false)
+				require.NoError(t, err)
+				assert.EqualValues(t, 12345, refunded.AmountCents)
+				assert.Equal(t, "refunded", refunded.RefundState)
+				assert.Nil(t, refunded.RefundCents)
+			})
+
+			t.Run("tier supply preview inheritance overrides and historical snapshots", func(t *testing.T) {
+				resellerID, adminID := users[2].Id, users[1].Id
+				_, err := model.SetGuardianResellerAccess(resellerID, adminID, model.GuardianResellerAccessRequest{Status: "active", Reason: "tier test"})
+				require.NoError(t, err)
+				product := model.GuardianService{Title: "Tier product", Route: "vps", PriceCents: 20000, Enabled: true}
+				require.NoError(t, db.Create(&product).Error)
+				change := model.GuardianTierChange{Tier: 1, Prices: []model.GuardianTierSupply{{ServiceID: product.ID, GuardianSupplyRequest: model.GuardianSupplyRequest{Granted: true, SupplyCents: 10000}}}}
+				preview, err := model.ChangeGuardianTier(adminID, change)
+				require.NoError(t, err)
+				var count int64
+				require.NoError(t, db.Model(&model.GuardianTierSupply{}).Where("service_id = ?", product.ID).Count(&count).Error)
+				assert.Zero(t, count)
+				change.PreviewToken = preview.Token
+				_, err = model.ChangeGuardianTier(adminID, change)
+				require.NoError(t, err)
+				require.NoError(t, model.SaveGuardianRetail(resellerID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 15000}))
+				reseller, err := model.GetGuardianReseller(resellerID)
+				require.NoError(t, err)
+				price := int64(15000)
+				order, err := model.CreateGuardianOrder(users[0].Id, model.GuardianOrderRequest{DiscoveryChannel: "qq", ServiceID: product.ID, Route: "vps", OS: "linux", PaymentMethod: "alipay", ContactType: "qq", Contact: "123456", ResellerCode: reseller.Code, ExpectedAmountCents: &price, AcceptRefundFee: true})
+				require.NoError(t, err)
+				change.PreviewToken = ""
+				change.Prices[0].SupplyCents = 16000
+				preview, err = model.ChangeGuardianTier(adminID, change)
+				require.NoError(t, err)
+				assert.Greater(t, preview.Unavailable, 0)
+				change.PreviewToken = preview.Token
+				_, err = model.ChangeGuardianTier(adminID, change)
+				require.NoError(t, err)
+				_, err = model.ChangeGuardianTier(adminID, change)
+				require.ErrorContains(t, err, "重新预览")
+				catalog, err := model.GuardianResellerCatalog(reseller.Code)
+				require.NoError(t, err)
+				for _, p := range catalog {
+					assert.NotEqual(t, product.ID, p.ID)
+				}
+				var sale model.GuardianResellerSale
+				require.NoError(t, db.First(&sale, order.ID).Error)
+				assert.EqualValues(t, 10000, sale.SupplyCents)
+				require.NoError(t, model.CompleteGuardianOrder(order.TradeNo, "fixture", "150.00", "alipay"))
+				require.NoError(t, model.SaveGuardianSupply(resellerID, product.ID, adminID, model.GuardianSupplyRequest{Granted: true, SupplyCents: 9000}))
+				offers, err := model.ListGuardianResellerOffers(resellerID)
+				require.NoError(t, err)
+				for _, o := range offers {
+					if o.ServiceID == product.ID {
+						assert.False(t, o.FollowTier)
+						assert.EqualValues(t, 9000, o.SupplyCents)
+					}
+				}
+				restore := model.GuardianTierChange{Tier: 1, ResellerIDs: []int{resellerID}, ServiceIDs: []int{product.ID}, Restore: true}
+				preview, err = model.ChangeGuardianTier(adminID, restore)
+				require.NoError(t, err)
+				restore.PreviewToken = preview.Token
+				_, err = model.ChangeGuardianTier(adminID, restore)
+				require.NoError(t, err)
+				offers, err = model.ListGuardianResellerOffers(resellerID)
+				require.NoError(t, err)
+				for _, o := range offers {
+					if o.ServiceID == product.ID {
+						assert.True(t, o.FollowTier)
+						assert.EqualValues(t, 16000, o.SupplyCents)
+					}
+				}
+				for range 2 {
+					require.NoError(t, db.AutoMigrate(&model.GuardianReseller{}, &model.GuardianTierSupply{}, &model.GuardianResellerOffer{}, &model.GuardianReceipt{}))
+				}
+				require.NoError(t, db.First(&sale, order.ID).Error)
+				assert.EqualValues(t, 10000, sale.SupplyCents)
+				assert.Error(t, db.Create(&model.GuardianTierSupply{Tier: 1, ServiceID: product.ID}).Error)
+				_, err = model.GetGuardianReceipt(order.ID, users[0].Id, false)
+				require.NoError(t, err)
+				assert.Error(t, db.Create(&model.GuardianReceipt{OrderID: order.ID, Number: "duplicate"}).Error)
+			})
+
 		})
 	}
 }

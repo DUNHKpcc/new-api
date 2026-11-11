@@ -29,11 +29,13 @@ import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny } from '../lib/price'
 import type { GuardianOrder, GuardianQueueState } from '../types'
 import { EditGuardianContact } from './contact-dialog'
+import { DiscoveryLabel } from './discovery-options'
 import { OrderActions } from './order-actions'
 import { OrderStatusBadge } from './order-status-badge'
 import { QueueTracker } from './queue-tracker'
+import { ReceiptLink } from './receipt-link'
 
-export function OrderProgress(props: { order: GuardianOrder }) {
+function OrderProgress(props: { order: GuardianOrder }) {
   const { t } = useTranslation()
   const labels = useGuardianLabels()
   const current = GUARDIAN_ORDER_TRACK.indexOf(props.order.status)
@@ -79,6 +81,10 @@ export function OrderCard(props: {
   const labels = useGuardianLabels()
   const order = props.order
   const details = [
+    {
+      label: t('How did you hear about us?'),
+      value: <DiscoveryLabel value={order.discovery_channel} />,
+    },
     ...((order.claude_max_price_cents ?? 0) > 0
       ? [
           {
@@ -143,6 +149,7 @@ export function OrderCard(props: {
       </div>
 
       <QueueTracker order={order} queue={props.queue} />
+      {order.paid_at > 0 && <ReceiptLink orderId={order.id} />}
 
       {order.status === 'pending_payment' && (
         <>
@@ -164,6 +171,14 @@ export function OrderCard(props: {
             <dd className='min-w-0 break-words'>{detail.value}</dd>
           </div>
         ))}
+        {order.invoice_information && (
+          <section className='my-4 rounded-lg border p-4'>
+            <h3 className='mb-2 font-medium'>{t('Invoice information')}</h3>
+            <p className='break-words whitespace-pre-wrap'>
+              {order.invoice_information}
+            </p>
+          </section>
+        )}
         {order.note && (
           <div className='flex min-w-0 gap-3 sm:col-span-2'>
             <dt className='w-24 shrink-0 text-[var(--g-ink-soft)]'>

@@ -38,6 +38,7 @@ import {
 } from '../../reseller-api'
 
 const schema = z.object({
+  tier: z.number().int().min(0).max(3),
   status: z.enum(['active', 'suspended']),
   reason: z.string().trim().min(1, 'Please enter a reason').max(500),
 })
@@ -83,7 +84,11 @@ function ResellerAccessForm(props: {
   const queryClient = useQueryClient()
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { status: props.profile?.status ?? 'active', reason: '' },
+    defaultValues: {
+      tier: props.profile?.tier ?? 1,
+      status: props.profile?.status ?? 'active',
+      reason: '',
+    },
   })
   const save = useMutation({
     mutationFn: (values: z.infer<typeof schema>) =>
@@ -122,6 +127,23 @@ function ResellerAccessForm(props: {
           </NativeSelectOption>
         </NativeSelect>
       </Field>
+      {!props.profile && (
+        <Field>
+          <FieldLabel htmlFor='guardian-reseller-tier'>
+            {t('Reseller tier')}
+          </FieldLabel>
+          <NativeSelect
+            id='guardian-reseller-tier'
+            {...form.register('tier', { valueAsNumber: true })}
+          >
+            {[1, 2, 3].map((tier) => (
+              <NativeSelectOption key={tier} value={tier}>
+                {t('Tier {{tier}}', { tier })}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+      )}
       <Field data-invalid={!!form.formState.errors.reason}>
         <FieldLabel htmlFor='guardian-reseller-reason'>
           {t('Reason')}

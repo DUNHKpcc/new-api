@@ -76,7 +76,7 @@ func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, p
 		return nil, 0, 0, errors.New("代理不能购买自己销售的商品")
 	}
 	var offer GuardianResellerOffer
-	if err := tx.First(&offer, "reseller_id = ? AND service_id = ? AND granted = ? AND listed = ?", reseller.UserID, product.ID, true, true).Error; err != nil {
+	if err := effectiveGuardianOffer(tx, reseller.UserID, product.ID, &offer); err != nil || !offer.Granted || !offer.Listed {
 		return nil, 0, 0, errors.New("代理尚未开放该商品")
 	}
 	var setting GuardianResellerSetting

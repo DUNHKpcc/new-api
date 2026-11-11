@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -71,14 +72,24 @@ function ServiceCard(props: {
   return (
     <article className='g-rule relative flex h-full flex-col rounded-2xl border bg-[var(--g-paper-raised)] p-6'>
       <div className='flex items-start justify-between gap-4'>
-        <p className='g-mono text-xs text-[var(--g-ink-soft)]'>
+        <p className='g-mono shrink-0 text-xs text-[var(--g-ink-soft)]'>
           {labels.serviceRoute[props.service.route]}
         </p>
-        {props.service.badge && (
-          <span className='rounded-full bg-[var(--g-accent-wash)] px-2.5 py-0.5 text-xs font-medium text-[var(--g-accent)]'>
-            {props.service.badge}
-          </span>
-        )}
+        <div className='flex flex-wrap justify-end gap-1.5'>
+          {props.service.invoice_enabled && (
+            <Badge
+              variant='outline'
+              className='border-[var(--g-rule)] text-[var(--g-ink-soft)]'
+            >
+              {t('Supports invoicing')}
+            </Badge>
+          )}
+          {props.service.badge && (
+            <Badge className='bg-[var(--g-accent-wash)] text-[var(--g-accent)]'>
+              {props.service.badge}
+            </Badge>
+          )}
+        </div>
       </div>
       <div className='mt-3 flex items-start justify-between gap-3'>
         <div className='min-w-0 flex-1'>

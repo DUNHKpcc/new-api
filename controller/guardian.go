@@ -103,7 +103,7 @@ func AdminUpdateGuardianService(c *gin.Context) {
 	}
 	service.CreatedAt = previous.CreatedAt
 	service.UpdatedAt = time.Now().Unix()
-	if err := model.DB.Model(&previous).Select("claude_ultra_price_cents", "claude_max_price_cents", "quarter_price_cents", "annual_price_cents", "region", "hardware_config", "chip", "base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
+	if err := model.DB.Model(&previous).Select("invoice_enabled", "claude_ultra_price_cents", "claude_max_price_cents", "quarter_price_cents", "annual_price_cents", "region", "hardware_config", "chip", "base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -209,9 +209,19 @@ func CancelGuardianOrder(c *gin.Context) {
 	common.ApiSuccess(c, order)
 }
 func ListMyGuardianOrders(c *gin.Context) {
+	var filter model.GuardianOrderFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		common.ApiErrorMsg(c, "查询条件无效")
+		return
+	}
+	if filter.CreatedAfter > 0 && filter.CreatedBefore > 0 && filter.CreatedAfter >= filter.CreatedBefore {
+		common.ApiErrorMsg(c, "开始日期不能晚于结束日期")
+		return
+	}
+
 	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	orders, total, err := model.ListUserGuardianOrders(c.GetInt("id"), max(1, page), min(50, max(1, size)))
+	orders, total, err := model.ListUserGuardianOrders(c.GetInt("id"), max(1, page), min(50, max(1, size)), filter)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -239,7 +249,7 @@ func ListMyGuardianOrders(c *gin.Context) {
 func AdminListGuardianOrders(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	orders, total, err := model.ListAdminGuardianOrders(c.Query("status"), c.Query("keyword"), max(1, page), min(50, max(1, size)), c.Query("payment_anomaly") == "true")
+	orders, total, err := model.ListAdminGuardianOrders(c.Query("status"), c.Query("keyword"), max(1, page), min(50, max(1, size)), c.Query("payment_anomaly") == "true", c.Query("discovery_channel"))
 	if err != nil {
 		common.ApiError(c, err)
 		return

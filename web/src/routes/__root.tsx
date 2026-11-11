@@ -111,7 +111,7 @@ function RootComponent() {
         </>
       )}
       <Toaster closeButton duration={5000} position='top-center' richColors />
-      {import.meta.env.MODE === 'development' && (
+      {import.meta.env.MODE === 'development' && !isGuardianPage && (
         <>
           <ReactQueryDevtools buttonPosition='bottom-left' />
           <TanStackRouterDevtools position='top-right' />

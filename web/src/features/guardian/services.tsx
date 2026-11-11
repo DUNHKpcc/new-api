@@ -22,7 +22,13 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { SiApple } from 'react-icons/si'
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  TabsIndicator,
+} from '@/components/ui/tabs'
 
 import { GuardianAccountStatisticsPanel } from './account-statistics'
 import { ServicesFaqSection } from './components/faq-section'
@@ -130,16 +136,7 @@ function ServicesIntro(props: { macMini: boolean; accountStatus: boolean }) {
           />
         </div>
       )}
-      <TabsList
-        className='mt-5 max-w-full flex-wrap group-data-horizontal/tabs:h-auto'
-        aria-label={t('Service category')}
-      >
-        <TabsTrigger value='account_status'>
-          {t('Purchased user account status')}
-        </TabsTrigger>
-        <TabsTrigger value='setup'>{t('Environment setup')}</TabsTrigger>
-        <TabsTrigger value='mac_mini'>{t('Overseas Mac mini')}</TabsTrigger>
-      </TabsList>
+
       {!props.accountStatus && !props.macMini && (
         <ul className='mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[var(--g-ink-soft)]'>
           {promises.map((promise) => (
@@ -178,10 +175,9 @@ export function GuardianServices(props: {
 
   return (
     <GuardianShell resellerCode={props.resellerCode}>
-      {/* The intro and the catalog share one first screen, centred on both axes. */}
       <section
         aria-labelledby='services-title'
-        className='mx-auto flex max-w-6xl flex-col justify-center gap-10 px-4 py-14 sm:px-6 lg:min-h-[calc(100svh-4rem)] lg:py-10 2xl:max-w-7xl'
+        className='mx-auto flex max-w-6xl flex-col gap-10 px-4 py-14 sm:px-6 lg:min-h-[calc(100svh-4rem)] lg:py-10 2xl:max-w-7xl'
       >
         <Tabs
           className='gap-10'
@@ -197,15 +193,35 @@ export function GuardianServices(props: {
             })
           }}
         >
-          <ServicesIntro
-            macMini={props.category === 'mac_mini'}
-            accountStatus={props.category === 'account_status'}
-          />
-          <TabsContent value='account_status'>
+          <TabsList
+            className='g-service-tabs relative mx-auto grid w-full max-w-[25rem] grid-cols-3 gap-0.5 p-[3px] group-data-horizontal/tabs:h-auto [&_[data-slot=tabs-trigger]]:h-full [&_[data-slot=tabs-trigger]]:min-h-8 [&_[data-slot=tabs-trigger]]:min-w-0 [&_[data-slot=tabs-trigger]]:px-2 [&_[data-slot=tabs-trigger]]:py-1 [&_[data-slot=tabs-trigger]]:whitespace-normal'
+            aria-label={t('Service category')}
+          >
+            <TabsIndicator className='g-service-tab-indicator' />
+            <TabsTrigger value='account_status'>
+              {t('Purchased user account status')}
+            </TabsTrigger>
+            <TabsTrigger value='setup'>{t('Environment setup')}</TabsTrigger>
+            <TabsTrigger value='mac_mini'>{t('Overseas Mac mini')}</TabsTrigger>
+          </TabsList>
+          <TabsContent className='g-service-panel' value='account_status'>
+            <div className='mb-10'>
+              <ServicesIntro macMini={false} accountStatus />
+            </div>
             <GuardianAccountStatisticsPanel />
           </TabsContent>
           {(['setup', 'mac_mini'] as const).map((category) => (
-            <TabsContent key={category} value={category}>
+            <TabsContent
+              className='g-service-panel'
+              key={category}
+              value={category}
+            >
+              <div className='mb-10'>
+                <ServicesIntro
+                  macMini={category === 'mac_mini'}
+                  accountStatus={false}
+                />
+              </div>
               {category === 'mac_mini' && (
                 <p className='mb-6 text-center text-sm text-[var(--g-ink-soft)]'>
                   {t(

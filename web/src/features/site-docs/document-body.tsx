@@ -20,7 +20,7 @@ export function DocumentBody(props: { document: SiteDocument }) {
     const items = Array.from(elements, (element, index) => {
       const id = `doc-${props.document.slug}-section-${index + 1}`
       element.id = id
-      element.classList.add('scroll-mt-28')
+      element.classList.add('scroll-mt-40', 'lg:scroll-mt-4')
       return {
         id,
         text: element.textContent ?? '',
@@ -34,7 +34,7 @@ export function DocumentBody(props: { document: SiteDocument }) {
   const startsWithTitle = content.startsWith(`# ${props.document.title}\n`)
   return (
     <>
-      <article className='min-w-0 lg:col-start-2 lg:row-start-1'>
+      <article className='min-w-0 lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-3'>
         {!startsWithTitle && (
           <h2 className='mb-6 text-2xl font-semibold'>
             {props.document.title}
@@ -44,7 +44,7 @@ export function DocumentBody(props: { document: SiteDocument }) {
           <DocumentMarkdown lazyImages content={content} />
         </div>
       </article>
-      <aside className='hidden min-w-0 self-start border-l pl-4 lg:sticky lg:top-24 lg:col-start-3 lg:row-start-1 lg:block lg:max-h-[calc(100svh-8rem)] lg:overflow-y-auto'>
+      <aside className='hidden min-w-0 border-l pl-4 lg:col-start-3 lg:row-start-1 lg:block lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'>
         <h2 className='mb-3 text-sm font-semibold'>{t('On this page')}</h2>
         <nav aria-label={t('On this page')}>
           <ul className='space-y-2'>

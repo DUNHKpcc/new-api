@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 import { resellerRead, resellerWrite } from '../../reseller-api'
 import {
@@ -30,12 +31,12 @@ import {
   type ResellerAction,
 } from '../reseller/action-dialog'
 import { ResellerRecords } from '../reseller/records'
-import { GuardianResellerProductsDialog } from './reseller-products-dialog'
+import { GuardianResellerList } from './reseller-list'
+import { GuardianTierPrices } from './tier-prices'
 
 export function GuardianResellerAdminPanel() {
   const { t } = useTranslation()
   const [action, setAction] = useState<ResellerAction | null>(null)
-  const [productsOpen, setProductsOpen] = useState(false)
   const setting = useQuery({
     queryKey: ['guardian', 'reseller-setting'],
     queryFn: () =>
@@ -76,19 +77,23 @@ export function GuardianResellerAdminPanel() {
         >
           {t('Configure payment fee')}
         </Button>
-        <Button variant='outline' onClick={() => setProductsOpen(true)}>
-          {t('Configure reseller products')}
-        </Button>
       </div>
-      {productsOpen && (
-        <GuardianResellerProductsDialog
-          onClose={() => setProductsOpen(false)}
-        />
-      )}
-      <section className='space-y-3'>
-        <h3 className='font-medium'>{t('Withdrawals')}</h3>
-        <ResellerRecords admin withdrawals />
-      </section>
+      <Tabs defaultValue='resellers'>
+        <TabsList>
+          <TabsTrigger value='resellers'>{t('Reseller list')}</TabsTrigger>
+          <TabsTrigger value='prices'>{t('Tier supply prices')}</TabsTrigger>
+          <TabsTrigger value='withdrawals'>{t('Withdrawals')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value='resellers'>
+          <GuardianResellerList />
+        </TabsContent>
+        <TabsContent value='prices'>
+          <GuardianTierPrices />
+        </TabsContent>
+        <TabsContent value='withdrawals'>
+          <ResellerRecords admin withdrawals />
+        </TabsContent>
+      </Tabs>
       {action && (
         <ResellerActionDialog action={action} onClose={() => setAction(null)} />
       )}

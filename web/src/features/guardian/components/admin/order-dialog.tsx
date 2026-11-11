@@ -41,7 +41,9 @@ import { GUARDIAN_ADMIN_TRANSITIONS } from '../../constants'
 import { useGuardianLabels } from '../../hooks/use-guardian-labels'
 import { formatCny } from '../../lib/price'
 import type { AdminGuardianOrder, GuardianOrderStatus } from '../../types'
+import { DiscoveryLabel } from '../discovery-options'
 import { OrderStatusBadge } from '../order-status-badge'
+import { ReceiptLink } from '../receipt-link'
 import { GuardianOrderHistory } from './order-history'
 import { GuardianOrderResellerFinance } from './order-reseller-finance'
 
@@ -79,6 +81,10 @@ export function GuardianOrderDialog(props: {
     onError: (error) => handleServerError(error, t('Failed to update order')),
   })
   const details = [
+    {
+      label: t('How did you hear about us?'),
+      value: <DiscoveryLabel value={order.discovery_channel} />,
+    },
     { label: t('Order number'), value: order.trade_no },
     {
       label: t('Order source'),
@@ -152,6 +158,14 @@ export function GuardianOrderDialog(props: {
             }}
           />
         )}
+        {order.invoice_information && (
+          <section className='my-4 rounded-lg border p-4'>
+            <h3 className='mb-2 font-medium'>{t('Invoice information')}</h3>
+            <p className='break-words whitespace-pre-wrap'>
+              {order.invoice_information}
+            </p>
+          </section>
+        )}
         {order.note && (
           <div className='bg-muted/50 rounded-lg border p-3 text-sm whitespace-pre-line'>
             {order.note}
@@ -214,6 +228,7 @@ export function GuardianOrderDialog(props: {
           )}
         </Field>
         <GuardianOrderHistory orderId={order.id} />
+        {order.paid_at > 0 && <ReceiptLink orderId={order.id} admin />}
       </div>
     </Dialog>
   )

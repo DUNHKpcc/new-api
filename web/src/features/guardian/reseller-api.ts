@@ -27,6 +27,7 @@ import type {
 } from './types'
 
 export interface GuardianReseller {
+  tier: number
   user_id: number
   status: 'active' | 'suspended'
   code: string
@@ -52,7 +53,7 @@ export async function getGuardianReseller(userId?: number) {
 
 export async function setGuardianResellerAccess(
   userId: number,
-  request: { status: 'active' | 'suspended'; reason: string }
+  request: { status: 'active' | 'suspended'; reason: string; tier?: number }
 ) {
   return requireServerSuccess(
     (
@@ -87,7 +88,8 @@ export async function resellerWrite<T = unknown>(
 }
 export const getResellerCatalog = (code: string) =>
   resellerRead<GuardianCatalog>(`/resellers/${encodeURIComponent(code)}`)
-export interface ResellerOffer {
+interface ResellerOffer {
+  follow_tier?: boolean
   id: number
   service_id: number
   granted: boolean
@@ -162,6 +164,9 @@ export interface ResellerPage<T> {
 }
 
 export interface GuardianResellerSummary {
+  independent_products: number
+  unavailable_products: number
+  tier: number
   user_id: number
   username: string
   display_name: string

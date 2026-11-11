@@ -92,7 +92,12 @@ it.each(['vps', 'mac_mini'] as const)(
     const onClose = vi.fn()
     renderDialog(
       <CheckoutDialog
-        service={{ ...service, route, annual_price_cents: 500000 }}
+        service={{
+          ...service,
+          route,
+          annual_price_cents: 500000,
+          invoice_enabled: route === 'mac_mini',
+        }}
         billingPeriod='yearly'
         payMethods={payMethods}
         onClose={onClose}
@@ -104,6 +109,20 @@ it.each(['vps', 'mac_mini'] as const)(
         name: route === 'mac_mini' ? 'Pay ¥5,000' : 'Pay ¥599',
       })
     ).toBeVisible()
+    await userEvent.selectOptions(
+      screen.getByLabelText('How did you hear about us?'),
+      'github'
+    )
+    if (route === 'mac_mini') {
+      await userEvent.type(
+        screen.getByLabelText('Invoice information'),
+        'Company name / invoice details'
+      )
+    } else {
+      expect(
+        screen.queryByLabelText('Invoice information')
+      ).not.toBeInTheDocument()
+    }
     await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
     await userEvent.click(screen.getByRole('radio', { name: 'WeChat Pay' }))
     await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
@@ -111,7 +130,10 @@ it.each(['vps', 'mac_mini'] as const)(
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
     expect(post).toHaveBeenCalledWith('/api/guardian/orders', {
       ...(route === 'mac_mini' ? { billing_period: 'yearly' } : {}),
+      invoice_information:
+        route === 'mac_mini' ? 'Company name / invoice details' : undefined,
       service_id: 4,
+      discovery_channel: 'github',
       payment_method: 'wxpay',
       route,
       os: 'macos',
@@ -238,6 +260,10 @@ it.each([
     await userEvent.keyboard('[Space]')
     expect(screen.getByRole('button', { name: 'Pay ¥5,000' })).toBeVisible()
     await userEvent.click(addon)
+    await userEvent.selectOptions(
+      screen.getByLabelText('How did you hear about us?'),
+      'github'
+    )
     await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
     await userEvent.click(screen.getByRole('button', { name: `Pay ${total}` }))
     await waitFor(() => expect(post).toHaveBeenCalledOnce())
@@ -267,6 +293,10 @@ it('requires reseller refund consent and sends the displayed quote with attribut
   )
   const pay = screen.getByRole('button', { name: /^Pay / })
   expect(pay).toBeDisabled()
+  await userEvent.selectOptions(
+    screen.getByLabelText('How did you hear about us?'),
+    'qq'
+  )
   await userEvent.type(screen.getByLabelText('Contact'), '@customer')
   await userEvent.click(
     screen.getByRole('checkbox', { name: /I agree|original reseller/ })
@@ -300,6 +330,10 @@ it('requires explicit direct-renewal consent and sends the owned service ID', as
     />
   )
   expect(screen.getByRole('button', { name: /^Pay / })).toBeDisabled()
+  await userEvent.selectOptions(
+    screen.getByLabelText('How did you hear about us?'),
+    'qq'
+  )
   await userEvent.type(screen.getByLabelText('Contact'), '@customer')
   await userEvent.click(
     screen.getByRole('checkbox', { name: /I agree|original reseller/ })
@@ -314,5 +348,49 @@ it('requires explicit direct-renewal consent and sends the owned service ID', as
         expected_amount_cents: 59900,
       })
     )
+  )
+})
+
+it('requires a discovery channel before opening payment and keeps contact input', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: { discovery_channel: '' } },
+  })
+  const post = vi.spyOn(api, 'post')
+  renderDialog(
+    <CheckoutDialog
+      service={service}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  await userEvent.type(screen.getByLabelText('Contact'), '@customer')
+  await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
+  expect(await screen.findByText('Choose how you heard about us')).toBeVisible()
+  expect(screen.getByLabelText('Contact')).toHaveValue('@customer')
+  expect(post).not.toHaveBeenCalled()
+})
+
+it('prefills the previous discovery channel and allows changing it', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: { discovery_channel: 'linuxdo' } },
+  })
+  renderDialog(
+    <CheckoutDialog
+      service={service}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  await waitFor(() =>
+    expect(screen.getByLabelText('How did you hear about us?')).toHaveValue(
+      'linuxdo'
+    )
+  )
+  await userEvent.selectOptions(
+    screen.getByLabelText('How did you hear about us?'),
+    'other'
+  )
+  expect(screen.getByLabelText('How did you hear about us?')).toHaveValue(
+    'other'
   )
 })

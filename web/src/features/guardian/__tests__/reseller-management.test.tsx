@@ -31,7 +31,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 
 import { GuardianResellerAccessDialog } from '../components/admin/reseller-access-dialog'
-import { GuardianResellerProductsDialog } from '../components/admin/reseller-products-dialog'
+import { GuardianResellerList } from '../components/admin/reseller-list'
 import { ResellerActionDialog } from '../components/reseller/action-dialog'
 import { ResellerOffersPanel } from '../components/reseller/offers'
 import { ResellerRecords } from '../components/reseller/records'
@@ -149,10 +149,10 @@ it('refreshes the cached reseller list after granting access', async () => {
   vi.spyOn(api, 'put').mockResolvedValue({
     data: { success: true, data: { user_id: 3, status: 'active' } },
   })
-  function AccessThenProducts() {
+  function AccessThenList() {
     const [saved, setSaved] = useState(false)
     return saved ? (
-      <GuardianResellerProductsDialog onClose={() => undefined} />
+      <GuardianResellerList />
     ) : (
       <GuardianResellerAccessDialog
         user={{ id: 3, username: 'new-agent' }}
@@ -162,14 +162,12 @@ it('refreshes the cached reseller list after granting access', async () => {
   }
   render(
     <QueryClientProvider client={client}>
-      <AccessThenProducts />
+      <AccessThenList />
     </QueryClientProvider>
   )
   await userEvent.type(await screen.findByLabelText('Reason'), 'Approved')
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  expect(
-    await screen.findByRole('combobox', { name: 'Select reseller' })
-  ).toBeVisible()
+  expect(await screen.findByText('new-agent')).toBeVisible()
 })
 
 it('shows prices but prevents editing when reseller sales are suspended', async () => {
@@ -354,15 +352,12 @@ it('selects a named reseller before editing their product supply prices', async 
       name: 'Transfer future renewal attribution',
     })
   ).not.toBeInTheDocument()
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Configure reseller products' })
+  await userEvent.type(
+    await screen.findByRole('textbox', { name: 'Search resellers' }),
+    'alice'
   )
-  const select = await screen.findByRole('combobox', {
-    name: 'Select reseller',
-  })
-  await userEvent.type(select, 'alice')
   await userEvent.click(
-    await screen.findByRole('option', { name: /alice-agent/ })
+    await screen.findByRole('button', { name: 'Products and supply prices' })
   )
   expect(await screen.findByText('Deployment')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
@@ -393,13 +388,124 @@ it('explains how to enable reseller access when the product selector has no rese
     data: { success: true, data: responses[url] ?? { items: [], total: 0 } },
   }))
   renderPanel(<GuardianResellerAdminPanel />)
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Configure reseller products' })
-  )
   expect(
     await screen.findByText(
       'No resellers yet. Enable Guardian reseller access in User management first.'
     )
   ).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+})
+
+it('previews the selected reseller tier before applying it', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: [
+        {
+          user_id: 7,
+          username: 'alice-agent',
+          display_name: 'Alice',
+          status: 'active',
+          tier: 0,
+          independent_products: 2,
+          unavailable_products: 0,
+        },
+      ],
+    },
+  })
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        token: 'preview-token',
+        resellers: 1,
+        independent: 2,
+        unavailable: 0,
+        before: [],
+        after: [],
+      },
+    },
+  })
+  renderPanel(<GuardianResellerList />)
+  await userEvent.click(
+    await screen.findByRole('checkbox', { name: 'Select alice-agent' })
+  )
+  const tiers = screen.getAllByRole('combobox', { name: 'Reseller tier' })
+  await userEvent.selectOptions(tiers[1], '2')
+  await userEvent.click(screen.getByRole('button', { name: 'Set tier' }))
+  expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+    'Independent prices and existing orders stay unchanged.'
+  )
+  expect(post).toHaveBeenCalledTimes(1)
+  expect(post.mock.calls[0][1]).toEqual({ tier: 2, reseller_ids: [7] })
+  await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+  expect(post.mock.calls[1][1]).toEqual({
+    tier: 2,
+    reseller_ids: [7],
+    preview_token: 'preview-token',
+  })
+})
+
+it('edits multiple tier prices and preserves fields when preview fails', async () => {
+  const { GuardianTierPrices } = await import('../components/admin/tier-prices')
+  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data: url.endsWith('/services')
+        ? [{ id: 1, title: 'Deployment', route: 'vps' }]
+        : [],
+    },
+  }))
+  const post = vi.spyOn(api, 'post').mockRejectedValue(new Error('offline'))
+  renderPanel(<GuardianTierPrices />)
+  const input = await screen.findByLabelText('Single / monthly · CNY')
+  await userEvent.type(input, '120.50')
+  await userEvent.click(
+    screen.getByRole('checkbox', { name: 'Authorized for sale' })
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Preview changes' }))
+  await waitFor(() => expect(post).toHaveBeenCalledOnce())
+  expect(input).toHaveValue('120.50')
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  expect(post.mock.calls[0][1]).toMatchObject({
+    tier: 1,
+    prices: [{ service_id: 1, granted: true, supply_cents: 12050 }],
+  })
+})
+
+it('excludes unassigned resellers from the following-tier filter', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: [
+        {
+          user_id: 7,
+          username: 'unassigned-agent',
+          status: 'active',
+          tier: 0,
+          independent_products: 0,
+        },
+        {
+          user_id: 8,
+          username: 'tier-agent',
+          status: 'active',
+          tier: 1,
+          independent_products: 0,
+        },
+      ],
+    },
+  })
+  renderPanel(<GuardianResellerList />)
+  await screen.findByRole('checkbox', { name: 'Select unassigned-agent' })
+  await userEvent.selectOptions(
+    screen.getByRole('combobox', { name: 'Supply source' }),
+    'tier'
+  )
+  expect(
+    screen.queryByRole('checkbox', { name: 'Select unassigned-agent' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('checkbox', { name: 'Select tier-agent' })
+  ).toBeVisible()
 })

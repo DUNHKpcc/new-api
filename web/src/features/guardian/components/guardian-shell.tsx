@@ -68,7 +68,7 @@ function GuardianHeader(props: { resellerCode?: string }) {
   const sections = useSectionLinks(props.resellerCode)
 
   return (
-    <header className='g-rule sticky top-0 z-40 border-b bg-[color-mix(in_srgb,var(--g-paper)_88%,transparent)] backdrop-blur-md'>
+    <header className='g-rule fixed inset-x-0 top-0 z-40 border-b bg-[color-mix(in_srgb,var(--g-paper)_88%,transparent)] backdrop-blur-md'>
       <div className='mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6 2xl:max-w-7xl'>
         <Link
           to='/guardian'
@@ -241,7 +241,7 @@ export function GuardianShell(props: {
   resellerCode?: string
 }) {
   return (
-    <div className='guardian-root relative isolate flex min-h-svh flex-col'>
+    <div className='guardian-root relative isolate flex min-h-svh flex-col pt-16'>
       <PixelField />
       <GuardianHeader resellerCode={props.resellerCode} />
       <main id='main-content' className='relative z-10 flex-1'>

@@ -37,6 +37,7 @@ func (f *GuardianFeatures) Scan(value any) error {
 }
 
 type GuardianService struct {
+	InvoiceEnabled        bool             `json:"invoice_enabled"`
 	ClaudeUltraPriceCents int64            `json:"claude_ultra_price_cents"`
 	ClaudeMaxPriceCents   int64            `json:"claude_max_price_cents"`
 	QuarterPriceCents     int64            `json:"quarter_price_cents"`
@@ -171,7 +172,9 @@ func (s GuardianService) PriceForPeriod(period string) (int64, string, error) {
 }
 
 type GuardianOrderRequest struct {
-	AddClaudeUltra            bool `json:"add_claude_ultra"`
+	InvoiceInformation        string `json:"invoice_information"`
+	DiscoveryChannel          string `json:"discovery_channel"`
+	AddClaudeUltra            bool   `json:"add_claude_ultra"`
 	renewalPreviousResellerID int
 	CustomerServiceID         int    `json:"customer_service_id"`
 	AcceptDirectRenewal       bool   `json:"accept_direct_renewal"`
@@ -190,6 +193,14 @@ type GuardianOrderRequest struct {
 }
 
 func (r *GuardianOrderRequest) Validate() error {
+	r.InvoiceInformation = strings.TrimSpace(r.InvoiceInformation)
+	if len([]rune(r.InvoiceInformation)) > 2000 {
+		return errors.New("发票信息不能超过 2000 字")
+	}
+
+	if !slices.Contains([]string{"linuxdo", "github", "bilibili", "qq", "other"}, r.DiscoveryChannel) {
+		return errors.New("请选择认识我们的渠道")
+	}
 	if r.AddClaudeMax && r.AddClaudeUltra {
 		return errors.New("Claude MAX 与 Ultra 首月加购只能选择一项")
 	}
@@ -215,6 +226,9 @@ func (r *GuardianOrderRequest) Validate() error {
 }
 
 type GuardianServiceOrder struct {
+	InvoiceInformation        string `json:"invoice_information" gorm:"type:text"`
+	DiscoveryChannel          string `json:"discovery_channel" gorm:"type:varchar(16)"`
+	ReceiptNotification       bool   `json:"-"`
 	ClaudeUltraPriceCents     int64  `json:"claude_ultra_price_cents"`
 	RenewalPreviousResellerID int    `json:"-"`
 	CustomerServiceID         int    `json:"customer_service_id" gorm:"index"`
@@ -277,6 +291,9 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		if err := tx.First(&service, req.ServiceID).Error; err != nil {
 			return errors.New("服务不存在")
 		}
+		if req.InvoiceInformation != "" && !service.InvoiceEnabled {
+			return errors.New("该商品暂不支持开票")
+		}
 		if !service.Enabled || service.PriceCents < 1 {
 			return errors.New("服务已下架或价格无效")
 		}
@@ -318,7 +335,7 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 			}
 		}
 		now := time.Now().Unix()
-		*order = GuardianServiceOrder{RenewalPreviousResellerID: req.renewalPreviousResellerID, CustomerServiceID: req.CustomerServiceID, ResellerCode: req.ResellerCode, TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: amount, BillingPeriod: period, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
+		*order = GuardianServiceOrder{InvoiceInformation: req.InvoiceInformation, DiscoveryChannel: req.DiscoveryChannel, ReceiptNotification: true, RenewalPreviousResellerID: req.renewalPreviousResellerID, CustomerServiceID: req.CustomerServiceID, ResellerCode: req.ResellerCode, TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: amount, BillingPeriod: period, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
 		if req.AddClaudeUltra {
 			order.ClaudeUltraPriceCents = addonPrice
 		} else {
@@ -522,11 +539,27 @@ func UpdateGuardianOrder(id, actorID int, status, note string) (*GuardianService
 	return order, err
 }
 
-func ListUserGuardianOrders(userID, page, pageSize int) ([]GuardianServiceOrder, int64, error) {
+type GuardianOrderFilter struct {
+	OrderNumber   string `form:"order_number" binding:"max=64"`
+	CreatedAfter  int64  `form:"created_after" binding:"gte=0"`
+	CreatedBefore int64  `form:"created_before" binding:"gte=0"`
+}
+
+func ListUserGuardianOrders(userID, page, pageSize int, filter GuardianOrderFilter) ([]GuardianServiceOrder, int64, error) {
 	if err := expireGuardianOrders(DB, userID); err != nil {
 		return nil, 0, err
 	}
 	query := DB.Model(&GuardianServiceOrder{}).Where("user_id = ?", userID)
+	if filter.OrderNumber != "" {
+		query = query.Where("trade_no LIKE ?", "%"+filter.OrderNumber+"%")
+	}
+	if filter.CreatedAfter > 0 {
+		query = query.Where("created_at >= ?", filter.CreatedAfter)
+	}
+	if filter.CreatedBefore > 0 {
+		query = query.Where("created_at < ?", filter.CreatedBefore)
+	}
+
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -538,11 +571,18 @@ func ListUserGuardianOrders(userID, page, pageSize int) ([]GuardianServiceOrder,
 	return orders, total, nil
 }
 
-func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomaliesOnly bool) ([]AdminGuardianOrder, int64, error) {
+func ListAdminGuardianOrders(status, keyword string, page, pageSize int, anomaliesOnly bool, discovery string) ([]AdminGuardianOrder, int64, error) {
 	if err := expireGuardianOrders(DB, 0); err != nil {
 		return nil, 0, err
 	}
 	query := DB.Model(&GuardianServiceOrder{})
+	if discovery != "" {
+		if discovery == "unrecorded" {
+			query = query.Where("discovery_channel IS NULL OR discovery_channel = ?", "")
+		} else {
+			query = query.Where("discovery_channel = ?", discovery)
+		}
+	}
 	if anomaliesOnly {
 		query = query.Where("has_payment_anomaly = ?", true)
 	}

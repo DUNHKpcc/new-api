@@ -17,10 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ShieldAlert } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -32,14 +32,17 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Textarea } from '@/components/ui/textarea'
 import { submitPaymentForm } from '@/features/wallet/lib/payment'
 import { toIntlLocale } from '@/i18n/languages'
 import { handleServerError } from '@/lib/handle-server-error'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { createGuardianOrder } from '../api'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny, guardianPeriodPrice } from '../lib/price'
 import { guardianOrderSchema, type GuardianOrderForm } from '../lib/schema'
+import { resellerRead } from '../reseller-api'
 import type {
   GuardianBillingPeriod,
   GuardianPayMethod,
@@ -47,6 +50,7 @@ import type {
 } from '../types'
 import { ClaudeSubscriptionAddon } from './claude-subscription-addon'
 import { GuardianContactFields } from './contact-fields'
+import { DiscoveryOptions } from './discovery-options'
 
 const FORM_ID = 'guardian-checkout'
 
@@ -64,6 +68,8 @@ export function CheckoutDialog(props: {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
+  const email = useAuthStore((state) => state.auth.user?.email)
+  const maskedEmail = email ? email.replace(/^(.).*(@.*)$/, '$1***$2') : ''
   const navigate = useNavigate()
   const [accepted, setAccepted] = useState(false)
   const needsConsent =
@@ -87,8 +93,26 @@ export function CheckoutDialog(props: {
       contact_type: 'telegram',
       contact: '',
       note: '',
+      invoice_information: '',
     },
   })
+  const previous = useQuery({
+    queryKey: ['guardian', 'checkout-context'],
+    queryFn: () =>
+      resellerRead<{
+        discovery_channel: GuardianOrderForm['discovery_channel'] | ''
+      }>('/checkout-context'),
+    retry: false,
+    meta: { errorToast: false },
+  })
+  useEffect(() => {
+    if (
+      previous.data?.discovery_channel &&
+      !form.getFieldState('discovery_channel').isDirty
+    ) {
+      form.setValue('discovery_channel', previous.data.discovery_channel)
+    }
+  }, [previous.data, form])
   const checkout = useMutation({
     mutationFn: (values: GuardianOrderForm) =>
       createGuardianOrder({
@@ -104,6 +128,9 @@ export function CheckoutDialog(props: {
             }
           : {}),
         ...values,
+        invoice_information: props.service.invoice_enabled
+          ? values.invoice_information || undefined
+          : undefined,
         ...(props.service.route === 'mac_mini'
           ? {
               billing_period: props.billingPeriod ?? 'monthly',
@@ -251,6 +278,56 @@ export function CheckoutDialog(props: {
             </span>
           </label>
         )}
+        {props.service.invoice_enabled && (
+          <Field data-invalid={!!errors.invoice_information}>
+            <FieldLabel htmlFor='guardian-invoice-information'>
+              {t('Invoice information')}
+            </FieldLabel>
+            <Textarea
+              id='guardian-invoice-information'
+              aria-invalid={!!errors.invoice_information}
+              maxLength={2000}
+              rows={4}
+              placeholder={t(
+                'Enter your invoice information if you need an invoice; otherwise leave blank.'
+              )}
+              {...form.register('invoice_information')}
+            />
+            {errors.invoice_information && (
+              <FieldError>
+                {t('Message must be at most 2000 characters')}
+              </FieldError>
+            )}
+          </Field>
+        )}
+        <Field data-invalid={!!errors.discovery_channel}>
+          <FieldLabel htmlFor='guardian-discovery'>
+            {t('How did you hear about us?')}
+          </FieldLabel>
+          <NativeSelect
+            id='guardian-discovery'
+            aria-invalid={!!errors.discovery_channel}
+            defaultValue=''
+            {...form.register('discovery_channel')}
+          >
+            <NativeSelectOption value='' disabled>
+              {t('Please select')}
+            </NativeSelectOption>
+            <DiscoveryOptions />
+          </NativeSelect>
+          {errors.discovery_channel && (
+            <FieldError>{t('Choose how you heard about us')}</FieldError>
+          )}
+        </Field>
+        <p className='text-muted-foreground text-sm'>
+          {maskedEmail
+            ? t('Your payment receipt will be emailed to {{email}}.', {
+                email: maskedEmail,
+              })
+            : t(
+                'View your receipt in My orders after payment. Bind an account email to receive it by email.'
+              )}
+        </p>
         <FormProvider {...form}>
           <GuardianContactFields />
         </FormProvider>

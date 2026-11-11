@@ -54,6 +54,14 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/site-docs-admin":                   accessTokenSessionRule,
 	"PUT /api/site-docs-admin/:slug":              accessTokenSessionRule,
 	// Guardian purchases and administration use dashboard sessions.
+	"GET /api/guardian/checkout-context":                accessTokenSessionRule,
+	"GET /api/guardian/orders/:id/receipt":              accessTokenSessionRule,
+	"POST /api/guardian/orders/:id/receipt/email":       accessTokenSessionRule,
+	"GET /api/guardian/admin/orders/:id/receipt":        accessTokenSessionRule,
+	"POST /api/guardian/admin/orders/:id/receipt/email": accessTokenSessionRule,
+	"GET /api/guardian/admin/tier-supplies":             accessTokenSessionRule,
+	"POST /api/guardian/admin/tier-supplies":            accessTokenSessionRule,
+
 	"GET /api/guardian/reseller/offers":                        accessTokenSessionRule,
 	"PUT /api/guardian/reseller/offers/:service_id":            accessTokenSessionRule,
 	"GET /api/guardian/reseller/orders":                        accessTokenSessionRule,

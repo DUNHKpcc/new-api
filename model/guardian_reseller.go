@@ -11,6 +11,7 @@ import (
 )
 
 type GuardianReseller struct {
+	Tier      int    `json:"tier"`
 	UserID    int    `json:"user_id" gorm:"primaryKey;autoIncrement:false"`
 	Status    string `json:"status" gorm:"type:varchar(16);not null"`
 	Code      string `json:"code" gorm:"type:varchar(32);not null;uniqueIndex"`
@@ -47,6 +48,7 @@ func recordGuardianResellerOperation(tx *gorm.DB, actorID, resellerID int, actio
 }
 
 type GuardianResellerAccessRequest struct {
+	Tier   int    `json:"tier"`
 	Status string `json:"status"`
 	Reason string `json:"reason"`
 }
@@ -95,7 +97,17 @@ func SetGuardianResellerAccess(userID, actorID int, request GuardianResellerAcce
 			if request.Status != "active" {
 				return errors.New("该用户尚未开通 Guardian 代理")
 			}
-			reseller = GuardianReseller{UserID: userID, Status: request.Status, Code: common.GetRandomString(24), CreatedBy: actorID, CreatedAt: now, UpdatedAt: now}
+			if request.Tier < 1 || request.Tier > 3 {
+				return errors.New("请选择代理等级")
+			}
+			var count int64
+			if err := tx.Model(&GuardianTierSupply{}).Where("tier = ?", request.Tier).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return errors.New("请先配置该等级供货价")
+			}
+			reseller = GuardianReseller{Tier: request.Tier, UserID: userID, Status: request.Status, Code: common.GetRandomString(24), CreatedBy: actorID, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&reseller).Error; err != nil {
 				return err
 			}
@@ -111,10 +123,13 @@ func SetGuardianResellerAccess(userID, actorID int, request GuardianResellerAcce
 }
 
 type GuardianResellerSummary struct {
-	UserID      int    `json:"user_id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Status      string `json:"status"`
+	IndependentProducts int    `json:"independent_products"`
+	UnavailableProducts int    `json:"unavailable_products"`
+	Tier                int    `json:"tier"`
+	UserID              int    `json:"user_id"`
+	Username            string `json:"username"`
+	DisplayName         string `json:"display_name"`
+	Status              string `json:"status"`
 }
 
 func ListGuardianResellers() ([]GuardianResellerSummary, error) {
@@ -122,7 +137,28 @@ func ListGuardianResellers() ([]GuardianResellerSummary, error) {
 	err := DB.Table("guardian_resellers AS reseller").
 		Joins("JOIN users ON users.id = reseller.user_id").
 		Where("users.deleted_at IS NULL").
-		Select("reseller.user_id, reseller.status, users.username, users.display_name").
+		Select("reseller.user_id, reseller.status, reseller.tier, users.username, users.display_name").
 		Order("reseller.user_id DESC").Scan(&items).Error
-	return items, err
+	if err != nil {
+		return nil, err
+	}
+	setting, err := GetGuardianResellerSetting()
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		offers, err := effectiveGuardianOffers(DB, items[i].UserID)
+		if err != nil {
+			return nil, err
+		}
+		for _, offer := range offers {
+			if !offer.FollowTier {
+				items[i].IndependentProducts++
+			}
+			if offer.Listed && (setting == nil || guardianOfferNeedsRetailUpdate(offer, setting.FeeBPS)) {
+				items[i].UnavailableProducts++
+			}
+		}
+	}
+	return items, nil
 }

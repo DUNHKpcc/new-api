@@ -521,3 +521,47 @@ html .guardian-root.guardian-root [data-slot='button'].g-pill {
     0.8% 85.8%
   );
 }
+
+/* Keep the moving selection behind the existing keyboard-focusable tabs. */
+.g-service-tabs [data-slot='tabs-trigger'] {
+  z-index: 1;
+}
+.g-service-tabs [data-slot='tabs-trigger'][data-active] {
+  background: transparent;
+  box-shadow: none;
+}
+.g-service-tab-indicator {
+  position: absolute;
+  top: var(--active-tab-top);
+  left: var(--active-tab-left);
+  width: var(--active-tab-width);
+  height: var(--active-tab-height);
+  border-radius: 0.375rem;
+  background: var(--g-paper-raised);
+  box-shadow: 0 1px 3px #00000014;
+  pointer-events: none;
+  transition:
+    left 220ms ease,
+    width 220ms ease,
+    top 220ms ease;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .g-service-panel {
+    animation: guardian-service-enter 220ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-service-tab-indicator {
+    transition: none;
+  }
+}
+@keyframes guardian-service-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

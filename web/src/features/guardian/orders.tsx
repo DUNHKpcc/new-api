@@ -18,18 +18,28 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { DatePicker } from '@/components/date-picker'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from '@/components/ui/carousel'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 
-import { listMyGuardianOrders } from './api'
+import { listMyGuardianOrders, type GuardianOrderFilter } from './api'
 import { GuardianCustomerServices } from './components/customer-services'
 import { GuardianShell } from './components/guardian-shell'
 import { OrderCard } from './components/order-card'
@@ -75,9 +85,32 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const [page, setPage] = useState(1)
+  const [orderNumber, setOrderNumber] = useState('')
+  const [startDate, setStartDate] = useState<Date>()
+  const [endDate, setEndDate] = useState<Date>()
+  const [filter, setFilter] = useState<GuardianOrderFilter>({})
+  const invalidRange = !!(startDate && endDate && startDate > endDate)
+  const filtered = !!(
+    filter.order_number ||
+    filter.created_after ||
+    filter.created_before
+  )
+  const [carousel, setCarousel] = useState<CarouselApi>()
+  const [selected, setSelected] = useState(0)
+  useEffect(() => {
+    if (!carousel) return
+    const syncSelection = () => setSelected(carousel.selectedScrollSnap())
+    syncSelection()
+    carousel.on('select', syncSelection)
+    carousel.on('reInit', syncSelection)
+    return () => {
+      carousel.off('select', syncSelection)
+      carousel.off('reInit', syncSelection)
+    }
+  }, [carousel])
   const orders = useQuery({
-    queryKey: [...GUARDIAN_QUERY_KEYS.myOrders, page],
-    queryFn: () => listMyGuardianOrders(page, PAGE_SIZE),
+    queryKey: [...GUARDIAN_QUERY_KEYS.myOrders, page, filter],
+    queryFn: () => listMyGuardianOrders(page, PAGE_SIZE, filter),
     refetchInterval: (query) =>
       query.state.data?.items.some((order) =>
         WATCHED_STATUSES.has(order.status)
@@ -90,7 +123,7 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
 
   return (
     <GuardianShell>
-      <div className='mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:py-20'>
+      <div className='mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:py-10'>
         <p className='g-eyebrow'>{t('Hands-on services')}</p>
         <h1 className='g-display mt-4 text-[2.5rem] sm:text-5xl'>
           {t('My orders')}
@@ -104,11 +137,79 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
         <GuardianCustomerServices />
         {props.payResult && <PayResultBanner result={props.payResult} />}
 
-        <div className='mt-10 space-y-5' aria-busy={orders.isFetching}>
-          {orders.isPending &&
-            [0, 1].map((key) => (
-              <Skeleton key={key} className='h-64 rounded-2xl' />
-            ))}
+        <form
+          className='mt-8 grid gap-3 sm:grid-cols-2'
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (invalidRange) return
+            setPage(1)
+            setSelected(0)
+            setFilter({
+              order_number: orderNumber.trim() || undefined,
+              created_after: startDate
+                ? Math.floor(startDate.getTime() / 1000)
+                : undefined,
+              created_before: endDate
+                ? Math.floor(
+                    new Date(
+                      endDate.getFullYear(),
+                      endDate.getMonth(),
+                      endDate.getDate() + 1
+                    ).getTime() / 1000
+                  )
+                : undefined,
+            })
+          }}
+        >
+          <Input
+            className='sm:col-span-2'
+            aria-label={t('Order number')}
+            placeholder={t('Order number')}
+            maxLength={64}
+            value={orderNumber}
+            onChange={(e) => setOrderNumber(e.target.value)}
+          />
+          <DatePicker
+            ariaLabel={t('Order start date')}
+            placeholder={t('Order start date')}
+            selected={startDate}
+            onSelect={setStartDate}
+            className='w-full'
+          />
+          <DatePicker
+            ariaLabel={t('Order end date')}
+            placeholder={t('Order end date')}
+            selected={endDate}
+            onSelect={setEndDate}
+            className='w-full'
+          />
+          {invalidRange && (
+            <p role='alert' className='text-destructive text-sm sm:col-span-2'>
+              {t('Start date must not be after end date.')}
+            </p>
+          )}
+          <div className='flex gap-2 sm:col-span-2'>
+            <Button type='submit' disabled={invalidRange}>
+              {t('Search')}
+            </Button>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => {
+                setOrderNumber('')
+                setStartDate(undefined)
+                setEndDate(undefined)
+                setFilter({})
+                setPage(1)
+                setSelected(0)
+              }}
+            >
+              {t('Reset')}
+            </Button>
+          </div>
+        </form>
+        <div className='mt-6 space-y-5' aria-busy={orders.isFetching}>
+          {orders.isPending && <Skeleton className='h-64 rounded-2xl' />}
 
           {orders.isError && (
             <ErrorState
@@ -119,8 +220,12 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
 
           {orders.isSuccess && orders.data.items.length === 0 && (
             <EmptyState
-              title={t('No orders yet')}
-              description={t('Book a setup service and it will show up here.')}
+              title={filtered ? t('No results found') : t('No orders yet')}
+              description={
+                filtered
+                  ? undefined
+                  : t('Book a setup service and it will show up here.')
+              }
               action={
                 <Button render={<Link to='/guardian/services' />}>
                   {t('Browse services')}
@@ -131,14 +236,44 @@ export function GuardianOrders(props: { payResult?: GuardianPayResult }) {
             />
           )}
 
-          {orders.isSuccess &&
-            orders.data.items.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                queue={orders.data.queue}
-              />
-            ))}
+          {orders.isSuccess && orders.data.items.length > 0 && (
+            <Carousel
+              key={`${page}-${filter.order_number ?? ''}-${filter.created_after ?? ''}-${filter.created_before ?? ''}`}
+              setApi={setCarousel}
+              opts={{ align: 'start' }}
+              aria-label={t('My orders')}
+            >
+              <div className='mb-4 flex items-center justify-between gap-4'>
+                <span
+                  className='text-sm text-[var(--g-ink-soft)]'
+                  aria-live='polite'
+                >
+                  {t('Slide {{current}} of {{total}}', {
+                    current: formatNumber(
+                      (page - 1) * PAGE_SIZE + selected + 1,
+                      locale
+                    ),
+                    total: formatNumber(total, locale),
+                  })}
+                </span>
+                <div className='flex gap-2'>
+                  <CarouselPrevious className='static translate-y-0' />
+                  <CarouselNext className='static translate-y-0' />
+                </div>
+              </div>
+              <CarouselContent className='items-start'>
+                {orders.data.items.map((order, index) => (
+                  <CarouselItem
+                    key={order.id}
+                    inert={index !== selected}
+                    aria-hidden={index !== selected}
+                  >
+                    <OrderCard order={order} queue={orders.data.queue} />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+            </Carousel>
+          )}
         </div>
 
         {orders.isSuccess && pageCount > 1 && (

@@ -48,6 +48,7 @@ import { GUARDIAN_QUERY_KEYS } from '../../constants'
 import { useGuardianLabels } from '../../hooks/use-guardian-labels'
 import { formatCny } from '../../lib/price'
 import type { AdminGuardianOrder, GuardianOrderStatus } from '../../types'
+import { DiscoveryOptions, DiscoveryLabel } from '../discovery-options'
 import { OrderStatusBadge } from '../order-status-badge'
 import { GuardianOrderDialog } from './order-dialog'
 
@@ -60,6 +61,7 @@ export function GuardianOrdersPanel() {
   const queryClient = useQueryClient()
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [status, setStatus] = useState<GuardianOrderStatus | ''>('')
+  const [discovery, setDiscovery] = useState('')
   const [anomaliesOnly, setAnomaliesOnly] = useState(false)
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -71,6 +73,7 @@ export function GuardianOrdersPanel() {
       status,
       keyword,
       anomaliesOnly,
+      discovery,
     ],
     queryFn: () =>
       listAdminGuardianOrders({
@@ -79,6 +82,7 @@ export function GuardianOrdersPanel() {
         status,
         keyword,
         payment_anomaly: anomaliesOnly,
+        discovery_channel: discovery,
       }),
   })
   const { table } = useDataTable({
@@ -126,6 +130,20 @@ export function GuardianOrdersPanel() {
             </NativeSelectOption>
           ))}
         </NativeSelect>
+        <NativeSelect
+          aria-label={t('How did you hear about us?')}
+          value={discovery}
+          onChange={(e) => {
+            setDiscovery(e.target.value)
+            resetPage()
+          }}
+        >
+          <NativeSelectOption value=''>{t('All sources')}</NativeSelectOption>
+          <NativeSelectOption value='unrecorded'>
+            {t('Not recorded')}
+          </NativeSelectOption>
+          <DiscoveryOptions />
+        </NativeSelect>
         <Button
           type='button'
           variant={anomaliesOnly ? 'default' : 'outline'}
@@ -166,6 +184,7 @@ export function GuardianOrdersPanel() {
               <TableRow>
                 <TableHead>{t('Order number')}</TableHead>
                 <TableHead>{t('Order source')}</TableHead>
+                <TableHead>{t('Discovery channel')}</TableHead>
                 <TableHead>{t('User')}</TableHead>
                 <TableHead>{t('Service')}</TableHead>
                 <TableHead>{t('Amount')}</TableHead>
@@ -188,6 +207,9 @@ export function GuardianOrdersPanel() {
                         ? t('Reseller')
                         : t('Platform direct')}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DiscoveryLabel value={order.discovery_channel} />
                   </TableCell>
                   <TableCell>
                     <div>{order.username}</div>

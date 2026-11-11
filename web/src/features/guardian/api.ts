@@ -63,11 +63,20 @@ export async function createGuardianOrder(request: GuardianOrderRequest) {
   ).data
 }
 
-export async function listMyGuardianOrders(p: number, page_size: number) {
+export interface GuardianOrderFilter {
+  order_number?: string
+  created_after?: number
+  created_before?: number
+}
+export async function listMyGuardianOrders(
+  p: number,
+  page_size: number,
+  filter: GuardianOrderFilter = {}
+) {
   return requireServerSuccess(
     (
       await api.get<Response<GuardianMyOrders>>(`${base}/orders/self`, {
-        params: { p, page_size },
+        params: { p, page_size, ...filter },
       })
     ).data
   ).data
@@ -117,6 +126,7 @@ export async function listAdminGuardianOrders(params: {
   page_size: number
   status: GuardianOrderStatus | ''
   keyword: string
+  discovery_channel?: string
   payment_anomaly?: boolean
 }) {
   return requireServerSuccess(

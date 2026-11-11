@@ -45,16 +45,22 @@ export function SiteDocs(props: { article?: string }) {
   }, [catalog.data, search])
 
   return (
-    <PublicLayout>
-      <div className='mx-auto w-full max-w-[1440px] py-8 sm:py-12'>
-        <h1 className='mb-8 text-3xl font-semibold'>{t('Docs')}</h1>
+    <PublicLayout showMainContainer={false}>
+      <div className='container mx-auto px-4 pt-36 pb-4 lg:h-svh lg:overflow-hidden'>
+        <div className='bg-background fixed inset-x-0 top-16 z-20 border-b'>
+          <div className='container px-4'>
+            <h1 className='mx-auto flex h-16 max-w-[1440px] items-center text-3xl font-semibold'>
+              {t('Docs')}
+            </h1>
+          </div>
+        </div>
         {catalog.isPending && <LoadingState />}
         {catalog.isError && (
           <ErrorState onRetry={() => void catalog.refetch()} />
         )}
         {catalog.isSuccess && (
-          <div className='grid min-w-0 gap-6 lg:grid-cols-[200px_minmax(0,1fr)_160px] xl:grid-cols-[240px_minmax(0,1fr)_190px] xl:gap-10'>
-            <aside className='min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100svh-8rem)] lg:self-start lg:overflow-y-auto'>
+          <div className='grid min-w-0 gap-6 lg:h-full lg:min-h-0 lg:grid-cols-[200px_minmax(0,1fr)_160px] xl:grid-cols-[240px_minmax(0,1fr)_190px] xl:gap-10'>
+            <aside className='min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'>
               <Input
                 aria-label={t('Search documents')}
                 placeholder={t('Search documents')}

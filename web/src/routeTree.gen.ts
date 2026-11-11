@@ -34,6 +34,7 @@ import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe
 import { Route as GuardianIndexRouteImport } from './routes/guardian/index'
 import { Route as GuardianAccountStatisticsRouteImport } from './routes/guardian/account-statistics'
 import { Route as GuardianOrdersRouteImport } from './routes/guardian/orders'
+import { Route as GuardianReceiptRouteImport } from './routes/guardian/receipt'
 import { Route as GuardianResellerRouteImport } from './routes/guardian/reseller'
 import { Route as GuardianServicesRouteImport } from './routes/guardian/services'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
@@ -211,6 +212,11 @@ const GuardianAccountStatisticsRoute =
 const GuardianOrdersRoute = GuardianOrdersRouteImport.update({
   id: '/guardian/orders',
   path: '/guardian/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuardianReceiptRoute = GuardianReceiptRouteImport.update({
+  id: '/guardian/receipt',
+  path: '/guardian/receipt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuardianResellerRoute = GuardianResellerRouteImport.update({
@@ -541,6 +547,7 @@ export interface FileRoutesByFullPath {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/guardian/account-statistics': typeof GuardianAccountStatisticsRoute
   '/guardian/orders': typeof GuardianOrdersRoute
+  '/guardian/receipt': typeof GuardianReceiptRoute
   '/guardian/reseller': typeof GuardianResellerRoute
   '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -618,6 +625,7 @@ export interface FileRoutesByTo {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/guardian/account-statistics': typeof GuardianAccountStatisticsRoute
   '/guardian/orders': typeof GuardianOrdersRoute
+  '/guardian/receipt': typeof GuardianReceiptRoute
   '/guardian/reseller': typeof GuardianResellerRoute
   '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -699,6 +707,7 @@ export interface FileRoutesById {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/guardian/account-statistics': typeof GuardianAccountStatisticsRoute
   '/guardian/orders': typeof GuardianOrdersRoute
+  '/guardian/receipt': typeof GuardianReceiptRoute
   '/guardian/reseller': typeof GuardianResellerRoute
   '/guardian/services': typeof GuardianServicesRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -779,6 +788,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/guardian/account-statistics'
     | '/guardian/orders'
+    | '/guardian/receipt'
     | '/guardian/reseller'
     | '/guardian/services'
     | '/oauth/$provider'
@@ -856,6 +866,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/guardian/account-statistics'
     | '/guardian/orders'
+    | '/guardian/receipt'
     | '/guardian/reseller'
     | '/guardian/services'
     | '/oauth/$provider'
@@ -936,6 +947,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/guardian/account-statistics'
     | '/guardian/orders'
+    | '/guardian/receipt'
     | '/guardian/reseller'
     | '/guardian/services'
     | '/oauth/$provider'
@@ -1008,6 +1020,7 @@ export interface RootRouteChildren {
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   GuardianAccountStatisticsRoute: typeof GuardianAccountStatisticsRoute
   GuardianOrdersRoute: typeof GuardianOrdersRoute
+  GuardianReceiptRoute: typeof GuardianReceiptRoute
   GuardianResellerRoute: typeof GuardianResellerRoute
   GuardianServicesRoute: typeof GuardianServicesRoute
   OauthProviderRoute: typeof OauthProviderRoute
@@ -1196,6 +1209,13 @@ declare module '@tanstack/react-router' {
       path: '/guardian/orders'
       fullPath: '/guardian/orders'
       preLoaderRoute: typeof GuardianOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guardian/receipt': {
+      id: '/guardian/receipt'
+      path: '/guardian/receipt'
+      fullPath: '/guardian/receipt'
+      preLoaderRoute: typeof GuardianReceiptRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/guardian/reseller': {
@@ -1745,6 +1765,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   GuardianAccountStatisticsRoute: GuardianAccountStatisticsRoute,
   GuardianOrdersRoute: GuardianOrdersRoute,
+  GuardianReceiptRoute: GuardianReceiptRoute,
   GuardianResellerRoute: GuardianResellerRoute,
   GuardianServicesRoute: GuardianServicesRoute,
   OauthProviderRoute: OauthProviderRoute,

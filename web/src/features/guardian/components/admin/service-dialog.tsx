@@ -71,6 +71,7 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
       delivery_note: '',
       badge: '',
       route: 'any',
+      invoice_enabled: false,
       enabled: true,
       sort_order: 0,
     }
@@ -100,6 +101,7 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     delivery_note: service.delivery_note,
     badge: service.badge,
     route: service.route,
+    invoice_enabled: service.invoice_enabled ?? false,
     enabled: service.enabled,
     sort_order: service.sort_order,
   }
@@ -150,6 +152,7 @@ export function GuardianServiceDialog(props: {
           delivery_note: values.delivery_note,
           badge: values.badge,
           route: values.route,
+          invoice_enabled: values.invoice_enabled ?? false,
           enabled: values.enabled,
           sort_order: values.sort_order,
         },
@@ -503,6 +506,22 @@ export function GuardianServiceDialog(props: {
               {...form.register('sort_order', { valueAsNumber: true })}
             />
             {fieldError(errors.sort_order?.message)}
+          </Field>
+          <Field orientation='horizontal'>
+            <Controller
+              control={form.control}
+              name='invoice_enabled'
+              render={({ field }) => (
+                <Switch
+                  id='guardian-invoice-enabled'
+                  checked={field.value ?? false}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <FieldLabel htmlFor='guardian-invoice-enabled'>
+              {t('Supports invoicing')}
+            </FieldLabel>
           </Field>
           <Field orientation='horizontal' className='h-8 items-center'>
             <Controller

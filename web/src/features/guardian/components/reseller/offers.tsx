@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -32,14 +32,21 @@ import {
   resellerWrite,
   type ResellerOffers,
 } from '../../reseller-api'
+import {
+  TierConfirmation,
+  type TierChange,
+  type TierPreview,
+} from '../admin/tier-prices'
 import { ResellerActionDialog, type ResellerAction } from './action-dialog'
 
 export function ResellerOffersPanel({
   userId,
   suspended = false,
+  tier = 0,
 }: {
   userId?: number
   suspended?: boolean
+  tier?: number
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -47,6 +54,15 @@ export function ResellerOffersPanel({
   const query = useQuery({
     queryKey: ['guardian', 'offers', userId ?? 'self'],
     queryFn: () => resellerRead<ResellerOffers>(path),
+  })
+  const [confirmation, setConfirmation] = useState<{
+    change: TierChange
+    preview: TierPreview
+  } | null>(null)
+  const preview = useMutation({
+    mutationFn: (change: TierChange) =>
+      resellerWrite<TierPreview>('/admin/tier-supplies', change, 'post'),
+    onSuccess: (result, change) => setConfirmation({ change, preview: result }),
   })
   const [action, setAction] = useState<ResellerAction | null>(null)
   if (query.isPending) return <LoadingState />
@@ -71,6 +87,36 @@ export function ResellerOffersPanel({
         emptyContent={t('No authorized products')}
         columns={[
           { id: 'title', header: t('Service'), cell: (s) => s.title },
+          {
+            id: 'source',
+            header: t('Supply source'),
+            cell: (s) => {
+              const offer = query.data.offers.find((o) => o.service_id === s.id)
+              return (
+                <div>
+                  {offer?.follow_tier
+                    ? t('Following tier')
+                    : t('Independent price')}
+                  {userId && tier > 0 && !offer?.follow_tier && (
+                    <Button
+                      variant='ghost'
+                      disabled={preview.isPending}
+                      onClick={() =>
+                        preview.mutate({
+                          tier,
+                          reseller_ids: [userId],
+                          service_ids: [s.id],
+                          restore: true,
+                        })
+                      }
+                    >
+                      {t('Restore tier prices')}
+                    </Button>
+                  )}
+                </div>
+              )
+            },
+          },
           {
             id: 'supply',
             header: t('Supply price'),
@@ -176,6 +222,16 @@ export function ResellerOffersPanel({
           },
         ]}
       />
+      {confirmation && (
+        <TierConfirmation
+          {...confirmation}
+          onClose={() => setConfirmation(null)}
+          onSaved={() => {
+            setConfirmation(null)
+            void query.refetch()
+          }}
+        />
+      )}
       {action && (
         <ResellerActionDialog action={action} onClose={() => setAction(null)} />
       )}

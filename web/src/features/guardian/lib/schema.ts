@@ -28,13 +28,21 @@ import { yuanToCents } from './price'
 const SECRET_PATTERN =
   /(-----BEGIN [A-Z ]*PRIVATE KEY-----|ssh-(rsa|ed25519)\s+AAAA|\b(vmess|vless|trojan|ss|ssr|hysteria2?|tuic):\/\/|\bsk-[A-Za-z0-9_-]{16,}|(\b(password|passwd|pwd)|密码|密碼)\s*[:：=])/i
 
-export function looksLikeSecret(value: string): boolean {
+function looksLikeSecret(value: string): boolean {
   return SECRET_PATTERN.test(value)
 }
 
 const SECRET_MESSAGE = 'Do not include passwords, keys or subscription links'
 
 export const guardianOrderSchema = z.object({
+  invoice_information: z
+    .string()
+    .trim()
+    .max(2000, 'Message must be at most 2000 characters')
+    .optional(),
+  discovery_channel: z.enum(['linuxdo', 'github', 'bilibili', 'qq', 'other'], {
+    error: 'Choose how you heard about us',
+  }),
   payment_method: z.string().min(1, 'Choose a payment method'),
   route: z.enum(['local', 'vm', 'vps', 'unsure', 'mac_mini']),
   os: z.enum(['macos', 'windows', 'linux', 'other']),
@@ -112,6 +120,7 @@ export const guardianServiceSchema = z.object({
     .max(128, 'Delivery note must be at most 128 characters'),
   badge: z.string().trim().max(32, 'Badge must be at most 32 characters'),
   route: z.enum(['any', 'local', 'vm', 'vps', 'mac_mini']),
+  invoice_enabled: z.boolean().optional(),
   enabled: z.boolean(),
   sort_order: z
     .number({ message: 'Enter a whole number' })

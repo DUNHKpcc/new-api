@@ -21,6 +21,7 @@ import { describe, expect, it } from 'vitest'
 import { guardianOrderSchema } from '../lib/schema'
 
 const validOrder = {
+  discovery_channel: 'github',
   payment_method: 'alipay',
   route: 'vps',
   os: 'macos',
@@ -54,4 +55,13 @@ describe('guardianOrderSchema', () => {
     expect(result.success).toBe(false)
     expect(result.error?.issues[0]?.message).toBe('Enter how we can reach you')
   })
+})
+
+it('requires a known discovery channel', () => {
+  for (const discovery_channel of ['', 'unknown', undefined]) {
+    expect(
+      guardianOrderSchema.safeParse({ ...validOrder, discovery_channel })
+        .success
+    ).toBe(false)
+  }
 })

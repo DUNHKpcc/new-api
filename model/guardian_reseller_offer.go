@@ -38,6 +38,7 @@ func SaveGuardianResellerSetting(actorID int, feeBPS int64) error {
 }
 
 type GuardianResellerOffer struct {
+	FollowTier         bool  `json:"follow_tier"`
 	UltraSupplyCents   int64 `json:"ultra_supply_cents"`
 	UltraRetailCents   int64 `json:"ultra_retail_cents"`
 	ID                 int   `json:"id"`
@@ -96,7 +97,7 @@ func SaveGuardianSupply(resellerID, serviceID, actorID int, req GuardianSupplyRe
 			return errors.New("部署服务不支持周期及订阅加购供货价")
 		}
 		offer := GuardianResellerOffer{UltraSupplyCents: req.UltraSupplyCents, ResellerID: resellerID, ServiceID: serviceID, Granted: req.Granted, SupplyCents: req.SupplyCents, QuarterSupplyCents: req.QuarterSupplyCents, AnnualSupplyCents: req.AnnualSupplyCents, MaxSupplyCents: req.MaxSupplyCents, UpdatedAt: time.Now().Unix()}
-		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reseller_id"}, {Name: "service_id"}}, DoUpdates: clause.AssignmentColumns([]string{"granted", "supply_cents", "quarter_supply_cents", "annual_supply_cents", "max_supply_cents", "ultra_supply_cents", "updated_at"})}).Create(&offer).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reseller_id"}, {Name: "service_id"}}, DoUpdates: clause.AssignmentColumns([]string{"follow_tier", "granted", "supply_cents", "quarter_supply_cents", "annual_supply_cents", "max_supply_cents", "ultra_supply_cents", "updated_at"})}).Create(&offer).Error; err != nil {
 			return err
 		}
 		return recordGuardianResellerOperation(tx, actorID, resellerID, "supply_updated", map[string]any{"service_id": serviceID, "request": req})
@@ -115,7 +116,7 @@ func SaveGuardianRetail(resellerID, serviceID int, req GuardianRetailRequest) er
 			return errors.New("Guardian 代理未开通或已暂停销售")
 		}
 		var offer GuardianResellerOffer
-		if err := tx.First(&offer, "reseller_id = ? AND service_id = ? AND granted = ?", resellerID, serviceID, true).Error; err != nil {
+		if err := effectiveGuardianOffer(tx, resellerID, serviceID, &offer); err != nil || !offer.Granted {
 			return errors.New("未获准销售该商品")
 		}
 		var setting GuardianResellerSetting
@@ -133,7 +134,12 @@ func SaveGuardianRetail(resellerID, serviceID int, req GuardianRetailRequest) er
 		offer.RetailCents, offer.QuarterRetailCents, offer.AnnualRetailCents, offer.MaxRetailCents = req.RetailCents, req.QuarterRetailCents, req.AnnualRetailCents, req.MaxRetailCents
 		offer.UltraRetailCents = req.UltraRetailCents
 		offer.Listed, offer.UpdatedAt = req.Listed, time.Now().Unix()
-		if err := tx.Model(&offer).Select("retail_cents", "quarter_retail_cents", "annual_retail_cents", "max_retail_cents", "ultra_retail_cents", "listed", "updated_at").Updates(&offer).Error; err != nil {
+		if offer.ID == 0 {
+			if err := tx.Create(&GuardianResellerOffer{ResellerID: resellerID, ServiceID: serviceID, FollowTier: true}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&GuardianResellerOffer{}).Where("reseller_id = ? AND service_id = ?", resellerID, serviceID).Select("retail_cents", "quarter_retail_cents", "annual_retail_cents", "max_retail_cents", "ultra_retail_cents", "listed", "updated_at").Updates(&offer).Error; err != nil {
 			return err
 		}
 		return recordGuardianResellerOperation(tx, resellerID, resellerID, "retail_updated", map[string]any{"service_id": serviceID, "request": req})
@@ -150,9 +156,7 @@ func guardianResalePriceAvailable(retail, supply, bps int64) bool {
 }
 
 func ListGuardianResellerOffers(resellerID int) ([]GuardianResellerOffer, error) {
-	items := []GuardianResellerOffer{}
-	err := DB.Where("reseller_id = ?", resellerID).Order("service_id").Find(&items).Error
-	return items, err
+	return effectiveGuardianOffers(DB, resellerID)
 }
 
 func GuardianResellerCatalog(code string) ([]GuardianService, error) {

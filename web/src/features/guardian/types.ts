@@ -58,6 +58,7 @@ export interface GuardianService {
   delivery_note: string
   badge: string
   route: GuardianServiceRoute
+  invoice_enabled?: boolean
   enabled: boolean
   sort_order: number
   created_at: number
@@ -81,6 +82,8 @@ export interface GuardianCatalog {
 }
 
 export interface GuardianOrderRequest {
+  invoice_information?: string
+  discovery_channel: string
   reseller_code?: string
   customer_service_id?: number
   expected_amount_cents?: number
@@ -105,6 +108,8 @@ export interface GuardianOrderCheckout {
 }
 
 export interface GuardianOrder {
+  invoice_information?: string
+  discovery_channel?: string
   reseller_code?: string
   customer_service_id?: number
   claude_max_price_cents?: number
@@ -238,4 +243,23 @@ export interface GuardianHistoricalAccounts {
   banned_phone: number
   kyc_phone: number
   all_three: number
+}
+
+export interface GuardianReceipt {
+  order_id: number
+  number: string
+  trade_no: string
+  service_title: string
+  billing_period: GuardianBillingPeriod
+  amount_cents: number
+  max_cents: number
+  ultra_cents: number
+  payment_method: string
+  paid_at: number
+  created_at: number
+  recipient: string
+  email_status: string
+  refund_state: string
+  refund_cents: number | null
+  refunded_at: number
 }
