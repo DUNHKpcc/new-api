@@ -10,6 +10,7 @@ import (
 )
 
 type GuardianResellerSale struct {
+	ProSupplyCents     int64  `json:"pro_supply_cents"`
 	UltraSupplyCents   int64  `json:"ultra_supply_cents"`
 	RefundTermsVersion string `json:"refund_terms_version" gorm:"type:varchar(32)"`
 	OrderID            int    `json:"order_id" gorm:"primaryKey;autoIncrement:false"`
@@ -100,6 +101,12 @@ func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, p
 			return nil, 0, 0, errors.New("代理尚未开放 MAX 加购报价")
 		}
 	}
+	if req.AddClaudePro {
+		addon, addonSupply = offer.ProRetailCents, offer.ProSupplyCents
+		if !guardianResalePriceAvailable(addon, addonSupply, setting.FeeBPS) {
+			return nil, 0, 0, errors.New("代理尚未开放 Pro 加购报价")
+		}
+	}
 	if req.AddClaudeUltra {
 		addon, addonSupply = offer.UltraRetailCents, offer.UltraSupplyCents
 		if !guardianResalePriceAvailable(addon, addonSupply, setting.FeeBPS) {
@@ -111,7 +118,9 @@ func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, p
 		return nil, 0, 0, errors.New("报价已变更，请刷新后确认金额")
 	}
 	sale := &GuardianResellerSale{RefundTermsVersion: "deduct_channel_fee_v1", ResellerID: reseller.UserID, SupplyCents: supply + addonSupply, FeeBPS: setting.FeeBPS, EstimatedFeeCents: guardianResaleFeeEstimate(amount, setting.FeeBPS)}
-	if req.AddClaudeUltra {
+	if req.AddClaudePro {
+		sale.ProSupplyCents = addonSupply
+	} else if req.AddClaudeUltra {
 		sale.UltraSupplyCents = addonSupply
 	} else {
 		sale.MaxSupplyCents = addonSupply

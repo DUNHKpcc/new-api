@@ -38,7 +38,14 @@ export type GuardianMacRegion = 'kr_seoul' | 'au_sydney'
 export type GuardianMacConfig = '16_256'
 
 export interface GuardianService {
+  tags?: string[]
+  out_of_stock?: boolean
+  stock_note?: string
+  claude_pro_out_of_stock?: boolean
+  claude_max_out_of_stock?: boolean
+  claude_ultra_out_of_stock?: boolean
   claude_max_price_cents?: number
+  claude_pro_price_cents?: number
   claude_ultra_price_cents?: number
   region?: GuardianMacRegion | ''
   hardware_config?: GuardianMacConfig | ''
@@ -90,6 +97,7 @@ export interface GuardianOrderRequest {
   accept_refund_fee?: boolean
   accept_direct_renewal?: boolean
   add_claude_max?: boolean
+  add_claude_pro?: boolean
   add_claude_ultra?: boolean
   billing_period?: GuardianBillingPeriod
   service_id: number
@@ -113,6 +121,7 @@ export interface GuardianOrder {
   reseller_code?: string
   customer_service_id?: number
   claude_max_price_cents?: number
+  claude_pro_price_cents?: number
   claude_ultra_price_cents?: number
   billing_period?: GuardianBillingPeriod | ''
   id: number
@@ -253,6 +262,7 @@ export interface GuardianReceipt {
   billing_period: GuardianBillingPeriod
   amount_cents: number
   max_cents: number
+  pro_cents?: number
   ultra_cents: number
   payment_method: string
   paid_at: number

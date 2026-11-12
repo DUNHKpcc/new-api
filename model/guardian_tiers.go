@@ -85,6 +85,7 @@ func effectiveGuardianOffers(tx *gorm.DB, resellerID int) ([]GuardianResellerOff
 }
 
 func applyGuardianTierSupply(offer *GuardianResellerOffer, price GuardianTierSupply) {
+	offer.ProSupplyCents = price.ProSupplyCents
 	offer.Granted = price.Granted
 	offer.SupplyCents, offer.QuarterSupplyCents, offer.AnnualSupplyCents = price.SupplyCents, price.QuarterSupplyCents, price.AnnualSupplyCents
 	offer.MaxSupplyCents, offer.UltraSupplyCents = price.MaxSupplyCents, price.UltraSupplyCents
@@ -190,12 +191,12 @@ func ChangeGuardianTier(actorID int, req GuardianTierChange) (*GuardianTierPrevi
 				if err := tx.First(&product, p.ServiceID).Error; err != nil {
 					return err
 				}
-				if product.Route != "mac_mini" && (p.QuarterSupplyCents != 0 || p.AnnualSupplyCents != 0 || p.MaxSupplyCents != 0 || p.UltraSupplyCents != 0) {
+				if product.Route != "mac_mini" && (p.QuarterSupplyCents != 0 || p.AnnualSupplyCents != 0 || p.MaxSupplyCents != 0 || p.UltraSupplyCents != 0 || p.ProSupplyCents != 0) {
 					return errors.New("部署服务不支持周期和加购价")
 				}
 				p.Tier = req.Tier
 				p.UpdatedAt = time.Now().UnixNano()
-				if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tier"}, {Name: "service_id"}}, DoUpdates: clause.AssignmentColumns([]string{"granted", "supply_cents", "quarter_supply_cents", "annual_supply_cents", "max_supply_cents", "ultra_supply_cents", "updated_at"})}).Create(&p).Error; err != nil {
+				if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tier"}, {Name: "service_id"}}, DoUpdates: clause.AssignmentColumns([]string{"granted", "supply_cents", "quarter_supply_cents", "annual_supply_cents", "max_supply_cents", "ultra_supply_cents", "pro_supply_cents", "updated_at"})}).Create(&p).Error; err != nil {
 					return err
 				}
 			}
@@ -234,7 +235,7 @@ func ChangeGuardianTier(actorID int, req GuardianTierChange) (*GuardianTierPrevi
 			for _, o := range effective {
 				if len(req.Prices) == 0 {
 					before := previousOffers[r.UserID][o.ServiceID]
-					if before.FollowTier != o.FollowTier || before.Granted != o.Granted || before.SupplyCents != o.SupplyCents || before.QuarterSupplyCents != o.QuarterSupplyCents || before.AnnualSupplyCents != o.AnnualSupplyCents || before.MaxSupplyCents != o.MaxSupplyCents || before.UltraSupplyCents != o.UltraSupplyCents {
+					if before.ProSupplyCents != o.ProSupplyCents || before.FollowTier != o.FollowTier || before.Granted != o.Granted || before.SupplyCents != o.SupplyCents || before.QuarterSupplyCents != o.QuarterSupplyCents || before.AnnualSupplyCents != o.AnnualSupplyCents || before.MaxSupplyCents != o.MaxSupplyCents || before.UltraSupplyCents != o.UltraSupplyCents {
 						result.OfferChanges = append(result.OfferChanges, GuardianOfferChange{ResellerID: r.UserID, ServiceID: o.ServiceID, Before: before, After: o})
 					}
 				}
@@ -282,7 +283,7 @@ func validateGuardianTierChange(req GuardianTierChange) error {
 			return errors.New("商品列表无效")
 		}
 		seen[p.ServiceID] = true
-		for _, amount := range []int64{p.SupplyCents, p.QuarterSupplyCents, p.AnnualSupplyCents, p.MaxSupplyCents, p.UltraSupplyCents} {
+		for _, amount := range []int64{p.SupplyCents, p.QuarterSupplyCents, p.AnnualSupplyCents, p.MaxSupplyCents, p.UltraSupplyCents, p.ProSupplyCents} {
 			if amount < 0 || amount > 10000000 {
 				return errors.New("供货金额须在 0 至 100000 元之间")
 			}
@@ -301,7 +302,7 @@ func guardianOfferNeedsRetailUpdate(offer GuardianResellerOffer, feeBPS int64) b
 	if !offer.Granted || !guardianResalePriceAvailable(offer.RetailCents, offer.SupplyCents, feeBPS) {
 		return true
 	}
-	for _, price := range [][2]int64{{offer.QuarterRetailCents, offer.QuarterSupplyCents}, {offer.AnnualRetailCents, offer.AnnualSupplyCents}, {offer.MaxRetailCents, offer.MaxSupplyCents}, {offer.UltraRetailCents, offer.UltraSupplyCents}} {
+	for _, price := range [][2]int64{{offer.QuarterRetailCents, offer.QuarterSupplyCents}, {offer.AnnualRetailCents, offer.AnnualSupplyCents}, {offer.MaxRetailCents, offer.MaxSupplyCents}, {offer.UltraRetailCents, offer.UltraSupplyCents}, {offer.ProRetailCents, offer.ProSupplyCents}} {
 		if price[0] > 0 && !guardianResalePriceAvailable(price[0], price[1], feeBPS) {
 			return true
 		}

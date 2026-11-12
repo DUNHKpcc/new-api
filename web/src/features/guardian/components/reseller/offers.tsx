@@ -165,6 +165,10 @@ export function ResellerOffersPanel({
                             { prefix: 'annual_', label: 'Annual price (CNY)' },
                             { prefix: 'max_', label: 'MAX add-on price (CNY)' },
                             {
+                              prefix: 'pro_',
+                              label: 'Pro add-on price (CNY)',
+                            },
+                            {
                               prefix: 'ultra_',
                               label: 'Ultra add-on price (CNY)',
                             },

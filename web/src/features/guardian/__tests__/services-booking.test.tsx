@@ -26,7 +26,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { GuardianServiceDialog } from '../components/admin/service-dialog'
 import { ServicesSection } from '../components/services-section'
-import type { GuardianCatalog } from '../types'
+import type { GuardianCatalog, GuardianService } from '../types'
 
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -67,6 +67,7 @@ function renderSection(props: {
   category?: 'setup' | 'mac_mini'
   requestedBillingPeriod?: 'monthly' | 'quarterly' | 'yearly'
   requestedClaudeMax?: boolean
+  requestedClaudePro?: boolean
   requestedClaudeUltra?: boolean
   requestedServiceId?: number
   onRequestHandled?: () => void
@@ -85,6 +86,7 @@ function renderSection(props: {
         requestedBillingPeriod={props.requestedBillingPeriod}
         requestedClaudeMax={props.requestedClaudeMax}
         requestedClaudeUltra={props.requestedClaudeUltra}
+        requestedClaudePro={props.requestedClaudePro}
         onRequestHandled={props.onRequestHandled ?? (() => undefined)}
       />
     </QueryClientProvider>
@@ -174,7 +176,7 @@ it('previews the base sales adjustment and saves zero without submitting derived
   expect(put.mock.calls[0][1]).not.toHaveProperty('sold_count')
 })
 
-it.each(['MAX', 'Ultra'])(
+it.each(['Pro', 'MAX', 'Ultra'] as const)(
   'preserves the Mac %s add-on through sign-in',
   async (addonName) => {
     const mac = {
@@ -187,6 +189,7 @@ it.each(['MAX', 'Ultra'])(
       price_cents: 10000,
       quarter_price_cents: 27000,
       annual_price_cents: 96000,
+      claude_pro_price_cents: 20000,
       claude_max_price_cents: 100000,
       claude_ultra_price_cents: 250000,
       route: 'mac_mini' as const,
@@ -204,7 +207,7 @@ it.each(['MAX', 'Ultra'])(
       expect(screen.getByText('South Korea · Seoul')).toBeVisible()
       expect(screen.getByText('16GB memory + 256GB storage')).toBeVisible()
       const addon = screen.getByRole('checkbox', {
-        name: `Add Claude ${addonName} for the first month`,
+        name: `Add Claude ${addonName} subscription`,
       })
       expect(addon).not.toBeChecked()
       await userEvent.click(addon)
@@ -215,7 +218,11 @@ it.each(['MAX', 'Ultra'])(
       ).toBeVisible()
       expect(
         screen.getByText(
-          addonName === 'MAX' ? 'Total: ¥1,960' : 'Total: ¥3,460'
+          {
+            Pro: 'Total: ¥1,160',
+            MAX: 'Total: ¥1,960',
+            Ultra: 'Total: ¥3,460',
+          }[addonName]
         )
       ).toBeVisible()
       await userEvent.click(
@@ -237,13 +244,17 @@ it.each(['MAX', 'Ultra'])(
         requestedBillingPeriod: 'yearly',
         requestedClaudeMax: addonName === 'MAX',
         requestedClaudeUltra: addonName === 'Ultra',
+        requestedClaudePro: addonName === 'Pro',
       })
       expect(
         await screen.findByRole('button', {
-          name: addonName === 'MAX' ? 'Pay ¥1,960' : 'Pay ¥3,460',
+          name: { Pro: 'Pay ¥1,160', MAX: 'Pay ¥1,960', Ultra: 'Pay ¥3,460' }[
+            addonName
+          ],
         })
       ).toBeVisible()
       cleanup()
+      mac.claude_pro_price_cents = 0
       mac.claude_max_price_cents = 0
       mac.claude_ultra_price_cents = 0
       mac.quarter_price_cents = 0
@@ -256,7 +267,7 @@ it.each(['MAX', 'Ultra'])(
       expect(screen.queryByText(/vs monthly payments/)).not.toBeInTheDocument()
       expect(
         screen.getByRole('checkbox', {
-          name: `Add Claude ${addonName} for the first month`,
+          name: `Add Claude ${addonName} subscription`,
         })
       ).toHaveAttribute('aria-disabled', 'true')
     } finally {
@@ -292,11 +303,22 @@ it('edits the fixed Mac chip choices and clears the chip for environment service
   await userEvent.type(screen.getByLabelText('Quarterly total (CNY)'), '270')
   await userEvent.type(screen.getByLabelText('Yearly total (CNY)'), '960')
   await userEvent.type(
-    screen.getByLabelText('Claude MAX first-month add-on (CNY)'),
+    screen.getByLabelText('Claude Pro add-on price (CNY)'),
+    '200'
+  )
+  await userEvent.click(
+    screen.getByRole('switch', { name: 'Service out of stock' })
+  )
+  await userEvent.click(
+    screen.getByRole('switch', { name: 'Claude Pro out of stock' })
+  )
+  await userEvent.type(screen.getByLabelText('Stock notice'), 'Restocking soon')
+  await userEvent.type(
+    screen.getByLabelText('Claude MAX add-on price (CNY)'),
     '1000'
   )
   await userEvent.type(
-    screen.getByLabelText('Claude Ultra first-month add-on (CNY)'),
+    screen.getByLabelText('Claude Ultra add-on price (CNY)'),
     '2500'
   )
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -310,6 +332,10 @@ it('edits the fixed Mac chip choices and clears the chip for environment service
     annual_price_cents: 96000,
     claude_max_price_cents: 100000,
     claude_ultra_price_cents: 250000,
+    claude_pro_price_cents: 20000,
+    out_of_stock: true,
+    claude_pro_out_of_stock: true,
+    stock_note: 'Restocking soon',
   })
   await userEvent.selectOptions(screen.getByLabelText('Route'), 'vm')
   expect(
@@ -327,4 +353,69 @@ it('edits the fixed Mac chip choices and clears the chip for environment service
     claude_max_price_cents: 0,
     claude_ultra_price_cents: 0,
   })
+})
+
+it('keeps an out-of-stock service visible but disables booking', async () => {
+  catalog.services[0].out_of_stock = true
+  catalog.services[0].stock_note = 'Restocking soon'
+  try {
+    renderSection({})
+    expect(await screen.findByText('VM route setup')).toBeVisible()
+    expect(screen.getByText('Restocking soon')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Temporarily out of stock' })
+    ).toBeDisabled()
+  } finally {
+    delete catalog.services[0].out_of_stock
+    delete catalog.services[0].stock_note
+  }
+})
+
+it('shows only configured display tags without changing the service price', async () => {
+  ;(catalog.services[0] as GuardianService).tags = [
+    'Static IP',
+    'Claude Pro subscription',
+  ]
+  try {
+    renderSection({})
+    expect(await screen.findByText('Static IP')).toBeVisible()
+    expect(screen.getByText('Claude Pro subscription')).toBeVisible()
+    expect(
+      screen.queryByText('Claude Ultra subscription')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  } finally {
+    delete (catalog.services[0] as GuardianService).tags
+  }
+})
+
+it('edits optional display tags and allows removing all tags', async () => {
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: {} } })
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <GuardianServiceDialog
+        service={catalog.services[0]}
+        onClose={() => undefined}
+        onSaved={() => undefined}
+      />
+    </QueryClientProvider>
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Static IP' }))
+  await userEvent.type(
+    screen.getByLabelText('Display tags'),
+    'Custom network{Enter}'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+  expect(put.mock.calls[0][1]).toMatchObject({
+    tags: ['Static IP', 'Custom network'],
+  })
+  for (const remove of screen.getAllByRole('button', { name: 'Remove tag' })) {
+    await userEvent.click(remove)
+  }
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledTimes(2))
+  expect(put.mock.calls[1][1]).toMatchObject({ tags: [] })
 })

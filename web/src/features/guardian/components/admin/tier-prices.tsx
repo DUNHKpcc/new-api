@@ -44,6 +44,7 @@ export interface TierPrice {
   quarter_supply_cents: number
   annual_supply_cents: number
   max_supply_cents: number
+  pro_supply_cents: number
   ultra_supply_cents: number
 }
 export interface TierChange {
@@ -255,6 +256,7 @@ function TierPriceForm(props: {
           price?.supply_cents,
           price?.quarter_supply_cents,
           price?.annual_supply_cents,
+          price?.pro_supply_cents,
           price?.max_supply_cents,
           price?.ultra_supply_cents,
         ].map((n) => (n ? centsToYuanInput(n) : '')),
@@ -274,8 +276,9 @@ function TierPriceForm(props: {
     t('Single / monthly'),
     t('Quarterly'),
     t('Yearly'),
-    t('Claude MAX first month'),
-    t('Claude Ultra first month'),
+    t('Claude Pro subscription'),
+    t('Claude MAX subscription'),
+    t('Claude Ultra subscription'),
   ]
   const invalid = values.some(
     (row) =>
@@ -301,8 +304,9 @@ function TierPriceForm(props: {
               supply_cents: a[0],
               quarter_supply_cents: a[1],
               annual_supply_cents: a[2],
-              max_supply_cents: a[3],
-              ultra_supply_cents: a[4],
+              pro_supply_cents: a[3],
+              max_supply_cents: a[4],
+              ultra_supply_cents: a[5],
             }
           }),
         })
@@ -327,7 +331,7 @@ function TierPriceForm(props: {
             />
             {t('Authorized for sale')}
           </label>
-          <div className='grid gap-3 sm:grid-cols-3 lg:grid-cols-5'>
+          <div className='grid gap-3 sm:grid-cols-3 lg:grid-cols-3'>
             {labels.map((label, k) => {
               if (k > 0 && props.products[i].route !== 'mac_mini') return null
               return (
@@ -391,8 +395,9 @@ function SupplyPriceChanges(props: {
     ['supply_cents', t('Single / monthly')],
     ['quarter_supply_cents', t('Quarterly')],
     ['annual_supply_cents', t('Yearly')],
-    ['max_supply_cents', t('Claude MAX first month')],
-    ['ultra_supply_cents', t('Claude Ultra first month')],
+    ['max_supply_cents', t('Claude MAX subscription')],
+    ['ultra_supply_cents', t('Claude Ultra subscription')],
+    ['pro_supply_cents', t('Claude Pro subscription')],
   ] as const
   return fields.map(([key, label]) => (
     <p key={key}>

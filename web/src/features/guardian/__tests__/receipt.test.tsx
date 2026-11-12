@@ -130,6 +130,18 @@ it('keeps the original payment visible after a refund and disables mail without 
   ).toBeDisabled()
 })
 
+it('separates the Pro add-on from hosting in the fixed receipt template', async () => {
+  show({ ...receipt, pro_cents: 5000, max_cents: 0 })
+  const frame = (await screen.findByTitle(
+    'Payment receipt'
+  )) as HTMLIFrameElement
+  const document = new DOMParser().parseFromString(frame.srcdoc, 'text/html')
+  expect(document.body.textContent).toContain('Claude Pro')
+  expect(document.body.textContent).toContain('¥250')
+  expect(document.body.textContent).toContain('¥50')
+  expect(document.body.textContent).toContain('¥300')
+})
+
 it('returns administrators to order management', async () => {
   show(receipt, true)
   await screen.findByTitle('Payment receipt')

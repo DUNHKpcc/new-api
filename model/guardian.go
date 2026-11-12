@@ -37,7 +37,14 @@ func (f *GuardianFeatures) Scan(value any) error {
 }
 
 type GuardianService struct {
+	Tags                  GuardianFeatures `json:"tags" gorm:"type:text"`
+	OutOfStock            bool             `json:"out_of_stock"`
+	StockNote             string           `json:"stock_note" gorm:"type:varchar(255)"`
+	ClaudeProOutOfStock   bool             `json:"claude_pro_out_of_stock"`
+	ClaudeMaxOutOfStock   bool             `json:"claude_max_out_of_stock"`
+	ClaudeUltraOutOfStock bool             `json:"claude_ultra_out_of_stock"`
 	InvoiceEnabled        bool             `json:"invoice_enabled"`
+	ClaudeProPriceCents   int64            `json:"claude_pro_price_cents"`
 	ClaudeUltraPriceCents int64            `json:"claude_ultra_price_cents"`
 	ClaudeMaxPriceCents   int64            `json:"claude_max_price_cents"`
 	QuarterPriceCents     int64            `json:"quarter_price_cents"`
@@ -64,8 +71,11 @@ type GuardianService struct {
 }
 
 func (s *GuardianService) Validate() error {
+	if s.ClaudeProPriceCents < 0 || s.ClaudeProPriceCents > 10000000 {
+		return errors.New("Claude Pro 加购价须在 0 至 100000 元之间")
+	}
 	if s.ClaudeUltraPriceCents < 0 || s.ClaudeUltraPriceCents > 10000000 {
-		return errors.New("Claude Ultra 首月加购价须在 0 至 100000 元之间")
+		return errors.New("Claude Ultra 加购价须在 0 至 100000 元之间")
 	}
 	if !slices.Contains([]string{"", "m4", "m6"}, s.Chip) {
 		return errors.New("芯片型号仅支持 M4 或 M6")
@@ -74,7 +84,7 @@ func (s *GuardianService) Validate() error {
 		return errors.New("Mac mini 地区或配置无效")
 	}
 	if s.ClaudeMaxPriceCents < 0 || s.ClaudeMaxPriceCents > 10000000 {
-		return errors.New("Claude MAX 首月加购价须在 0 至 100000 元之间")
+		return errors.New("Claude MAX 加购价须在 0 至 100000 元之间")
 	}
 	if s.QuarterPriceCents < 0 || s.QuarterPriceCents > 10000000 || s.AnnualPriceCents < 0 || s.AnnualPriceCents > 10000000 {
 		return errors.New("周期价格须在 0 至 100000 元之间")
@@ -86,7 +96,7 @@ func (s *GuardianService) Validate() error {
 		value *string
 		max   int
 	}{
-		{&s.Title, 128}, {&s.Subtitle, 255}, {&s.Description, 0}, {&s.DeliveryNote, 128}, {&s.Badge, 32}, {&s.Route, 16},
+		{&s.StockNote, 255}, {&s.Title, 128}, {&s.Subtitle, 255}, {&s.Description, 0}, {&s.DeliveryNote, 128}, {&s.Badge, 32}, {&s.Route, 16},
 	} {
 		*field.value = strings.TrimSpace(*field.value)
 		if field.max > 0 && utf8.RuneCountInString(*field.value) > field.max {
@@ -96,7 +106,8 @@ func (s *GuardianService) Validate() error {
 	if s.Route != "mac_mini" {
 		s.Chip, s.Region, s.HardwareConfig = "", "", ""
 		s.QuarterPriceCents, s.AnnualPriceCents = 0, 0
-		s.ClaudeMaxPriceCents, s.ClaudeUltraPriceCents = 0, 0
+		s.ClaudeProPriceCents, s.ClaudeMaxPriceCents, s.ClaudeUltraPriceCents = 0, 0, 0
+		s.ClaudeProOutOfStock, s.ClaudeMaxOutOfStock, s.ClaudeUltraOutOfStock = false, false, false
 	}
 	if s.Title == "" || s.PriceCents < 1 || s.PriceCents > 10000000 || !slices.Contains([]string{"any", "local", "vm", "vps", "mac_mini"}, s.Route) {
 		return errors.New("服务名称、价格或适用路线无效")
@@ -115,6 +126,20 @@ func (s *GuardianService) Validate() error {
 		return errors.New("服务规格最多 12 条")
 	}
 	s.Features = features
+	tags := GuardianFeatures{}
+	for _, tag := range s.Tags {
+		tag = strings.TrimSpace(tag)
+		if utf8.RuneCountInString(tag) > 24 {
+			return errors.New("展示标签最多 24 字")
+		}
+		if tag != "" && !slices.Contains(tags, tag) {
+			tags = append(tags, tag)
+		}
+	}
+	if len(tags) > 8 {
+		return errors.New("展示标签最多 8 个")
+	}
+	s.Tags = tags
 	return nil
 }
 
@@ -174,6 +199,7 @@ func (s GuardianService) PriceForPeriod(period string) (int64, string, error) {
 type GuardianOrderRequest struct {
 	InvoiceInformation        string `json:"invoice_information"`
 	DiscoveryChannel          string `json:"discovery_channel"`
+	AddClaudePro              bool   `json:"add_claude_pro"`
 	AddClaudeUltra            bool   `json:"add_claude_ultra"`
 	renewalPreviousResellerID int
 	CustomerServiceID         int    `json:"customer_service_id"`
@@ -201,8 +227,8 @@ func (r *GuardianOrderRequest) Validate() error {
 	if !slices.Contains([]string{"linuxdo", "github", "bilibili", "qq", "other"}, r.DiscoveryChannel) {
 		return errors.New("请选择认识我们的渠道")
 	}
-	if r.AddClaudeMax && r.AddClaudeUltra {
-		return errors.New("Claude MAX 与 Ultra 首月加购只能选择一项")
+	if (r.AddClaudeMax && r.AddClaudeUltra) || (r.AddClaudePro && (r.AddClaudeMax || r.AddClaudeUltra)) {
+		return errors.New("Claude Pro、MAX 与 Ultra 加购只能选择一项")
 	}
 	if r.CustomerServiceID < 0 {
 		return errors.New("续费服务 ID 无效")
@@ -229,6 +255,7 @@ type GuardianServiceOrder struct {
 	InvoiceInformation        string `json:"invoice_information" gorm:"type:text"`
 	DiscoveryChannel          string `json:"discovery_channel" gorm:"type:varchar(16)"`
 	ReceiptNotification       bool   `json:"-"`
+	ClaudeProPriceCents       int64  `json:"claude_pro_price_cents"`
 	ClaudeUltraPriceCents     int64  `json:"claude_ultra_price_cents"`
 	RenewalPreviousResellerID int    `json:"-"`
 	CustomerServiceID         int    `json:"customer_service_id" gorm:"index"`
@@ -304,17 +331,30 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		if err != nil {
 			return err
 		}
+		if service.OutOfStock && req.CustomerServiceID == 0 {
+			return errors.New("该服务暂时缺货")
+		}
+		if (req.AddClaudePro && service.ClaudeProOutOfStock) || (req.AddClaudeMax && service.ClaudeMaxOutOfStock) || (req.AddClaudeUltra && service.ClaudeUltraOutOfStock) {
+			return errors.New("所选 Claude 订阅暂时缺货，请重新选择")
+		}
 		var addonPrice int64
 		if req.AddClaudeMax {
 			if service.Route != "mac_mini" || service.ClaudeMaxPriceCents <= 0 {
-				return errors.New("该服务尚未开放 Claude MAX 首月加购")
+				return errors.New("该服务尚未开放 Claude MAX 加购")
 			}
 			addonPrice = service.ClaudeMaxPriceCents
 			amount += addonPrice
 		}
+		if req.AddClaudePro {
+			if service.Route != "mac_mini" || service.ClaudeProPriceCents <= 0 {
+				return errors.New("该服务尚未开放 Claude Pro 加购")
+			}
+			addonPrice = service.ClaudeProPriceCents
+			amount += addonPrice
+		}
 		if req.AddClaudeUltra {
 			if service.Route != "mac_mini" || service.ClaudeUltraPriceCents <= 0 {
-				return errors.New("该服务尚未开放 Claude Ultra 首月加购")
+				return errors.New("该服务尚未开放 Claude Ultra 加购")
 			}
 			addonPrice = service.ClaudeUltraPriceCents
 			amount += addonPrice
@@ -336,7 +376,9 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		}
 		now := time.Now().Unix()
 		*order = GuardianServiceOrder{InvoiceInformation: req.InvoiceInformation, DiscoveryChannel: req.DiscoveryChannel, ReceiptNotification: true, RenewalPreviousResellerID: req.renewalPreviousResellerID, CustomerServiceID: req.CustomerServiceID, ResellerCode: req.ResellerCode, TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: amount, BillingPeriod: period, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
-		if req.AddClaudeUltra {
+		if req.AddClaudePro {
+			order.ClaudeProPriceCents = addonPrice
+		} else if req.AddClaudeUltra {
 			order.ClaudeUltraPriceCents = addonPrice
 		} else {
 			order.ClaudeMaxPriceCents = addonPrice

@@ -32,6 +32,7 @@ const searchSchema = z.object({
     .optional()
     .catch(undefined),
   claude_max: z.literal('yes').optional().catch(undefined),
+  claude_pro: z.literal('yes').optional().catch(undefined),
   claude_ultra: z.literal('yes').optional().catch(undefined),
   service: z.number().int().positive().optional().catch(undefined),
 })
@@ -48,6 +49,7 @@ function GuardianServicesRoute() {
       resellerCode={search.reseller}
       requestedBillingPeriod={search.billing_period}
       requestedClaudeMax={search.claude_max === 'yes'}
+      requestedClaudePro={search.claude_pro === 'yes'}
       requestedClaudeUltra={search.claude_ultra === 'yes'}
       requestedServiceId={search.service}
       category={search.category}

@@ -17,6 +17,7 @@ type GuardianReceipt struct {
 	BillingPeriod string `json:"billing_period" gorm:"type:varchar(16)"`
 	AmountCents   int64  `json:"amount_cents"`
 	MaxCents      int64  `json:"max_cents"`
+	ProCents      int64  `json:"pro_cents"`
 	UltraCents    int64  `json:"ultra_cents"`
 	PaymentMethod string `json:"payment_method" gorm:"type:varchar(32)"`
 	PaidAt        int64  `json:"paid_at"`
@@ -94,7 +95,7 @@ func ensureGuardianReceipt(tx *gorm.DB, order GuardianServiceOrder) (*GuardianRe
 		return nil, err
 	}
 	now := time.Now().Unix()
-	receipt = GuardianReceipt{OrderID: order.ID, Number: fmt.Sprintf("GRC-%s", order.TradeNo), TradeNo: order.TradeNo, ServiceTitle: order.ServiceTitle, BillingPeriod: order.BillingPeriod, AmountCents: order.AmountCents, MaxCents: order.ClaudeMaxPriceCents, UltraCents: order.ClaudeUltraPriceCents, PaymentMethod: order.PaymentMethod, PaidAt: order.PaidAt, CreatedAt: now, EmailStatus: "not_requested"}
+	receipt = GuardianReceipt{OrderID: order.ID, Number: fmt.Sprintf("GRC-%s", order.TradeNo), TradeNo: order.TradeNo, ServiceTitle: order.ServiceTitle, BillingPeriod: order.BillingPeriod, AmountCents: order.AmountCents, MaxCents: order.ClaudeMaxPriceCents, UltraCents: order.ClaudeUltraPriceCents, ProCents: order.ClaudeProPriceCents, PaymentMethod: order.PaymentMethod, PaidAt: order.PaidAt, CreatedAt: now, EmailStatus: "not_requested"}
 	if order.ReceiptNotification {
 		receipt.Email = user.Email
 		receipt.RequestedAt = now

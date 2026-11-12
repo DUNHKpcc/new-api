@@ -162,6 +162,152 @@ type guardianRC52ResellerOffer struct {
 
 func (guardianRC52ResellerOffer) TableName() string { return "guardian_reseller_offers" }
 
+// rc.53 schemas preserve the released data shape for upgrade verification.
+type guardianRC53Service struct {
+	InvoiceEnabled        bool                   `json:"invoice_enabled"`
+	ClaudeUltraPriceCents int64                  `json:"claude_ultra_price_cents"`
+	ClaudeMaxPriceCents   int64                  `json:"claude_max_price_cents"`
+	QuarterPriceCents     int64                  `json:"quarter_price_cents"`
+	AnnualPriceCents      int64                  `json:"annual_price_cents"`
+	Region                string                 `json:"region" gorm:"type:varchar(16)"`
+	HardwareConfig        string                 `json:"hardware_config" gorm:"type:varchar(16)"`
+	Chip                  string                 `json:"chip" gorm:"type:varchar(8)"`
+	BaseSales             int64                  `json:"base_sales"`
+	ActualSales           *int64                 `json:"actual_sales,omitempty" gorm:"-"`
+	SoldCount             *int64                 `json:"sold_count,omitempty" gorm:"-"`
+	ID                    int                    `json:"id"`
+	Title                 string                 `json:"title" gorm:"type:varchar(128);not null"`
+	Subtitle              string                 `json:"subtitle" gorm:"type:varchar(255)"`
+	Description           string                 `json:"description" gorm:"type:text"`
+	Features              model.GuardianFeatures `json:"features" gorm:"type:text"`
+	PriceCents            int64                  `json:"price_cents" gorm:"not null"`
+	DeliveryNote          string                 `json:"delivery_note" gorm:"type:varchar(128)"`
+	Badge                 string                 `json:"badge" gorm:"type:varchar(32)"`
+	Route                 string                 `json:"route" gorm:"type:varchar(16)"`
+	Enabled               bool                   `json:"enabled"`
+	SortOrder             int                    `json:"sort_order"`
+	CreatedAt             int64                  `json:"created_at"`
+	UpdatedAt             int64                  `json:"updated_at"`
+}
+
+func (guardianRC53Service) TableName() string { return "guardian_services" }
+
+type guardianRC53Order struct {
+	InvoiceInformation        string `json:"invoice_information" gorm:"type:text"`
+	DiscoveryChannel          string `json:"discovery_channel" gorm:"type:varchar(16)"`
+	ReceiptNotification       bool   `json:"-"`
+	ClaudeUltraPriceCents     int64  `json:"claude_ultra_price_cents"`
+	RenewalPreviousResellerID int    `json:"-"`
+	CustomerServiceID         int    `json:"customer_service_id" gorm:"index"`
+	ResellerCode              string `json:"reseller_code,omitempty" gorm:"type:varchar(32)"`
+	ClaudeMaxPriceCents       int64  `json:"claude_max_price_cents"`
+	BillingPeriod             string `json:"billing_period" gorm:"type:varchar(16)"`
+	RefundedAt                int64  `json:"refunded_at"`
+	HasPaymentAnomaly         bool   `json:"-" gorm:"index"`
+	ID                        int    `json:"id"`
+	TradeNo                   string `json:"trade_no" gorm:"type:varchar(64);uniqueIndex"`
+	UserID                    int    `json:"-" gorm:"index"`
+	ServiceID                 int    `json:"service_id" gorm:"index"`
+	ServiceTitle              string `json:"service_title" gorm:"type:varchar(128)"`
+	AmountCents               int64  `json:"amount_cents"`
+	PaymentMethod             string `json:"payment_method" gorm:"type:varchar(32)"`
+	Status                    string `json:"status" gorm:"type:varchar(24);index"`
+	Route                     string `json:"route" gorm:"type:varchar(16)"`
+	OS                        string `json:"os" gorm:"type:varchar(32)"`
+	ContactType               string `json:"contact_type" gorm:"type:varchar(16)"`
+	Contact                   string `json:"contact" gorm:"type:varchar(128)"`
+	Note                      string `json:"note" gorm:"type:text"`
+	AdminNote                 string `json:"admin_note" gorm:"type:text"`
+	ProviderPayload           string `json:"-" gorm:"type:text"`
+	CreatedAt                 int64  `json:"created_at"`
+	PaidAt                    int64  `json:"paid_at"`
+	QueueSeq                  int64  `json:"-" gorm:"index"`
+	DeliveredAt               int64  `json:"delivered_at"`
+	UpdatedAt                 int64  `json:"updated_at"`
+}
+
+func (guardianRC53Order) TableName() string { return "guardian_service_orders" }
+
+type guardianRC53Receipt struct {
+	OrderID       int    `json:"order_id" gorm:"primaryKey;autoIncrement:false"`
+	Number        string `json:"number" gorm:"type:varchar(96);uniqueIndex"`
+	TradeNo       string `json:"trade_no" gorm:"type:varchar(64)"`
+	ServiceTitle  string `json:"service_title" gorm:"type:varchar(128)"`
+	BillingPeriod string `json:"billing_period" gorm:"type:varchar(16)"`
+	AmountCents   int64  `json:"amount_cents"`
+	MaxCents      int64  `json:"max_cents"`
+	UltraCents    int64  `json:"ultra_cents"`
+	PaymentMethod string `json:"payment_method" gorm:"type:varchar(32)"`
+	PaidAt        int64  `json:"paid_at"`
+	CreatedAt     int64  `json:"created_at"`
+	Email         string `json:"-" gorm:"type:varchar(254)"`
+	EmailStatus   string `json:"email_status" gorm:"type:varchar(24)"`
+	Attempts      int    `json:"-"`
+	NextAttemptAt int64  `json:"-"`
+	RequestedAt   int64  `json:"-"`
+}
+
+func (guardianRC53Receipt) TableName() string { return "guardian_receipts" }
+
+type guardianRC53Supply struct {
+	UltraSupplyCents   int64 `json:"ultra_supply_cents"`
+	Granted            bool  `json:"granted"`
+	SupplyCents        int64 `json:"supply_cents"`
+	QuarterSupplyCents int64 `json:"quarter_supply_cents"`
+	AnnualSupplyCents  int64 `json:"annual_supply_cents"`
+	MaxSupplyCents     int64 `json:"max_supply_cents"`
+}
+type guardianRC53Offer struct {
+	FollowTier         bool  `json:"follow_tier"`
+	UltraSupplyCents   int64 `json:"ultra_supply_cents"`
+	UltraRetailCents   int64 `json:"ultra_retail_cents"`
+	ID                 int   `json:"id"`
+	ResellerID         int   `json:"reseller_id" gorm:"uniqueIndex:ux_guardian_offer,priority:1"`
+	ServiceID          int   `json:"service_id" gorm:"uniqueIndex:ux_guardian_offer,priority:2"`
+	Granted            bool  `json:"granted"`
+	Listed             bool  `json:"listed"`
+	SupplyCents        int64 `json:"supply_cents"`
+	QuarterSupplyCents int64 `json:"quarter_supply_cents"`
+	AnnualSupplyCents  int64 `json:"annual_supply_cents"`
+	MaxSupplyCents     int64 `json:"max_supply_cents"`
+	RetailCents        int64 `json:"retail_cents"`
+	QuarterRetailCents int64 `json:"quarter_retail_cents"`
+	AnnualRetailCents  int64 `json:"annual_retail_cents"`
+	MaxRetailCents     int64 `json:"max_retail_cents"`
+	UpdatedAt          int64 `json:"updated_at"`
+}
+
+func (guardianRC53Offer) TableName() string { return "guardian_reseller_offers" }
+
+type guardianRC53Sale struct {
+	UltraSupplyCents   int64  `json:"ultra_supply_cents"`
+	RefundTermsVersion string `json:"refund_terms_version" gorm:"type:varchar(32)"`
+	OrderID            int    `json:"order_id" gorm:"primaryKey;autoIncrement:false"`
+	ResellerID         int    `json:"reseller_id" gorm:"index"`
+	SupplyCents        int64  `json:"supply_cents"`
+	MaxSupplyCents     int64  `json:"max_supply_cents"`
+	FeeBPS             int64  `json:"fee_bps"`
+	EstimatedFeeCents  int64  `json:"estimated_fee_cents"`
+	ActualFeeCents     int64  `json:"actual_fee_cents"`
+	FeeConfirmedAt     int64  `json:"fee_confirmed_at"`
+	FeeReference       string `json:"-" gorm:"type:varchar(128)"`
+	RefundState        string `json:"refund_state" gorm:"type:varchar(16)"`
+	RefundCents        int64  `json:"refund_cents"`
+	ReturnedFeeCents   int64  `json:"returned_fee_cents"`
+	RefundReference    string `json:"-" gorm:"type:varchar(128)"`
+}
+
+func (guardianRC53Sale) TableName() string { return "guardian_reseller_sales" }
+
+type guardianRC53Tier struct {
+	Tier      int                `json:"tier" gorm:"primaryKey;autoIncrement:false"`
+	ServiceID int                `json:"service_id" gorm:"primaryKey;autoIncrement:false"`
+	Supply    guardianRC53Supply `gorm:"embedded"`
+	UpdatedAt int64              `json:"updated_at"`
+}
+
+func (guardianRC53Tier) TableName() string { return "guardian_tier_supplies" }
+
 func TestGuardianLifecycle(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -252,8 +398,69 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.NoError(t, db.Create(&guardianRC52ResellerOffer{ResellerID: users[1].Id, ServiceID: legacy.ID, Granted: true, Listed: true, SupplyCents: 10000, RetailCents: 19900}).Error)
 				require.NoError(t, db.Create(&guardianRC52ServiceOrder{TradeNo: "rc52-order-" + suffix, UserID: users[1].Id, ServiceID: legacy.ID, ServiceTitle: "rc52 original", AmountCents: 19900, PaidAt: 123, Status: "delivered"}).Error)
 			}
+			var rc53Product guardianRC53Service
+			var rc53Order guardianRC53Order
+			if os.Getenv("TEST_GUARDIAN_RC53_UPGRADE") == "1" {
+				require.NoError(t, db.AutoMigrate(&guardianRC53Service{}, &guardianRC53Order{}, &guardianRC53Receipt{}, &guardianRC53Offer{}, &guardianRC53Sale{}, &guardianRC53Tier{}))
+				rc53Product = guardianRC53Service{Title: "rc53 Mac", Route: "mac_mini", Enabled: true, PriceCents: 50000, ClaudeMaxPriceCents: 90000, ClaudeUltraPriceCents: 200000, InvoiceEnabled: true, Features: model.GuardianFeatures{"preserve"}}
+				require.NoError(t, db.Create(&rc53Product).Error)
+				rc53Order = guardianRC53Order{TradeNo: "rc53-" + suffix, UserID: users[0].Id, ServiceID: rc53Product.ID, AmountCents: 250000, ClaudeUltraPriceCents: 200000, InvoiceInformation: "original invoice", DiscoveryChannel: "github", PaidAt: 123, Status: "delivered"}
+				require.NoError(t, db.Create(&rc53Order).Error)
+				require.NoError(t, db.Create(&guardianRC53Receipt{OrderID: rc53Order.ID, Number: "rc53-receipt-" + suffix, AmountCents: 250000, UltraCents: 200000}).Error)
+				require.NoError(t, db.Create(&guardianRC53Offer{ResellerID: users[2].Id, ServiceID: rc53Product.ID, SupplyCents: 40000, UltraSupplyCents: 190000, UltraRetailCents: 200000, Granted: true, Listed: true, FollowTier: true}).Error)
+				require.NoError(t, db.Create(&guardianRC53Sale{OrderID: rc53Order.ID, ResellerID: users[2].Id, SupplyCents: 230000, UltraSupplyCents: 190000}).Error)
+				require.NoError(t, db.Create(&guardianRC53Tier{Tier: 3, ServiceID: rc53Product.ID, Supply: guardianRC53Supply{SupplyCents: 40000, UltraSupplyCents: 190000, Granted: true}}).Error)
+			}
 			for range 2 {
 				require.NoError(t, db.AutoMigrate(&model.GuardianAccountStatus{}, &model.GuardianService{}, &model.GuardianServiceOrder{}, &model.GuardianOrderEvent{}, &model.GuardianPaymentAnomaly{}, &model.GuardianReseller{}, &model.GuardianResellerEvent{}, &model.GuardianResellerOperation{}, &model.GuardianResellerSetting{}, &model.GuardianResellerOffer{}, &model.GuardianTierSupply{}, &model.GuardianReceipt{}, &model.GuardianResellerSale{}, &model.GuardianResellerWithdrawal{}, &model.GuardianCustomerService{}))
+			}
+			if rc53Product.ID != 0 {
+				// Reopen after migration to discard PostgreSQL prepared SELECT * plans.
+				require.NoError(t, sqlDB.Close())
+				db, err = gorm.Open(driver, &gorm.Config{})
+				require.NoError(t, err)
+				sqlDB, err = db.DB()
+				require.NoError(t, err)
+				model.DB, model.LOG_DB = db, db
+				var product model.GuardianService
+				require.NoError(t, db.First(&product, rc53Product.ID).Error)
+				assert.True(t, product.InvoiceEnabled)
+				assert.Empty(t, product.Tags)
+				assert.False(t, product.OutOfStock)
+				assert.False(t, product.ClaudeProOutOfStock)
+				assert.False(t, product.ClaudeMaxOutOfStock)
+				assert.False(t, product.ClaudeUltraOutOfStock)
+				assert.Zero(t, product.ClaudeProPriceCents)
+				assert.Equal(t, rc53Product.ClaudeUltraPriceCents, product.ClaudeUltraPriceCents)
+				var order model.GuardianServiceOrder
+				require.NoError(t, db.First(&order, rc53Order.ID).Error)
+				assert.Equal(t, rc53Order.AmountCents, order.AmountCents)
+				assert.Equal(t, rc53Order.InvoiceInformation, order.InvoiceInformation)
+				assert.Equal(t, rc53Order.DiscoveryChannel, order.DiscoveryChannel)
+				assert.Zero(t, order.ClaudeProPriceCents)
+				var receipt model.GuardianReceipt
+				require.NoError(t, db.First(&receipt, order.ID).Error)
+				assert.EqualValues(t, 200000, receipt.UltraCents)
+				assert.Zero(t, receipt.ProCents)
+				var offer model.GuardianResellerOffer
+				require.NoError(t, db.Where("service_id = ?", product.ID).First(&offer).Error)
+				assert.True(t, offer.FollowTier)
+				assert.EqualValues(t, 190000, offer.UltraSupplyCents)
+				assert.Zero(t, offer.ProSupplyCents)
+				var sale model.GuardianResellerSale
+				require.NoError(t, db.First(&sale, order.ID).Error)
+				assert.EqualValues(t, 230000, sale.SupplyCents)
+				assert.Zero(t, sale.ProSupplyCents)
+				var tier model.GuardianTierSupply
+				require.NoError(t, db.Where("service_id = ?", product.ID).First(&tier).Error)
+				assert.EqualValues(t, 190000, tier.UltraSupplyCents)
+				assert.Zero(t, tier.ProSupplyCents)
+				require.NoError(t, db.Delete(&receipt).Error)
+				require.NoError(t, db.Delete(&sale).Error)
+				require.NoError(t, db.Delete(&offer).Error)
+				require.NoError(t, db.Delete(&tier).Error)
+				require.NoError(t, db.Delete(&order).Error)
+				require.NoError(t, db.Delete(&product).Error)
 			}
 			if legacy.ID != 0 {
 				var oldReseller model.GuardianReseller
@@ -381,6 +588,30 @@ func TestGuardianLifecycle(t *testing.T) {
 			catalog := decode(request("GET", "/api/guardian/services", "", ""))["data"].(map[string]any)
 			assert.Equal(t, true, catalog["purchase_enabled"])
 			assert.Len(t, catalog["pay_methods"], 1)
+
+			t.Run("optional display tags persist and clear without affecting price", func(t *testing.T) {
+				withTags := strings.Replace(payload, `"badge":""`, `"badge":"","tags":[" 静态 IP ","Claude Pro 订阅","静态 IP",""]`, 1)
+				created := decode(request("POST", "/api/guardian/admin/services", tokens[1], withTags))
+				require.Equal(t, true, created["success"])
+				data := created["data"].(map[string]any)
+				tagID := int(data["id"].(float64))
+				defer db.Delete(&model.GuardianService{}, tagID)
+				assert.Equal(t, []any{"静态 IP", "Claude Pro 订阅"}, data["tags"])
+				var stored model.GuardianService
+				require.NoError(t, db.First(&stored, tagID).Error)
+				assert.Equal(t, model.GuardianFeatures{"静态 IP", "Claude Pro 订阅"}, stored.Tags)
+				assert.EqualValues(t, 59901, stored.PriceCents)
+				path := fmt.Sprintf("/api/guardian/admin/services/%d", tagID)
+				for _, tags := range []string{`["` + strings.Repeat("字", 25) + `"]`, `["1","2","3","4","5","6","7","8","9"]`} {
+					invalid := strings.Replace(payload, `"badge":""`, `"badge":"","tags":`+tags, 1)
+					assert.Equal(t, false, decode(request("PUT", path, tokens[1], invalid))["success"])
+				}
+				cleared := strings.Replace(payload, `"badge":""`, `"badge":"","tags":[]`, 1)
+				assert.Equal(t, true, decode(request("PUT", path, tokens[1], cleared))["success"])
+				require.NoError(t, db.First(&stored, tagID).Error)
+				assert.Empty(t, stored.Tags)
+				assert.EqualValues(t, 59901, stored.PriceCents)
+			})
 
 			t.Run("mac mini uses existing service and order storage", func(t *testing.T) {
 				macPayload := strings.Replace(payload, `"route":"vps"`, `"route":"mac_mini","chip":"m4","region":"kr_seoul","hardware_config":"16_256","quarter_price_cents":150000,"annual_price_cents":500000,"claude_max_price_cents":100000,"claude_ultra_price_cents":250000`, 1)
@@ -1381,6 +1612,97 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.Equal(t, reseller.Code, original.ResellerCode)
 				assert.Equal(t, http.StatusNotFound, request("PUT", fmt.Sprintf("/api/guardian/admin/customer-services/%d/reseller", delivered.CustomerServiceID), tokens[1], `{"reseller_id":0,"reason":"Removed feature"}`).Code)
 
+			})
+			t.Run("stock availability and Pro snapshots", func(t *testing.T) {
+				buyer := model.User{Username: "stock-" + suffix, Password: "unused", AffCode: "stk" + suffix}
+				require.NoError(t, db.Create(&buyer).Error)
+				product := model.GuardianService{Title: "Stock Mac", Route: "mac_mini", Enabled: true, PriceCents: 30000, ClaudeProPriceCents: 12000, ClaudeMaxPriceCents: 90000, ClaudeUltraPriceCents: 200000}
+				require.NoError(t, product.Validate())
+				require.NoError(t, db.Create(&product).Error)
+				req := model.GuardianOrderRequest{ServiceID: product.ID, DiscoveryChannel: "github", Route: "mac_mini", OS: "macos", ContactType: "email", Contact: "stock@example.test", PaymentMethod: "alipay", AddClaudePro: true}
+				for _, pair := range []model.GuardianOrderRequest{{AddClaudePro: true, AddClaudeMax: true}, {AddClaudePro: true, AddClaudeUltra: true}, {AddClaudeMax: true, AddClaudeUltra: true}} {
+					invalid := req
+					invalid.AddClaudePro, invalid.AddClaudeMax, invalid.AddClaudeUltra = pair.AddClaudePro, pair.AddClaudeMax, pair.AddClaudeUltra
+					_, err := model.CreateGuardianOrder(buyer.Id, invalid)
+					require.ErrorContains(t, err, "只能选择一项")
+				}
+				for _, stock := range []string{"out_of_stock", "claude_pro_out_of_stock"} {
+					require.NoError(t, db.Model(&product).Update(stock, true).Error)
+					_, err := model.CreateGuardianOrder(buyer.Id, req)
+					require.ErrorContains(t, err, "缺货")
+					require.NoError(t, db.Model(&product).Update(stock, false).Error)
+				}
+				require.NoError(t, db.Model(&product).Updates(map[string]any{"claude_max_out_of_stock": true, "claude_ultra_out_of_stock": true}).Error)
+				for _, tier := range []string{"max", "ultra"} {
+					unavailable := req
+					unavailable.AddClaudePro = false
+					unavailable.AddClaudeMax, unavailable.AddClaudeUltra = tier == "max", tier == "ultra"
+					_, err := model.CreateGuardianOrder(buyer.Id, unavailable)
+					require.ErrorContains(t, err, "缺货")
+				}
+				order, err := model.CreateGuardianOrder(buyer.Id, req)
+				require.NoError(t, err)
+				assert.EqualValues(t, 42000, order.AmountCents)
+				assert.EqualValues(t, 12000, order.ClaudeProPriceCents)
+				assert.Zero(t, order.ClaudeMaxPriceCents)
+				assert.Zero(t, order.ClaudeUltraPriceCents)
+				require.NoError(t, db.Model(&product).Update("out_of_stock", true).Error)
+				require.NoError(t, model.CompleteGuardianOrder(order.TradeNo, "fixture", "420.00", "alipay"))
+				receipt, err := model.GetGuardianReceipt(order.ID, buyer.Id, false)
+				require.NoError(t, err)
+				assert.EqualValues(t, 12000, receipt.ProCents)
+				renewal := model.GuardianCustomerService{UserID: buyer.Id, ServiceID: product.ID, InitialOrderID: order.ID, Title: product.Title}
+				require.NoError(t, db.Create(&renewal).Error)
+				req.AddClaudePro = false
+				req.CustomerServiceID, req.ExpectedAmountCents = renewal.ID, &product.PriceCents
+				renewed, err := model.CreateGuardianOrder(buyer.Id, req)
+				require.NoError(t, err)
+				assert.EqualValues(t, 30000, renewed.AmountCents)
+				req.CustomerServiceID = 0
+				_, err = model.CreateGuardianOrder(buyer.Id, req)
+				require.ErrorContains(t, err, "缺货")
+				resellerUser := model.User{Username: "stock-reseller-" + suffix, Password: "unused", AffCode: "str" + suffix}
+				require.NoError(t, db.Create(&resellerUser).Error)
+				reseller := model.GuardianReseller{UserID: resellerUser.Id, Code: "stock-" + suffix, Status: "active", Tier: 2}
+				require.NoError(t, db.Create(&reseller).Error)
+				require.NoError(t, model.SaveGuardianSupply(reseller.UserID, product.ID, users[1].Id, model.GuardianSupplyRequest{Granted: true, SupplyCents: 20000, ProSupplyCents: 8000}))
+				require.NoError(t, model.SaveGuardianRetail(reseller.UserID, product.ID, model.GuardianRetailRequest{Listed: true, RetailCents: 28000, ProRetailCents: 11000}))
+				products, err := model.GuardianResellerCatalog(reseller.Code)
+				require.NoError(t, err)
+				require.Len(t, products, 1)
+				assert.True(t, products[0].OutOfStock)
+				assert.True(t, products[0].ClaudeMaxOutOfStock)
+				assert.EqualValues(t, 11000, products[0].ClaudeProPriceCents)
+				req.AddClaudePro, req.ResellerCode, req.AcceptRefundFee = true, reseller.Code, true
+				total := int64(39000)
+				req.ExpectedAmountCents = &total
+				_, err = model.CreateGuardianOrder(buyer.Id, req)
+				require.ErrorContains(t, err, "缺货")
+				require.NoError(t, db.Model(&product).Update("out_of_stock", false).Error)
+				sold, err := model.CreateGuardianOrder(buyer.Id, req)
+				require.NoError(t, err)
+				sale, err := model.GetGuardianResellerOrder(sold.ID)
+				require.NoError(t, err)
+				assert.EqualValues(t, 28000, sale.SupplyCents)
+				assert.EqualValues(t, 8000, sale.ProSupplyCents)
+				assert.EqualValues(t, 11000, sold.ClaudeProPriceCents)
+				change := model.GuardianTierChange{Tier: 2, Prices: []model.GuardianTierSupply{{ServiceID: product.ID, GuardianSupplyRequest: model.GuardianSupplyRequest{Granted: true, SupplyCents: 19000, ProSupplyCents: 7000}}}}
+				preview, err := model.ChangeGuardianTier(users[1].Id, change)
+				require.NoError(t, err)
+				change.PreviewToken = preview.Token
+				_, err = model.ChangeGuardianTier(users[1].Id, change)
+				require.NoError(t, err)
+				restore := model.GuardianTierChange{Tier: 2, ResellerIDs: []int{reseller.UserID}, ServiceIDs: []int{product.ID}, Restore: true}
+				preview, err = model.ChangeGuardianTier(users[1].Id, restore)
+				require.NoError(t, err)
+				restore.PreviewToken = preview.Token
+				_, err = model.ChangeGuardianTier(users[1].Id, restore)
+				require.NoError(t, err)
+				offers, err := model.ListGuardianResellerOffers(reseller.UserID)
+				require.NoError(t, err)
+				require.Len(t, offers, 1)
+				assert.EqualValues(t, 7000, offers[0].ProSupplyCents)
+				require.NoError(t, db.Delete(&reseller).Error)
 			})
 			t.Run("invoice availability and freeform information", func(t *testing.T) {
 				buyer := model.User{Username: "invoice-" + suffix, Password: "unused", AffCode: "inv" + suffix}

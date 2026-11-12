@@ -110,6 +110,11 @@ export function GuardianServicesPanel() {
                 <TableCell>{formatCny(service.price_cents, locale)}</TableCell>
                 <TableCell>{labels.serviceRoute[service.route]}</TableCell>
                 <TableCell>
+                  {service.out_of_stock && (
+                    <Badge variant='outline'>
+                      {t('Temporarily out of stock')}
+                    </Badge>
+                  )}
                   <Badge variant={service.enabled ? 'secondary' : 'outline'}>
                     {service.enabled ? t('Listed') : t('Unlisted')}
                   </Badge>

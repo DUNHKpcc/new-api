@@ -77,6 +77,15 @@ const optionalPeriodPrice = z
   )
 
 export const guardianServiceSchema = z.object({
+  claude_pro_price: optionalPeriodPrice,
+  out_of_stock: z.boolean(),
+  stock_note: z
+    .string()
+    .trim()
+    .max(255, 'Stock notice must be at most 255 characters'),
+  claude_pro_out_of_stock: z.boolean(),
+  claude_max_out_of_stock: z.boolean(),
+  claude_ultra_out_of_stock: z.boolean(),
   claude_max_price: optionalPeriodPrice,
   claude_ultra_price: optionalPeriodPrice,
   quarter_price: optionalPeriodPrice,
@@ -98,6 +107,15 @@ export const guardianServiceSchema = z.object({
     .string()
     .trim()
     .max(5000, 'Description must be at most 5000 characters'),
+  tags: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(24, 'Each display tag must be at most 24 characters')
+    )
+    .max(8, 'Use at most 8 display tags'),
   features: z
     .string()
     .refine(

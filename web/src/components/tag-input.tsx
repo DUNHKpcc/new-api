@@ -25,6 +25,9 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface TagInputProps {
+  id?: string
+  ariaDescribedBy?: string
+  ariaInvalid?: boolean
   value: string[]
   onChange: (tags: string[]) => void
   placeholder?: string
@@ -33,6 +36,9 @@ interface TagInputProps {
 }
 
 export function TagInput({
+  id,
+  ariaDescribedBy,
+  ariaInvalid,
   value = [],
   onChange,
   placeholder,
@@ -101,6 +107,9 @@ export function TagInput({
         </Badge>
       ))}
       <input
+        id={id}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         ref={inputRef}
         type='text'
         value={inputValue}

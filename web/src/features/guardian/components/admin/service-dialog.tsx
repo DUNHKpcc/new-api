@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
+import { TagInput } from '@/components/tag-input'
 import { Button } from '@/components/ui/button'
 import {
   Field,
@@ -63,14 +64,21 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
       subtitle: '',
       description: '',
       features: '',
+      tags: [],
       price: '',
       claude_max_price: '',
+      claude_pro_price: '',
       claude_ultra_price: '2500',
       quarter_price: '',
       annual_price: '',
       delivery_note: '',
       badge: '',
       route: 'any',
+      out_of_stock: false,
+      stock_note: '',
+      claude_pro_out_of_stock: false,
+      claude_max_out_of_stock: false,
+      claude_ultra_out_of_stock: false,
       invoice_enabled: false,
       enabled: true,
       sort_order: 0,
@@ -85,9 +93,13 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     subtitle: service.subtitle,
     description: service.description,
     features: service.features.join('\n'),
+    tags: service.tags ?? [],
     price: centsToYuanInput(service.price_cents),
     claude_max_price: service.claude_max_price_cents
       ? centsToYuanInput(service.claude_max_price_cents)
+      : '',
+    claude_pro_price: service.claude_pro_price_cents
+      ? centsToYuanInput(service.claude_pro_price_cents)
       : '',
     claude_ultra_price: service.claude_ultra_price_cents
       ? centsToYuanInput(service.claude_ultra_price_cents)
@@ -101,6 +113,11 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     delivery_note: service.delivery_note,
     badge: service.badge,
     route: service.route,
+    out_of_stock: service.out_of_stock ?? false,
+    stock_note: service.stock_note ?? '',
+    claude_pro_out_of_stock: service.claude_pro_out_of_stock ?? false,
+    claude_max_out_of_stock: service.claude_max_out_of_stock ?? false,
+    claude_ultra_out_of_stock: service.claude_ultra_out_of_stock ?? false,
     invoice_enabled: service.invoice_enabled ?? false,
     enabled: service.enabled,
     sort_order: service.sort_order,
@@ -132,9 +149,14 @@ export function GuardianServiceDialog(props: {
           subtitle: values.subtitle,
           description: values.description,
           features: splitFeatureLines(values.features),
+          tags: values.tags,
           claude_max_price_cents:
             values.route === 'mac_mini'
               ? (yuanToCents(values.claude_max_price) ?? 0)
+              : 0,
+          claude_pro_price_cents:
+            values.route === 'mac_mini'
+              ? (yuanToCents(values.claude_pro_price) ?? 0)
               : 0,
           claude_ultra_price_cents:
             values.route === 'mac_mini'
@@ -152,6 +174,11 @@ export function GuardianServiceDialog(props: {
           delivery_note: values.delivery_note,
           badge: values.badge,
           route: values.route,
+          out_of_stock: values.out_of_stock,
+          stock_note: values.stock_note,
+          claude_pro_out_of_stock: values.claude_pro_out_of_stock,
+          claude_max_out_of_stock: values.claude_max_out_of_stock,
+          claude_ultra_out_of_stock: values.claude_ultra_out_of_stock,
           invoice_enabled: values.invoice_enabled ?? false,
           enabled: values.enabled,
           sort_order: values.sort_order,
@@ -262,12 +289,16 @@ export function GuardianServiceDialog(props: {
           (
             [
               {
+                field: 'claude_pro_price',
+                label: 'Claude Pro add-on price (CNY)',
+              },
+              {
                 field: 'claude_max_price',
-                label: 'Claude MAX first-month add-on (CNY)',
+                label: 'Claude MAX add-on price (CNY)',
               },
               {
                 field: 'claude_ultra_price',
-                label: 'Claude Ultra first-month add-on (CNY)',
+                label: 'Claude Ultra add-on price (CNY)',
               },
             ] as const
           ).map(({ field, label }) => (
@@ -289,6 +320,64 @@ export function GuardianServiceDialog(props: {
               {fieldError(errors[field]?.message)}
             </Field>
           ))}
+        <fieldset className='space-y-3 rounded-lg border p-4'>
+          <legend className='px-1 text-sm font-medium'>
+            {t('Availability')}
+          </legend>
+          {(
+            [
+              { name: 'out_of_stock', label: t('Service out of stock') },
+              ...(route === 'mac_mini'
+                ? ([
+                    {
+                      name: 'claude_pro_out_of_stock',
+                      label: t('Claude Pro out of stock'),
+                    },
+                    {
+                      name: 'claude_max_out_of_stock',
+                      label: t('Claude MAX out of stock'),
+                    },
+                    {
+                      name: 'claude_ultra_out_of_stock',
+                      label: t('Claude Ultra out of stock'),
+                    },
+                  ] as const)
+                : []),
+            ] as const
+          ).map(({ name, label }) => (
+            <Field key={name} orientation='horizontal'>
+              <Controller
+                control={form.control}
+                name={name}
+                render={({ field }) => (
+                  <Switch
+                    id={`guardian-${name}`}
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+              <FieldLabel htmlFor={`guardian-${name}`}>{label}</FieldLabel>
+            </Field>
+          ))}
+          <Field data-invalid={!!errors.stock_note}>
+            <FieldLabel htmlFor='guardian-stock-note'>
+              {t('Stock notice')}
+            </FieldLabel>
+            <Textarea
+              id='guardian-stock-note'
+              maxLength={255}
+              {...form.register('stock_note')}
+              aria-invalid={!!errors.stock_note}
+            />
+            <FieldDescription>
+              {t(
+                'Optional. Shown when the service or an add-on is out of stock.'
+              )}
+            </FieldDescription>
+            {fieldError(errors.stock_note?.message)}
+          </Field>
+        </fieldset>
         <Field data-invalid={!!errors.base_sales}>
           <FieldLabel htmlFor='guardian-service-base-sales'>
             {t('Base sales')}
@@ -340,6 +429,60 @@ export function GuardianServiceDialog(props: {
             {...form.register('subtitle')}
           />
           {fieldError(errors.subtitle?.message)}
+        </Field>
+
+        <Field data-invalid={!!errors.tags}>
+          <FieldLabel htmlFor='guardian-service-tags'>
+            {t('Display tags')}
+          </FieldLabel>
+          <Controller
+            control={form.control}
+            name='tags'
+            render={({ field }) => (
+              <>
+                <TagInput
+                  id='guardian-service-tags'
+                  value={field.value}
+                  onChange={field.onChange}
+                  disabled={save.isPending}
+                  ariaInvalid={!!errors.tags}
+                  ariaDescribedBy='guardian-tags-help'
+                />
+                <div className='flex flex-wrap gap-1.5'>
+                  {[
+                    t('Static IP'),
+                    t('Claude Pro subscription'),
+                    t('Claude MAX subscription'),
+                    t('Claude Ultra subscription'),
+                  ].map((tag) => (
+                    <Button
+                      key={tag}
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      disabled={
+                        save.isPending ||
+                        field.value.includes(tag) ||
+                        field.value.length >= 8
+                      }
+                      onClick={() => field.onChange([...field.value, tag])}
+                    >
+                      {tag}
+                    </Button>
+                  ))}
+                </div>
+              </>
+            )}
+          />
+          <FieldDescription id='guardian-tags-help'>
+            {t(
+              'Optional display labels only. Add, edit or remove them without changing the price. Up to 8 tags, 24 characters each.'
+            )}
+          </FieldDescription>
+          {fieldError(
+            errors.tags?.message ??
+              errors.tags?.find?.((error) => error?.message)?.message
+          )}
         </Field>
 
         <Field data-invalid={!!errors.features}>

@@ -212,10 +212,11 @@ it('uses the Mac mini route and macOS without showing environment selectors', ()
 })
 
 it.each([
+  { name: 'Pro', field: 'add_claude_pro', total: '¥5,200' },
   { name: 'MAX', field: 'add_claude_max', total: '¥6,000' },
   { name: 'Ultra', field: 'add_claude_ultra', total: '¥7,500' },
 ])(
-  'charges $name once, allows removal, and keeps the two add-ons mutually exclusive',
+  'charges $name once, allows removal, and keeps the add-ons mutually exclusive',
   async ({ name, field, total }) => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({
       data: {
@@ -236,6 +237,7 @@ it.each([
           ...service,
           route: 'mac_mini',
           annual_price_cents: 500000,
+          claude_pro_price_cents: 20000,
           claude_max_price_cents: 100000,
           claude_ultra_price_cents: 250000,
         }}
@@ -245,10 +247,10 @@ it.each([
       />
     )
     const addon = screen.getByRole('checkbox', {
-      name: `Add Claude ${name} for the first month`,
+      name: `Add Claude ${name} subscription`,
     })
     const other = screen.getByRole('checkbox', {
-      name: `Add Claude ${name === 'MAX' ? 'Ultra' : 'MAX'} for the first month`,
+      name: `Add Claude ${name === 'MAX' ? 'Ultra' : 'MAX'} subscription`,
     })
     expect(addon).not.toBeChecked()
     expect(screen.queryByText(/US\$/)).not.toBeInTheDocument()
@@ -329,6 +331,21 @@ it('requires explicit direct-renewal consent and sends the owned service ID', as
       onClose={vi.fn()}
     />
   )
+  const cards = screen
+    .getAllByRole('checkbox')
+    .filter((item) =>
+      item.getAttribute('aria-describedby')?.endsWith('-description')
+    )
+  for (const card of cards) {
+    expect(card.parentElement?.querySelector('label')).toHaveClass(
+      'h-full',
+      'min-h-36'
+    )
+    expect(card.parentElement?.parentElement).toHaveClass(
+      'auto-rows-fr',
+      'grid-cols-3'
+    )
+  }
   expect(screen.getByRole('button', { name: /^Pay / })).toBeDisabled()
   await userEvent.selectOptions(
     screen.getByLabelText('How did you hear about us?'),
@@ -393,4 +410,44 @@ it('prefills the previous discovery channel and allows changing it', async () =>
   expect(screen.getByLabelText('How did you hear about us?')).toHaveValue(
     'other'
   )
+})
+
+it('disables an out-of-stock add-on and blocks submitting a stale selected add-on', () => {
+  renderDialog(
+    <CheckoutDialog
+      service={{
+        ...service,
+        route: 'mac_mini',
+        claude_pro_price_cents: 20000,
+        claude_pro_out_of_stock: true,
+      }}
+      addClaudePro
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  expect(
+    screen.getByRole('checkbox', { name: 'Add Claude Pro subscription' })
+  ).toHaveAttribute('aria-disabled', 'true')
+  const cards = screen
+    .getAllByRole('checkbox')
+    .filter((item) =>
+      item.getAttribute('aria-describedby')?.endsWith('-description')
+    )
+  for (const card of cards) {
+    expect(card.parentElement?.querySelector('label')).toHaveClass(
+      'h-full',
+      'min-h-36'
+    )
+    expect(card.parentElement?.parentElement).toHaveClass(
+      'auto-rows-fr',
+      'grid-cols-3'
+    )
+  }
+  expect(screen.getByRole('button', { name: /^Pay / })).toBeDisabled()
+  expect(
+    screen.getByText(
+      'The selected service or add-on is out of stock. Please choose again.'
+    )
+  ).toHaveAttribute('role', 'alert')
 })

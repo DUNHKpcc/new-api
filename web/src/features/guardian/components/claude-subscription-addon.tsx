@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Check } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -27,7 +28,9 @@ import { cn } from '@/lib/utils'
 import { formatCny } from '../lib/price'
 
 export function ClaudeSubscriptionAddon(props: {
-  variant: 'max' | 'ultra'
+  variant: 'pro' | 'max' | 'ultra'
+  outOfStock?: boolean
+  disabled?: boolean
   priceCents: number
   checked: boolean
   onCheckedChange: (checked: boolean) => void
@@ -35,13 +38,26 @@ export function ClaudeSubscriptionAddon(props: {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const id = useId()
+  const unavailable =
+    props.priceCents === 0 || props.outOfStock || props.disabled
+  const titles = {
+    pro: t('Add Claude Pro subscription'),
+    max: t('Add Claude MAX subscription'),
+    ultra: t('Add Claude Ultra subscription'),
+  }
+  let description = t('One-time add-on')
+  if (props.outOfStock) {
+    description = t('Temporarily out of stock')
+  } else if (props.priceCents === 0) {
+    description = t('This add-on is not available yet.')
+  }
   return (
     <div className='relative min-w-0 [&>input]:absolute!'>
       <Checkbox
         id={id}
         className='peer sr-only absolute top-0 left-0'
         checked={props.checked}
-        disabled={props.priceCents === 0}
+        disabled={unavailable}
         onCheckedChange={props.onCheckedChange}
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-description`}
@@ -49,42 +65,59 @@ export function ClaudeSubscriptionAddon(props: {
       <Label
         htmlFor={id}
         className={cn(
-          'g-rule block h-full cursor-pointer space-y-2 rounded-lg border p-3 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--g-accent)] peer-focus-visible:ring-offset-2',
-          props.checked && 'border-[var(--g-accent)] bg-[var(--g-accent-wash)]',
-          props.priceCents === 0 && 'cursor-not-allowed opacity-50'
+          'relative flex h-full min-h-36 cursor-pointer flex-col items-stretch! gap-0! rounded-xl border border-[var(--g-rule)] bg-[var(--g-paper-raised)] p-3 text-left transition-[background-color,border-color,box-shadow] duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--g-accent)] peer-focus-visible:ring-offset-2 motion-reduce:transition-none sm:p-4',
+          !unavailable &&
+            'hover:border-[var(--g-accent)] hover:bg-[var(--g-accent-wash)]',
+          props.checked &&
+            'border-[var(--g-accent)] bg-[var(--g-accent-wash)] ring-1 ring-[var(--g-accent)]',
+          unavailable &&
+            'cursor-not-allowed bg-[var(--g-paper-sunk)] text-[var(--g-ink-soft)]'
         )}
       >
+        <span id={`${id}-title`} className='sr-only'>
+          {titles[props.variant]}
+        </span>
         <span
-          id={`${id}-title`}
-          className='flex items-start gap-1.5 text-sm leading-5'
+          className='flex items-center justify-between gap-1'
+          aria-hidden='true'
         >
-          <img
-            src='/images/guardian/claude-color.png'
-            alt=''
-            className='size-5 shrink-0'
-          />
-          <span className='min-w-0'>
-            {props.variant === 'ultra'
-              ? t('Add Claude Ultra for the first month')
-              : t('Add Claude MAX for the first month')}
+          <span className='text-[10px] font-medium tracking-[0.12em] text-[var(--g-ink-soft)] uppercase'>
+            Claude
+          </span>
+          <span
+            className={cn(
+              'flex size-4 shrink-0 items-center justify-center rounded-full border border-[var(--g-rule)]',
+              props.checked &&
+                'border-[var(--g-accent)] bg-[var(--g-accent)] text-white'
+            )}
+          >
+            {props.checked && <Check className='size-3' strokeWidth={2.5} />}
           </span>
         </span>
-        <span className='block text-sm font-medium text-[var(--g-accent)]'>
-          {props.priceCents > 0 && (
-            <span>
-              {t('Charged: +{{price}}', {
-                price: formatCny(props.priceCents, locale),
-              })}
-            </span>
+        <span
+          aria-hidden='true'
+          className='mt-2 text-xl leading-6 font-semibold tracking-tight'
+        >
+          {{ pro: 'Pro', max: 'MAX', ultra: 'Ultra' }[props.variant]}
+        </span>
+        <span className='mt-1 text-[11px] leading-4 font-normal text-[var(--g-ink-soft)]'>
+          {t('Subscription')}
+        </span>
+        <span
+          className={cn(
+            'mt-4 whitespace-nowrap text-sm leading-6 font-semibold tabular-nums sm:text-lg',
+            props.checked && 'text-[var(--g-accent)]'
           )}
+        >
+          {props.priceCents > 0
+            ? `+${formatCny(props.priceCents, locale)}`
+            : '—'}
         </span>
         <span
           id={`${id}-description`}
-          className='block text-xs leading-5 font-normal text-[var(--g-ink-soft)]'
+          className='mt-1 text-[10px] leading-4 font-normal text-[var(--g-ink-soft)]'
         >
-          {props.priceCents > 0
-            ? t('First month only. Later subscription renewals are separate.')
-            : t('This add-on is not available yet.')}
+          {description}
         </span>
       </Label>
     </div>

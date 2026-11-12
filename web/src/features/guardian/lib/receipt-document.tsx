@@ -100,20 +100,29 @@ export function buildReceiptDocument(props: {
               </td>
               <td>
                 {formatCny(
-                  data.amount_cents - data.max_cents - data.ultra_cents,
+                  data.amount_cents -
+                    data.max_cents -
+                    data.ultra_cents -
+                    (data.pro_cents ?? 0),
                   locale
                 )}
               </td>
             </tr>
             {data.max_cents > 0 && (
               <tr>
-                <td>{t('Claude MAX first month')}</td>
+                <td>{t('Claude MAX subscription')}</td>
                 <td>{formatCny(data.max_cents, locale)}</td>
+              </tr>
+            )}
+            {(data.pro_cents ?? 0) > 0 && (
+              <tr>
+                <td>{t('Claude Pro subscription')}</td>
+                <td>{formatCny(data.pro_cents ?? 0, locale)}</td>
               </tr>
             )}
             {data.ultra_cents > 0 && (
               <tr>
-                <td>{t('Claude Ultra first month')}</td>
+                <td>{t('Claude Ultra subscription')}</td>
                 <td>{formatCny(data.ultra_cents, locale)}</td>
               </tr>
             )}

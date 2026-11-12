@@ -158,6 +158,7 @@ export function GuardianServices(props: {
   resellerCode?: string
   requestedBillingPeriod?: GuardianBillingPeriod
   requestedClaudeMax?: boolean
+  requestedClaudePro?: boolean
   requestedClaudeUltra?: boolean
   requestedServiceId?: number
   category?: 'setup' | 'mac_mini' | 'account_status'
@@ -234,6 +235,7 @@ export function GuardianServices(props: {
                 category={category}
                 requestedBillingPeriod={props.requestedBillingPeriod}
                 requestedClaudeMax={props.requestedClaudeMax}
+                requestedClaudePro={props.requestedClaudePro}
                 requestedClaudeUltra={props.requestedClaudeUltra}
                 requestedServiceId={props.requestedServiceId}
                 onRequestHandled={clearRequest}

@@ -60,6 +60,7 @@ export function CheckoutDialog(props: {
   directConfirmationRequired?: boolean
   billingPeriod?: GuardianBillingPeriod
   addClaudeMax?: boolean
+  addClaudePro?: boolean
   addClaudeUltra?: boolean
   service: GuardianService
   payMethods: GuardianPayMethod[]
@@ -75,15 +76,25 @@ export function CheckoutDialog(props: {
   const needsConsent =
     !!props.resellerCode || !!props.directConfirmationRequired
   const [addClaudeMax, setAddClaudeMax] = useState(!!props.addClaudeMax)
+  const [addClaudePro, setAddClaudePro] = useState(!!props.addClaudePro)
   const [addClaudeUltra, setAddClaudeUltra] = useState(!!props.addClaudeUltra)
   const addonPrice =
     props.service.route === 'mac_mini' && addClaudeMax
       ? (props.service.claude_max_price_cents ?? 0)
       : 0
+  const proPrice =
+    props.service.route === 'mac_mini' && addClaudePro
+      ? (props.service.claude_pro_price_cents ?? 0)
+      : 0
   const ultraPrice =
     props.service.route === 'mac_mini' && addClaudeUltra
       ? (props.service.claude_ultra_price_cents ?? 0)
       : 0
+  const unavailable =
+    (!!props.service.out_of_stock && !props.customerServiceId) ||
+    (addClaudePro && !!props.service.claude_pro_out_of_stock) ||
+    (addClaudeMax && !!props.service.claude_max_out_of_stock) ||
+    (addClaudeUltra && !!props.service.claude_ultra_out_of_stock)
   const form = useForm<GuardianOrderForm>({
     resolver: zodResolver(guardianOrderSchema),
     defaultValues: {
@@ -121,7 +132,8 @@ export function CheckoutDialog(props: {
           ? {
               reseller_code: props.resellerCode,
               customer_service_id: props.customerServiceId,
-              expected_amount_cents: hostingPrice + addonPrice + ultraPrice,
+              expected_amount_cents:
+                hostingPrice + addonPrice + ultraPrice + proPrice,
               accept_refund_fee: accepted,
               accept_direct_renewal:
                 !!props.directConfirmationRequired && accepted,
@@ -135,6 +147,7 @@ export function CheckoutDialog(props: {
           ? {
               billing_period: props.billingPeriod ?? 'monthly',
               ...(addClaudeMax ? { add_claude_max: true } : {}),
+              ...(addClaudePro ? { add_claude_pro: true } : {}),
               ...(addClaudeUltra ? { add_claude_ultra: true } : {}),
             }
           : {}),
@@ -153,7 +166,10 @@ export function CheckoutDialog(props: {
       ? guardianPeriodPrice(props.service, props.billingPeriod ?? 'monthly')
           .total
       : props.service.price_cents
-  const price = formatCny(hostingPrice + addonPrice + ultraPrice, locale)
+  const price = formatCny(
+    hostingPrice + addonPrice + ultraPrice + proPrice,
+    locale
+  )
 
   return (
     <Dialog
@@ -177,7 +193,9 @@ export function CheckoutDialog(props: {
           <Button
             type='submit'
             form={FORM_ID}
-            disabled={checkout.isPending || (needsConsent && !accepted)}
+            disabled={
+              unavailable || checkout.isPending || (needsConsent && !accepted)
+            }
           >
             {checkout.isPending
               ? t('Opening payment...')
@@ -191,7 +209,9 @@ export function CheckoutDialog(props: {
         className='space-y-5'
         noValidate
         onSubmit={form.handleSubmit((values) => {
-          if (!needsConsent || accepted) checkout.mutate(values)
+          if (!unavailable && (!needsConsent || accepted)) {
+            checkout.mutate(values)
+          }
         })}
       >
         {props.service.route === 'mac_mini' && (
@@ -201,26 +221,57 @@ export function CheckoutDialog(props: {
           </p>
         )}
         {props.service.route === 'mac_mini' && (
-          <div className='grid grid-cols-2 gap-3'>
+          <div className='grid auto-rows-fr grid-cols-3 gap-2 sm:gap-3'>
+            <ClaudeSubscriptionAddon
+              variant='pro'
+              outOfStock={props.service.claude_pro_out_of_stock}
+              disabled={props.service.out_of_stock && !props.customerServiceId}
+              priceCents={props.service.claude_pro_price_cents ?? 0}
+              checked={addClaudePro}
+              onCheckedChange={(checked) => {
+                setAddClaudePro(checked)
+                if (checked) {
+                  setAddClaudeMax(false)
+                  setAddClaudeUltra(false)
+                }
+              }}
+            />
             <ClaudeSubscriptionAddon
               variant='max'
+              outOfStock={props.service.claude_max_out_of_stock}
+              disabled={props.service.out_of_stock && !props.customerServiceId}
               priceCents={props.service.claude_max_price_cents ?? 0}
               checked={addClaudeMax}
               onCheckedChange={(checked) => {
                 setAddClaudeMax(checked)
-                if (checked) setAddClaudeUltra(false)
+                if (checked) {
+                  setAddClaudeUltra(false)
+                  setAddClaudePro(false)
+                }
               }}
             />
             <ClaudeSubscriptionAddon
               variant='ultra'
+              outOfStock={props.service.claude_ultra_out_of_stock}
+              disabled={props.service.out_of_stock && !props.customerServiceId}
               priceCents={props.service.claude_ultra_price_cents ?? 0}
               checked={addClaudeUltra}
               onCheckedChange={(checked) => {
                 setAddClaudeUltra(checked)
-                if (checked) setAddClaudeMax(false)
+                if (checked) {
+                  setAddClaudeMax(false)
+                  setAddClaudePro(false)
+                }
               }}
             />
           </div>
+        )}
+        {unavailable && (
+          <p role='alert'>
+            {t(
+              'The selected service or add-on is out of stock. Please choose again.'
+            )}
+          </p>
         )}
         {props.service.description && (
           <div className='max-h-40 space-y-3 overflow-y-auto rounded-lg bg-[var(--g-paper-sunk)] p-4 text-sm leading-6 text-[var(--g-ink-soft)]'>

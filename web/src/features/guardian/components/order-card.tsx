@@ -88,15 +88,24 @@ export function OrderCard(props: {
     ...((order.claude_max_price_cents ?? 0) > 0
       ? [
           {
-            label: t('Claude MAX first month'),
+            label: t('Claude MAX subscription'),
             value: formatCny(order.claude_max_price_cents ?? 0, locale),
           },
         ]
       : []),
+    ...((order.claude_pro_price_cents ?? 0) > 0
+      ? [
+          {
+            label: t('Claude Pro subscription'),
+            value: formatCny(order.claude_pro_price_cents ?? 0, locale),
+          },
+        ]
+      : []),
+
     ...((order.claude_ultra_price_cents ?? 0) > 0
       ? [
           {
-            label: t('Claude Ultra first month'),
+            label: t('Claude Ultra subscription'),
             value: formatCny(order.claude_ultra_price_cents ?? 0, locale),
           },
         ]

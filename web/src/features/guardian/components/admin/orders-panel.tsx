@@ -223,13 +223,19 @@ export function GuardianOrdersPanel() {
                     {order.service_title}
                     {(order.claude_max_price_cents ?? 0) > 0 && (
                       <span className='block text-xs text-[var(--g-accent)]'>
-                        {t('Claude MAX first month')} ·{' '}
+                        {t('Claude MAX subscription')} ·{' '}
                         {formatCny(order.claude_max_price_cents ?? 0, locale)}
+                      </span>
+                    )}
+                    {(order.claude_pro_price_cents ?? 0) > 0 && (
+                      <span className='block text-xs text-[var(--g-accent)]'>
+                        {t('Claude Pro subscription')} ·{' '}
+                        {formatCny(order.claude_pro_price_cents ?? 0, locale)}
                       </span>
                     )}
                     {(order.claude_ultra_price_cents ?? 0) > 0 && (
                       <span className='block text-xs text-[var(--g-accent)]'>
-                        {t('Claude Ultra first month')} ·{' '}
+                        {t('Claude Ultra subscription')} ·{' '}
                         {formatCny(order.claude_ultra_price_cents ?? 0, locale)}
                       </span>
                     )}

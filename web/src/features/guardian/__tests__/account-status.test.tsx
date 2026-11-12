@@ -196,6 +196,7 @@ it('saves all three conditions independently and allows clearing recovered condi
         user={{
           user_id: 7,
           username: 'buyer',
+          historical_category: 'healthy',
           banned: true,
           phone_required: false,
           kyc_required: false,
@@ -206,17 +207,28 @@ it('saves all three conditions independently and allows clearing recovered condi
       />
     </QueryClientProvider>
   )
-  await userEvent.click(screen.getByRole('switch', { name: 'Account banned' }))
   await userEvent.click(
-    screen.getByRole('switch', { name: 'Phone verification required' })
+    screen.getByRole('checkbox', { name: 'Account banned' })
   )
-  await userEvent.click(screen.getByRole('switch', { name: 'KYC required' }))
+  await userEvent.click(
+    screen.getByRole('checkbox', { name: 'Phone verification required' })
+  )
+  await userEvent.click(screen.getByRole('checkbox', { name: 'KYC required' }))
+  expect(
+    screen.queryByLabelText('Historical user link')
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce())
+  expect(put.mock.calls[0][1]).toMatchObject({ historical_category: 'healthy' })
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Historical user link (optional)' })
+  )
   await userEvent.selectOptions(
     screen.getByLabelText('Historical user link'),
     'banned_only'
   )
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(saved).toHaveBeenCalledOnce())
+  await waitFor(() => expect(saved).toHaveBeenCalledTimes(2))
   expect(put).toHaveBeenCalledWith('/api/guardian/admin/account-statuses/7', {
     banned: false,
     phone_required: true,

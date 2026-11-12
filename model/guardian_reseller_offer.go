@@ -39,7 +39,9 @@ func SaveGuardianResellerSetting(actorID int, feeBPS int64) error {
 
 type GuardianResellerOffer struct {
 	FollowTier         bool  `json:"follow_tier"`
+	ProSupplyCents     int64 `json:"pro_supply_cents"`
 	UltraSupplyCents   int64 `json:"ultra_supply_cents"`
+	ProRetailCents     int64 `json:"pro_retail_cents"`
 	UltraRetailCents   int64 `json:"ultra_retail_cents"`
 	ID                 int   `json:"id"`
 	ResellerID         int   `json:"reseller_id" gorm:"uniqueIndex:ux_guardian_offer,priority:1"`
@@ -58,6 +60,7 @@ type GuardianResellerOffer struct {
 }
 
 type GuardianSupplyRequest struct {
+	ProSupplyCents     int64 `json:"pro_supply_cents"`
 	UltraSupplyCents   int64 `json:"ultra_supply_cents"`
 	Granted            bool  `json:"granted"`
 	SupplyCents        int64 `json:"supply_cents"`
@@ -67,6 +70,7 @@ type GuardianSupplyRequest struct {
 }
 
 type GuardianRetailRequest struct {
+	ProRetailCents     int64 `json:"pro_retail_cents"`
 	UltraRetailCents   int64 `json:"ultra_retail_cents"`
 	Listed             bool  `json:"listed"`
 	RetailCents        int64 `json:"retail_cents"`
@@ -76,7 +80,7 @@ type GuardianRetailRequest struct {
 }
 
 func SaveGuardianSupply(resellerID, serviceID, actorID int, req GuardianSupplyRequest) error {
-	for _, amount := range []int64{req.SupplyCents, req.QuarterSupplyCents, req.AnnualSupplyCents, req.MaxSupplyCents, req.UltraSupplyCents} {
+	for _, amount := range []int64{req.SupplyCents, req.QuarterSupplyCents, req.AnnualSupplyCents, req.MaxSupplyCents, req.UltraSupplyCents, req.ProSupplyCents} {
 		if amount < 0 || amount > 10000000 {
 			return errors.New("供货金额须在 0 至 100000 元之间")
 		}
@@ -93,11 +97,11 @@ func SaveGuardianSupply(resellerID, serviceID, actorID int, req GuardianSupplyRe
 		if err := tx.First(&product, serviceID).Error; err != nil {
 			return err
 		}
-		if product.Route != "mac_mini" && (req.QuarterSupplyCents != 0 || req.AnnualSupplyCents != 0 || req.MaxSupplyCents != 0 || req.UltraSupplyCents != 0) {
+		if product.Route != "mac_mini" && (req.QuarterSupplyCents != 0 || req.AnnualSupplyCents != 0 || req.MaxSupplyCents != 0 || req.UltraSupplyCents != 0 || req.ProSupplyCents != 0) {
 			return errors.New("部署服务不支持周期及订阅加购供货价")
 		}
-		offer := GuardianResellerOffer{UltraSupplyCents: req.UltraSupplyCents, ResellerID: resellerID, ServiceID: serviceID, Granted: req.Granted, SupplyCents: req.SupplyCents, QuarterSupplyCents: req.QuarterSupplyCents, AnnualSupplyCents: req.AnnualSupplyCents, MaxSupplyCents: req.MaxSupplyCents, UpdatedAt: time.Now().Unix()}
-		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reseller_id"}, {Name: "service_id"}}, DoUpdates: clause.AssignmentColumns([]string{"follow_tier", "granted", "supply_cents", "quarter_supply_cents", "annual_supply_cents", "max_supply_cents", "ultra_supply_cents", "updated_at"})}).Create(&offer).Error; err != nil {
+		offer := GuardianResellerOffer{ProSupplyCents: req.ProSupplyCents, UltraSupplyCents: req.UltraSupplyCents, ResellerID: resellerID, ServiceID: serviceID, Granted: req.Granted, SupplyCents: req.SupplyCents, QuarterSupplyCents: req.QuarterSupplyCents, AnnualSupplyCents: req.AnnualSupplyCents, MaxSupplyCents: req.MaxSupplyCents, UpdatedAt: time.Now().Unix()}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reseller_id"}, {Name: "service_id"}}, DoUpdates: clause.AssignmentColumns([]string{"follow_tier", "granted", "supply_cents", "quarter_supply_cents", "annual_supply_cents", "max_supply_cents", "ultra_supply_cents", "pro_supply_cents", "updated_at"})}).Create(&offer).Error; err != nil {
 			return err
 		}
 		return recordGuardianResellerOperation(tx, actorID, resellerID, "supply_updated", map[string]any{"service_id": serviceID, "request": req})
@@ -105,7 +109,7 @@ func SaveGuardianSupply(resellerID, serviceID, actorID int, req GuardianSupplyRe
 }
 
 func SaveGuardianRetail(resellerID, serviceID int, req GuardianRetailRequest) error {
-	for _, amount := range []int64{req.RetailCents, req.QuarterRetailCents, req.AnnualRetailCents, req.MaxRetailCents, req.UltraRetailCents} {
+	for _, amount := range []int64{req.RetailCents, req.QuarterRetailCents, req.AnnualRetailCents, req.MaxRetailCents, req.UltraRetailCents, req.ProRetailCents} {
 		if amount < 0 || amount > 10000000 {
 			return errors.New("销售金额须在 0 至 100000 元之间")
 		}
@@ -126,20 +130,21 @@ func SaveGuardianRetail(resellerID, serviceID int, req GuardianRetailRequest) er
 		if req.Listed && req.RetailCents == 0 {
 			return errors.New("请设置单次或月付售价")
 		}
-		for _, price := range [][2]int64{{req.RetailCents, offer.SupplyCents}, {req.QuarterRetailCents, offer.QuarterSupplyCents}, {req.AnnualRetailCents, offer.AnnualSupplyCents}, {req.MaxRetailCents, offer.MaxSupplyCents}, {req.UltraRetailCents, offer.UltraSupplyCents}} {
+		for _, price := range [][2]int64{{req.RetailCents, offer.SupplyCents}, {req.QuarterRetailCents, offer.QuarterSupplyCents}, {req.AnnualRetailCents, offer.AnnualSupplyCents}, {req.MaxRetailCents, offer.MaxSupplyCents}, {req.UltraRetailCents, offer.UltraSupplyCents}, {req.ProRetailCents, offer.ProSupplyCents}} {
 			if req.Listed && price[0] > 0 && !guardianResalePriceAvailable(price[0], price[1], setting.FeeBPS) {
 				return errors.New("售价须覆盖供货价和预计支付手续费，且该规格必须已授权")
 			}
 		}
 		offer.RetailCents, offer.QuarterRetailCents, offer.AnnualRetailCents, offer.MaxRetailCents = req.RetailCents, req.QuarterRetailCents, req.AnnualRetailCents, req.MaxRetailCents
 		offer.UltraRetailCents = req.UltraRetailCents
+		offer.ProRetailCents = req.ProRetailCents
 		offer.Listed, offer.UpdatedAt = req.Listed, time.Now().Unix()
 		if offer.ID == 0 {
 			if err := tx.Create(&GuardianResellerOffer{ResellerID: resellerID, ServiceID: serviceID, FollowTier: true}).Error; err != nil {
 				return err
 			}
 		}
-		if err := tx.Model(&GuardianResellerOffer{}).Where("reseller_id = ? AND service_id = ?", resellerID, serviceID).Select("retail_cents", "quarter_retail_cents", "annual_retail_cents", "max_retail_cents", "ultra_retail_cents", "listed", "updated_at").Updates(&offer).Error; err != nil {
+		if err := tx.Model(&GuardianResellerOffer{}).Where("reseller_id = ? AND service_id = ?", resellerID, serviceID).Select("retail_cents", "quarter_retail_cents", "annual_retail_cents", "max_retail_cents", "ultra_retail_cents", "pro_retail_cents", "listed", "updated_at").Updates(&offer).Error; err != nil {
 			return err
 		}
 		return recordGuardianResellerOperation(tx, resellerID, resellerID, "retail_updated", map[string]any{"service_id": serviceID, "request": req})
@@ -197,7 +202,7 @@ func GuardianResellerCatalog(code string) ([]GuardianService, error) {
 		for _, option := range []struct {
 			target         *int64
 			retail, supply int64
-		}{{&p.QuarterPriceCents, o.QuarterRetailCents, o.QuarterSupplyCents}, {&p.AnnualPriceCents, o.AnnualRetailCents, o.AnnualSupplyCents}, {&p.ClaudeMaxPriceCents, o.MaxRetailCents, o.MaxSupplyCents}, {&p.ClaudeUltraPriceCents, o.UltraRetailCents, o.UltraSupplyCents}} {
+		}{{&p.QuarterPriceCents, o.QuarterRetailCents, o.QuarterSupplyCents}, {&p.AnnualPriceCents, o.AnnualRetailCents, o.AnnualSupplyCents}, {&p.ClaudeMaxPriceCents, o.MaxRetailCents, o.MaxSupplyCents}, {&p.ClaudeUltraPriceCents, o.UltraRetailCents, o.UltraSupplyCents}, {&p.ClaudeProPriceCents, o.ProRetailCents, o.ProSupplyCents}} {
 			if *option.target > 0 && guardianResalePriceAvailable(option.retail, option.supply, setting.FeeBPS) {
 				*option.target = option.retail
 			} else {

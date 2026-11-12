@@ -57,17 +57,25 @@ function ServiceCard(props: {
     service: GuardianService,
     period: GuardianBillingPeriod,
     addClaudeMax: boolean,
-    addClaudeUltra: boolean
+    addClaudeUltra: boolean,
+    addClaudePro: boolean
   ) => void
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const labels = useGuardianLabels()
   const [addClaudeMax, setAddClaudeMax] = useState(false)
+  const [addClaudePro, setAddClaudePro] = useState(false)
   const [addClaudeUltra, setAddClaudeUltra] = useState(false)
   const [period, setPeriod] = useState<GuardianBillingPeriod>('monthly')
   const pricing = guardianPeriodPrice(props.service, period)
   const macMini = props.service.route === 'mac_mini'
+  let bookingLabel = props.purchaseEnabled
+    ? t('Book this service')
+    : t('Ordering unavailable')
+  if (props.service.out_of_stock) {
+    bookingLabel = t('Temporarily out of stock')
+  }
 
   return (
     <article className='g-rule relative flex h-full flex-col rounded-2xl border bg-[var(--g-paper-raised)] p-6'>
@@ -76,6 +84,9 @@ function ServiceCard(props: {
           {labels.serviceRoute[props.service.route]}
         </p>
         <div className='flex flex-wrap justify-end gap-1.5'>
+          {props.service.out_of_stock && (
+            <Badge variant='outline'>{t('Temporarily out of stock')}</Badge>
+          )}
           {props.service.invoice_enabled && (
             <Badge
               variant='outline'
@@ -104,6 +115,26 @@ function ServiceCard(props: {
           <MacChipIcon chip={props.service.chip} className='size-16' />
         )}
       </div>
+      {!!props.service.tags?.length && (
+        <div
+          className='mt-4 flex flex-wrap gap-2'
+          aria-label={t('Display tags')}
+        >
+          {props.service.tags.map((tag) => (
+            <Badge
+              key={tag}
+              variant='outline'
+              className='max-w-full gap-1.5 rounded-md border-[var(--g-rule)] bg-[var(--g-accent-wash)] px-2.5 py-1 text-xs leading-5 font-medium whitespace-normal text-[var(--g-ink)]'
+            >
+              <span
+                aria-hidden='true'
+                className='size-1 shrink-0 rounded-full bg-[var(--g-accent)]'
+              />
+              <span className='min-w-0 break-words'>{tag}</span>
+            </Badge>
+          ))}
+        </div>
+      )}
       {props.service.route === 'mac_mini' &&
         (props.service.region || props.service.hardware_config) && (
           <dl className='mt-4 space-y-2 text-sm text-[var(--g-ink-soft)]'>
@@ -221,25 +252,58 @@ function ServiceCard(props: {
           ))}
         </ul>
       )}
+      {(props.service.out_of_stock ||
+        props.service.claude_pro_out_of_stock ||
+        props.service.claude_max_out_of_stock ||
+        props.service.claude_ultra_out_of_stock) &&
+        props.service.stock_note && (
+          <p className='mt-4 text-sm text-[var(--g-ink-soft)]'>
+            {props.service.stock_note}
+          </p>
+        )}
       <div className='mt-auto space-y-4 pt-6'>
         {macMini && (
-          <div className='grid grid-cols-2 gap-3'>
+          <div className='grid auto-rows-fr grid-cols-3 gap-2 sm:gap-3'>
+            <ClaudeSubscriptionAddon
+              variant='pro'
+              outOfStock={props.service.claude_pro_out_of_stock}
+              disabled={props.service.out_of_stock}
+              priceCents={props.service.claude_pro_price_cents ?? 0}
+              checked={addClaudePro}
+              onCheckedChange={(checked) => {
+                setAddClaudePro(checked)
+                if (checked) {
+                  setAddClaudeMax(false)
+                  setAddClaudeUltra(false)
+                }
+              }}
+            />
             <ClaudeSubscriptionAddon
               variant='max'
+              outOfStock={props.service.claude_max_out_of_stock}
+              disabled={props.service.out_of_stock}
               priceCents={props.service.claude_max_price_cents ?? 0}
               checked={addClaudeMax}
               onCheckedChange={(checked) => {
                 setAddClaudeMax(checked)
-                if (checked) setAddClaudeUltra(false)
+                if (checked) {
+                  setAddClaudeUltra(false)
+                  setAddClaudePro(false)
+                }
               }}
             />
             <ClaudeSubscriptionAddon
               variant='ultra'
+              outOfStock={props.service.claude_ultra_out_of_stock}
+              disabled={props.service.out_of_stock}
               priceCents={props.service.claude_ultra_price_cents ?? 0}
               checked={addClaudeUltra}
               onCheckedChange={(checked) => {
                 setAddClaudeUltra(checked)
-                if (checked) setAddClaudeMax(false)
+                if (checked) {
+                  setAddClaudeMax(false)
+                  setAddClaudePro(false)
+                }
               }}
             />
           </div>
@@ -249,6 +313,9 @@ function ServiceCard(props: {
             {t('Total: {{price}}', {
               price: formatCny(
                 pricing.total +
+                  (addClaudePro
+                    ? (props.service.claude_pro_price_cents ?? 0)
+                    : 0) +
                   (addClaudeUltra
                     ? (props.service.claude_ultra_price_cents ?? 0)
                     : 0) +
@@ -262,14 +329,24 @@ function ServiceCard(props: {
         )}
         <Button
           className='h-10 w-full'
-          disabled={!props.purchaseEnabled}
+          disabled={
+            !props.purchaseEnabled ||
+            props.service.out_of_stock ||
+            (addClaudePro && props.service.claude_pro_out_of_stock) ||
+            (addClaudeMax && props.service.claude_max_out_of_stock) ||
+            (addClaudeUltra && props.service.claude_ultra_out_of_stock)
+          }
           onClick={() =>
-            props.onBook(props.service, period, addClaudeMax, addClaudeUltra)
+            props.onBook(
+              props.service,
+              period,
+              addClaudeMax,
+              addClaudeUltra,
+              addClaudePro
+            )
           }
         >
-          {props.purchaseEnabled
-            ? t('Book this service')
-            : t('Ordering unavailable')}
+          {bookingLabel}
         </Button>
       </div>
     </article>
@@ -302,6 +379,7 @@ export function ServicesSection(props: {
   requestedServiceId?: number
   requestedBillingPeriod?: GuardianBillingPeriod
   requestedClaudeMax?: boolean
+  requestedClaudePro?: boolean
   requestedClaudeUltra?: boolean
   onRequestHandled: () => void
 }) {
@@ -309,6 +387,7 @@ export function ServicesSection(props: {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.auth.user)
   const [addClaudeMax, setAddClaudeMax] = useState(false)
+  const [addClaudePro, setAddClaudePro] = useState(false)
   const [addClaudeUltra, setAddClaudeUltra] = useState(false)
   const [billingPeriod, setBillingPeriod] =
     useState<GuardianBillingPeriod>('monthly')
@@ -332,6 +411,7 @@ export function ServicesSection(props: {
     requestedBillingPeriod,
     requestedClaudeMax,
     requestedClaudeUltra,
+    requestedClaudePro,
     onRequestHandled,
   } = props
 
@@ -341,7 +421,12 @@ export function ServicesSection(props: {
     const service = catalog.data.services.find(
       (item) => item.id === requestedServiceId
     )
-    if (service && user && catalog.data.purchase_enabled) {
+    if (
+      service &&
+      !service.out_of_stock &&
+      user &&
+      catalog.data.purchase_enabled
+    ) {
       const requested = requestedBillingPeriod ?? 'monthly'
       setBillingPeriod(
         guardianPeriodPrice(service, requested).total > 0
@@ -351,13 +436,20 @@ export function ServicesSection(props: {
       setAddClaudeMax(
         !!requestedClaudeMax &&
           !requestedClaudeUltra &&
+          !requestedClaudePro &&
           service.route === 'mac_mini' &&
           (service.claude_max_price_cents ?? 0) > 0
       )
       setAddClaudeUltra(
         !!requestedClaudeUltra &&
+          !requestedClaudePro &&
           service.route === 'mac_mini' &&
           (service.claude_ultra_price_cents ?? 0) > 0
+      )
+      setAddClaudePro(
+        !!requestedClaudePro &&
+          service.route === 'mac_mini' &&
+          (service.claude_pro_price_cents ?? 0) > 0
       )
       setSelected(service)
     }
@@ -367,6 +459,7 @@ export function ServicesSection(props: {
     requestedBillingPeriod,
     requestedClaudeMax,
     requestedClaudeUltra,
+    requestedClaudePro,
     catalog.isSuccess,
     catalog.data,
     user,
@@ -377,13 +470,14 @@ export function ServicesSection(props: {
     service: GuardianService,
     period: GuardianBillingPeriod,
     addon: boolean,
-    ultra: boolean
+    ultra: boolean,
+    pro: boolean
   ) => {
     if (!user) {
       void navigate({
         to: '/sign-in',
         search: {
-          redirect: `/guardian/services?service=${service.id}${props.resellerCode ? `&reseller=${encodeURIComponent(props.resellerCode)}` : ''}${service.route === 'mac_mini' ? `&category=mac_mini&billing_period=${period}${addon ? '&claude_max=yes' : ''}${ultra ? '&claude_ultra=yes' : ''}` : ''}`,
+          redirect: `/guardian/services?service=${service.id}${props.resellerCode ? `&reseller=${encodeURIComponent(props.resellerCode)}` : ''}${service.route === 'mac_mini' ? `&category=mac_mini&billing_period=${period}${addon ? '&claude_max=yes' : ''}${ultra ? '&claude_ultra=yes' : ''}${pro ? '&claude_pro=yes' : ''}` : ''}`,
         },
       })
       return
@@ -391,6 +485,7 @@ export function ServicesSection(props: {
     setBillingPeriod(period)
     setAddClaudeMax(addon)
     setAddClaudeUltra(ultra)
+    setAddClaudePro(pro)
     setSelected(service)
   }
 
@@ -468,6 +563,7 @@ export function ServicesSection(props: {
           billingPeriod={billingPeriod}
           addClaudeMax={addClaudeMax}
           addClaudeUltra={addClaudeUltra}
+          addClaudePro={addClaudePro}
           payMethods={catalog.data.pay_methods}
           onClose={() => setSelected(null)}
         />

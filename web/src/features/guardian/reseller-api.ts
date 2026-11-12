@@ -98,11 +98,13 @@ interface ResellerOffer {
   quarter_supply_cents: number
   annual_supply_cents: number
   max_supply_cents: number
+  pro_supply_cents?: number
   ultra_supply_cents?: number
   retail_cents: number
   quarter_retail_cents: number
   annual_retail_cents: number
   max_retail_cents: number
+  pro_retail_cents?: number
   ultra_retail_cents?: number
 }
 export interface ResellerOffers {
