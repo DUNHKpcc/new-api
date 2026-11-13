@@ -181,3 +181,22 @@ it('opens receipts through the router in the current tab', async () => {
   expect(await screen.findByText('Receipt destination')).toBeVisible()
   expect(router.state.location.search).toMatchObject({ order: 7, admin: true })
 })
+
+it('separates IP add-ons without counting them twice in the receipt', async () => {
+  show({
+    ...receipt,
+    max_cents: 0,
+    ip_billing_period: 'yearly',
+    ip_option_name: 'Residential IP',
+    ip_option_price_cents: 5000,
+  })
+  const frame = (await screen.findByTitle(
+    'Payment receipt'
+  )) as HTMLIFrameElement
+  const document = new DOMParser().parseFromString(frame.srcdoc, 'text/html')
+  expect(document.body.textContent).toContain('Residential IP')
+  expect(document.body.textContent).toContain('Yearly')
+  expect(document.body.textContent).toContain('¥250')
+  expect(document.body.textContent).toContain('¥50')
+  expect(document.body.textContent).toContain('¥300')
+})

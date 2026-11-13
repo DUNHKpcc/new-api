@@ -342,7 +342,7 @@ export function RevenueOverview() {
       <Alert>
         <AlertDescription>
           {t(
-            'External revenue participates in reports only. It never changes platform orders, settlements, quotas, or user balances.'
+            'Platform revenue includes paid Guardian service orders, including those marked refunded, at the original paid amount and payment date. External revenue only affects reports.'
           )}
         </AlertDescription>
       </Alert>

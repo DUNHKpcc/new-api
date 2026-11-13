@@ -221,6 +221,21 @@ export function GuardianOrdersPanel() {
                   </TableCell>
                   <TableCell className='max-w-56 break-words whitespace-normal'>
                     {order.service_title}
+                    {order.ip_option_name && (
+                      <span className='block text-xs text-[var(--g-accent)]'>
+                        {t('IP add-ons')} · {order.ip_option_name} ·{' '}
+                        {order.ip_billing_period && (
+                          <>
+                            {labels.billingPeriod[order.ip_billing_period]}{' '}
+                            ·{' '}
+                          </>
+                        )}
+                        {formatCny(order.ip_option_price_cents ?? 0, locale)}
+                        <span className='block whitespace-pre-wrap'>
+                          {order.ip_option_description}
+                        </span>
+                      </span>
+                    )}
                     {(order.claude_max_price_cents ?? 0) > 0 && (
                       <span className='block text-xs text-[var(--g-accent)]'>
                         {t('Claude MAX subscription')} ·{' '}

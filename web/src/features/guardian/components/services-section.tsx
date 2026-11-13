@@ -25,7 +25,6 @@ import { Trans, useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
@@ -41,6 +40,7 @@ import type { GuardianService, GuardianBillingPeriod } from '../types'
 import { CheckoutDialog } from './checkout-dialog'
 import { ClaudeSubscriptionAddon } from './claude-subscription-addon'
 import { MacChipIcon } from './mac-chip-icon'
+import { GuardianPeriodSelector } from './period-selector'
 
 /**
  * Cards keep a fixed, compact width and sit in a centred row, so the group
@@ -175,63 +175,12 @@ function ServiceCard(props: {
         )}
       </div>
       {macMini && (
-        <RadioGroup
-          aria-label={t('Billing period')}
+        <GuardianPeriodSelector
+          prices={props.service}
           value={period}
-          onValueChange={(value) => setPeriod(value as GuardianBillingPeriod)}
-          className='mt-4 grid grid-cols-3 gap-2'
-        >
-          {(['monthly', 'quarterly', 'yearly'] as const).map((option) => {
-            const plan = guardianPeriodPrice(props.service, option)
-            return (
-              <label
-                key={option}
-                className={cn(
-                  'g-rule relative flex cursor-pointer flex-col items-center gap-1 rounded-lg border px-1 py-2 text-xs has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--g-accent)] has-[:focus-visible]:ring-offset-2',
-                  period === option &&
-                    'border-[var(--g-accent)] bg-[var(--g-accent-wash)]',
-                  !plan.total && 'cursor-not-allowed opacity-40'
-                )}
-              >
-                <RadioGroupItem
-                  className='sr-only absolute'
-                  value={option}
-                  disabled={!plan.total}
-                />
-                <span>{labels.billingPeriod[option]}</span>
-                <span className='font-medium'>
-                  {plan.total ? formatCny(plan.total, locale) : '—'}
-                </span>
-                {plan.total > 0 && plan.savings > 0 && (
-                  <span className='text-[var(--g-accent)]'>
-                    {t('Save {{percent}}%', {
-                      percent: formatNumber(plan.discount, locale),
-                    })}
-                  </span>
-                )}
-              </label>
-            )
-          })}
-        </RadioGroup>
-      )}
-
-      {macMini && (
-        <div className='mt-2 space-y-1 text-sm'>
-          <p className='text-[var(--g-ink-soft)]'>
-            {labels.billingPeriod[period]} ·{' '}
-            {t('Equivalent to {{price}}/month', {
-              price: formatCny(pricing.monthly, locale),
-            })}
-          </p>
-          {period !== 'monthly' && pricing.savings > 0 && (
-            <p className='font-medium text-[var(--g-accent)]'>
-              {t('Save {{amount}} ({{percent}}%) vs monthly payments', {
-                amount: formatCny(pricing.savings, locale),
-                percent: formatNumber(pricing.discount, locale),
-              })}
-            </p>
-          )}
-        </div>
+          onChange={setPeriod}
+          label={t('Billing period')}
+        />
       )}
       {props.service.delivery_note && (
         <p className='mt-2 flex items-center gap-1.5 text-sm text-[var(--g-ink-soft)]'>
@@ -331,6 +280,11 @@ function ServiceCard(props: {
           className='h-10 w-full'
           disabled={
             !props.purchaseEnabled ||
+            (!macMini &&
+              !!props.service.ip_enabled &&
+              !(props.service.ip_options ?? []).some(
+                (option) => option.enabled
+              )) ||
             props.service.out_of_stock ||
             (addClaudePro && props.service.claude_pro_out_of_stock) ||
             (addClaudeMax && props.service.claude_max_out_of_stock) ||

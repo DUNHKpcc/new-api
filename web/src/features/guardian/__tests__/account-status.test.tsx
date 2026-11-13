@@ -41,7 +41,6 @@ import { Route as legacyStatisticsRoute } from '@/routes/guardian/account-statis
 import { Route as servicesRoute } from '@/routes/guardian/services'
 
 import { GuardianAccountStatusDialog } from '../components/admin/account-status-dialog'
-import { GuardianHistoricalAccountsForm } from '../components/admin/historical-accounts-panel'
 import { GuardianServices } from '../services'
 import type { GuardianAccountStatistics } from '../types'
 
@@ -96,7 +95,6 @@ function renderStatistics(data: GuardianAccountStatistics) {
 }
 
 const empty: GuardianAccountStatistics = {
-  historical_users: 0,
   healthy_users: 0,
   all_issues_users: 0,
   purchased_users: 5,
@@ -196,7 +194,6 @@ it('saves all three conditions independently and allows clearing recovered condi
         user={{
           user_id: 7,
           username: 'buyer',
-          historical_category: 'healthy',
           banned: true,
           phone_required: false,
           kyc_required: false,
@@ -219,35 +216,22 @@ it('saves all three conditions independently and allows clearing recovered condi
   ).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(saved).toHaveBeenCalledOnce())
-  expect(put.mock.calls[0][1]).toMatchObject({ historical_category: 'healthy' })
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Historical user link (optional)' })
-  )
-  await userEvent.selectOptions(
-    screen.getByLabelText('Historical user link'),
-    'banned_only'
-  )
-  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(saved).toHaveBeenCalledTimes(2))
   expect(put).toHaveBeenCalledWith('/api/guardian/admin/account-statuses/7', {
     banned: false,
     phone_required: true,
     kyc_required: true,
-    historical_category: 'banned_only',
   })
 })
 
-it('includes historical users in status groups without using sales samples', async () => {
+it('summarizes recorded purchasers with overflow and independent status groups', async () => {
   renderStatistics({
     ...empty,
     purchased_users: 110,
-    historical_users: 105,
     recorded_users: 109,
     healthy_users: 105,
     all_issues_users: 1,
   })
-  expect(await screen.findByText('Historical users: 105')).toBeVisible()
-  expect(screen.getByText('(+5)')).toBeVisible()
+  expect(await screen.findByText('(+5)')).toBeVisible()
   const partial = screen.getByText('One or two conditions flagged')
   expect(
     within(partial.parentElement as HTMLElement).getByText('3')
@@ -259,7 +243,7 @@ it('includes historical users in status groups without using sales samples', asy
 })
 
 it('renders a continuous seven-row matrix with scrollable overflow and separate counts', async () => {
-  renderStatistics({ ...empty, historical_users: 2 })
+  renderStatistics(empty)
   const matrix = await screen.findByRole('region', {
     name: 'Account status matrix',
   })
@@ -281,7 +265,6 @@ it('shows the matching status on hover and keyboard focus, including placeholder
     recorded_users: 3,
     healthy_users: 1,
     all_issues_users: 1,
-    historical_users: 1,
   })
   const matrix = await screen.findByRole('region', {
     name: 'Account status matrix',
@@ -321,69 +304,5 @@ it('shows the matching status on hover and keyboard focus, including placeholder
   await user.keyboard('{Escape}')
   await waitFor(() =>
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
-  )
-})
-
-it('saves eight historical counts, rejects overlapping totals and allows resetting to zero', async () => {
-  const initial = {
-    total_users: 0,
-    banned_only: 0,
-    kyc_only: 0,
-    phone_only: 0,
-    banned_kyc: 0,
-    banned_phone: 0,
-    kyc_phone: 0,
-    all_three: 0,
-  }
-  const put = vi.spyOn(api, 'put').mockImplementation(async (_url, data) => ({
-    data: { success: true, data },
-  }))
-  const client = new QueryClient()
-  clients.push(client)
-  render(
-    <QueryClientProvider client={client}>
-      <GuardianHistoricalAccountsForm initial={initial} baseSales={10} />
-    </QueryClientProvider>
-  )
-  const user = userEvent.setup()
-  expect(screen.getAllByRole('spinbutton')).toHaveLength(8)
-  for (const field of screen.getAllByRole('spinbutton')) {
-    expect(field).toHaveValue(0)
-  }
-  await user.clear(screen.getByLabelText('Ban only'))
-  await user.type(screen.getByLabelText('Ban only'), '1')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
-  expect(
-    await screen.findByText(
-      'Combined issue counts cannot exceed historical users'
-    )
-  ).toBeVisible()
-  expect(put).not.toHaveBeenCalled()
-  await user.clear(screen.getByLabelText('Historical base users'))
-  await user.type(screen.getByLabelText('Historical base users'), '11')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
-  expect(
-    await screen.findByText('Historical users cannot exceed base sales')
-  ).toBeVisible()
-  expect(put).not.toHaveBeenCalled()
-  await user.clear(screen.getByLabelText('Historical base users'))
-  await user.type(screen.getByLabelText('Historical base users'), '10')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
-    expect(put).toHaveBeenCalledWith(
-      '/api/guardian/admin/historical-accounts',
-      { ...initial, total_users: 10, banned_only: 1 }
-    )
-  )
-  for (const label of ['Historical base users', 'Ban only']) {
-    await user.clear(screen.getByLabelText(label))
-    await user.type(screen.getByLabelText(label), '0')
-  }
-  await user.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
-    expect(put).toHaveBeenLastCalledWith(
-      '/api/guardian/admin/historical-accounts',
-      initial
-    )
   )
 })

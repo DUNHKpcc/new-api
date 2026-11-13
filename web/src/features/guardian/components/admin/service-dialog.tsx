@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -56,6 +56,8 @@ const FORM_ID = 'guardian-service'
 function toFormValues(service?: GuardianService): GuardianServiceForm {
   if (!service) {
     return {
+      ip_enabled: false,
+      ip_options: [],
       chip: 'm4',
       region: '',
       hardware_config: '16_256',
@@ -85,6 +87,17 @@ function toFormValues(service?: GuardianService): GuardianServiceForm {
     }
   }
   return {
+    ip_enabled: service.ip_enabled ?? false,
+    ip_options: (service.ip_options ?? []).map((option) => ({
+      ...option,
+      price: centsToYuanInput(option.price_cents),
+      quarter_price: option.quarter_price_cents
+        ? centsToYuanInput(option.quarter_price_cents)
+        : '',
+      annual_price: option.annual_price_cents
+        ? centsToYuanInput(option.annual_price_cents)
+        : '',
+    })),
     chip: service.chip ?? '',
     region: service.region ?? '',
     hardware_config: service.hardware_config ?? '',
@@ -144,6 +157,19 @@ export function GuardianServiceDialog(props: {
           region: values.route === 'mac_mini' ? values.region : '',
           hardware_config:
             values.route === 'mac_mini' ? values.hardware_config : '',
+          ip_enabled: values.route !== 'mac_mini' && !!values.ip_enabled,
+          ip_options:
+            values.route === 'mac_mini'
+              ? []
+              : (values.ip_options ?? []).map((option) => ({
+                  id: option.id,
+                  name: option.name,
+                  description: option.description,
+                  enabled: option.enabled,
+                  price_cents: yuanToCents(option.price) ?? 0,
+                  quarter_price_cents: yuanToCents(option.quarter_price) ?? 0,
+                  annual_price_cents: yuanToCents(option.annual_price) ?? 0,
+                })),
           base_sales: values.base_sales,
           title: values.title,
           subtitle: values.subtitle,
@@ -191,6 +217,11 @@ export function GuardianServiceDialog(props: {
       props.onClose()
     },
     onError: (error) => handleServerError(error, t('Failed to save service')),
+  })
+  const ipOptions = useFieldArray({
+    control: form.control,
+    name: 'ip_options',
+    keyName: 'fieldKey',
   })
   const route = form.watch('route')
   const baseSales = form.watch('base_sales')
@@ -320,6 +351,123 @@ export function GuardianServiceDialog(props: {
               {fieldError(errors[field]?.message)}
             </Field>
           ))}
+        {route !== 'mac_mini' && (
+          <fieldset className='space-y-3 rounded-lg border p-4'>
+            <legend className='px-1 text-sm font-medium'>
+              {t('IP add-ons')}
+            </legend>
+            <FieldDescription>
+              {t(
+                'When enabled, customers must choose an IP type and billing period. Resellers use platform IP prices without a markup.'
+              )}
+            </FieldDescription>
+            <Field orientation='horizontal'>
+              <Controller
+                control={form.control}
+                name='ip_enabled'
+                render={({ field }) => (
+                  <Switch
+                    id='guardian-ip-enabled'
+                    checked={!!field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+              <FieldLabel htmlFor='guardian-ip-enabled'>
+                {t('Require IP for this product')}
+              </FieldLabel>
+            </Field>
+            {ipOptions.fields.map((option, index) => (
+              <div
+                key={option.fieldKey}
+                className='space-y-3 rounded-lg border p-3'
+              >
+                <Field>
+                  <FieldLabel htmlFor={`ip-name-${index}`}>
+                    {t('Name')}
+                  </FieldLabel>
+                  <Input
+                    id={`ip-name-${index}`}
+                    maxLength={128}
+                    {...form.register(`ip_options.${index}.name`)}
+                  />
+                  {fieldError(errors.ip_options?.[index]?.name?.message)}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`ip-description-${index}`}>
+                    {t('Description')}
+                  </FieldLabel>
+                  <Textarea
+                    id={`ip-description-${index}`}
+                    maxLength={1000}
+                    {...form.register(`ip_options.${index}.description`)}
+                  />
+                  {fieldError(errors.ip_options?.[index]?.description?.message)}
+                </Field>
+                {(
+                  [
+                    ['price', t('Monthly price (CNY)')],
+                    ['quarter_price', t('Quarterly price (CNY)')],
+                    ['annual_price', t('Annual price (CNY)')],
+                  ] as const
+                ).map(([name, label]) => (
+                  <Field key={name}>
+                    <FieldLabel htmlFor={`ip-${name}-${index}`}>
+                      {label}
+                    </FieldLabel>
+                    <Input
+                      id={`ip-${name}-${index}`}
+                      inputMode='decimal'
+                      {...form.register(`ip_options.${index}.${name}`)}
+                    />
+                    {fieldError(errors.ip_options?.[index]?.[name]?.message)}
+                  </Field>
+                ))}
+                <Field orientation='horizontal'>
+                  <Controller
+                    control={form.control}
+                    name={`ip_options.${index}.enabled`}
+                    render={({ field }) => (
+                      <Switch
+                        id={`ip-enabled-${index}`}
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
+                  <FieldLabel htmlFor={`ip-enabled-${index}`}>
+                    {t('List this IP option')}
+                  </FieldLabel>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    onClick={() => ipOptions.remove(index)}
+                  >
+                    {t('Remove')}
+                  </Button>
+                </Field>
+              </div>
+            ))}
+            <Button
+              type='button'
+              variant='outline'
+              disabled={ipOptions.fields.length >= 12}
+              onClick={() =>
+                ipOptions.append({
+                  id: crypto.randomUUID(),
+                  name: '',
+                  description: '',
+                  price: '',
+                  quarter_price: '',
+                  annual_price: '',
+                  enabled: true,
+                })
+              }
+            >
+              {t('Add IP option')}
+            </Button>
+          </fieldset>
+        )}
         <fieldset className='space-y-3 rounded-lg border p-4'>
           <legend className='px-1 text-sm font-medium'>
             {t('Availability')}

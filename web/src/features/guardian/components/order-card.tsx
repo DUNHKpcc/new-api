@@ -81,6 +81,25 @@ export function OrderCard(props: {
   const labels = useGuardianLabels()
   const order = props.order
   const details = [
+    ...(order.ip_option_name
+      ? [
+          {
+            label: t('IP add-ons'),
+            value: (
+              <span>
+                {order.ip_option_name} ·{' '}
+                {order.ip_billing_period && (
+                  <>{labels.billingPeriod[order.ip_billing_period]} · </>
+                )}
+                {formatCny(order.ip_option_price_cents ?? 0, locale)}
+                <span className='block text-xs whitespace-pre-wrap'>
+                  {order.ip_option_description}
+                </span>
+              </span>
+            ),
+          },
+        ]
+      : []),
     {
       label: t('How did you hear about us?'),
       value: <DiscoveryLabel value={order.discovery_channel} />,

@@ -83,7 +83,7 @@ export function GuardianAccountStatisticsPanel() {
     <div>
       <p className='max-w-3xl text-[var(--g-ink-soft)]'>
         {t(
-          'Recorded by administrators, not automatic Claude monitoring. Refreshes every 30 seconds.'
+          'Base sales default to no ban, no phone verification and no KYC. Purchased user statuses are recorded by administrators. Refreshes every 30 seconds.'
         )}
       </p>
       {statistics.isPending && <LoadingState />}
@@ -108,11 +108,6 @@ export function GuardianAccountStatisticsPanel() {
                   ),
                 }}
               />
-            </p>
-            <p>
-              {t('Historical users: {{total}}', {
-                total: formatNumber(data.historical_users, locale),
-              })}
             </p>
             <p>
               {t('Recorded: {{total}}', {
@@ -220,7 +215,7 @@ export function GuardianAccountStatisticsPanel() {
       <div className='g-rule mt-10 space-y-3 border-t pt-6 text-sm leading-7 text-[var(--g-ink-soft)]'>
         <p>
           {t(
-            'Totals include historical users and distinct purchasers. Linked returning users count once; repeat purchases add sales, not users.'
+            'Totals include base sales and distinct purchasers. Repeat purchases by the same user count once.'
           )}
         </p>
         <p>

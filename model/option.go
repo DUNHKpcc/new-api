@@ -338,13 +338,6 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
-	if key == guardianHistoricalAccountsKey {
-		var history GuardianHistoricalAccounts
-		if err := common.UnmarshalJsonStr(value, &history); err != nil {
-			return err
-		}
-		return history.Validate()
-	}
 	if key == "console_setting.announcements" {
 		return console_setting.ValidateConsoleSettings(value, "Announcements")
 	}

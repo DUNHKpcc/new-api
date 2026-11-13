@@ -68,6 +68,13 @@ export function splitFeatureLines(value: string): string[] {
     .filter(Boolean)
 }
 
+const requiredPrice = z
+  .string()
+  .refine(
+    (value) => yuanToCents(value) !== null,
+    'Enter a price between 0.01 and 100000 yuan'
+  )
+
 const optionalPeriodPrice = z
   .string()
   .trim()
@@ -77,6 +84,28 @@ const optionalPeriodPrice = z
   )
 
 export const guardianServiceSchema = z.object({
+  ip_enabled: z.boolean().optional(),
+  ip_options: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(64),
+        name: z
+          .string()
+          .trim()
+          .min(1, 'Enter a service name')
+          .max(128, 'Service name must be at most 128 characters'),
+        description: z
+          .string()
+          .trim()
+          .max(1000, 'Note must be at most 1000 characters'),
+        price: requiredPrice,
+        quarter_price: requiredPrice,
+        annual_price: requiredPrice,
+        enabled: z.boolean(),
+      })
+    )
+    .max(12)
+    .optional(),
   claude_pro_price: optionalPeriodPrice,
   out_of_stock: z.boolean(),
   stock_note: z
@@ -126,12 +155,7 @@ export const guardianServiceSchema = z.object({
       (value) => splitFeatureLines(value).every((line) => line.length <= 120),
       'Each specification line must be at most 120 characters'
     ),
-  price: z
-    .string()
-    .refine(
-      (value) => yuanToCents(value) !== null,
-      'Enter a price between 0.01 and 100000 yuan'
-    ),
+  price: requiredPrice,
   delivery_note: z
     .string()
     .trim()
@@ -177,31 +201,3 @@ export const guardianQueueSettingSchema = z
 export type GuardianQueueSettingForm = z.infer<
   typeof guardianQueueSettingSchema
 >
-
-const historicalCount = z.number().int().min(0).max(1000000000)
-export const guardianHistoricalAccountsSchema = z
-  .object({
-    total_users: historicalCount,
-    banned_only: historicalCount,
-    kyc_only: historicalCount,
-    phone_only: historicalCount,
-    banned_kyc: historicalCount,
-    banned_phone: historicalCount,
-    kyc_phone: historicalCount,
-    all_three: historicalCount,
-  })
-  .refine(
-    (v) =>
-      v.banned_only +
-        v.kyc_only +
-        v.phone_only +
-        v.banned_kyc +
-        v.banned_phone +
-        v.kyc_phone +
-        v.all_three <=
-      v.total_users,
-    {
-      path: ['total_users'],
-      message: 'Combined issue counts cannot exceed historical users',
-    }
-  )

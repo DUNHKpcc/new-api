@@ -29,6 +29,8 @@ type GuardianResellerSale struct {
 }
 
 type GuardianResellerOrderView struct {
+	IPOptionPriceCents int64 `json:"ip_option_price_cents"`
+	SettlementFeeCents int64 `json:"settlement_fee_cents" gorm:"-"`
 	GuardianResellerSale
 	TradeNo       string `json:"trade_no"`
 	ServiceTitle  string `json:"service_title"`
@@ -40,9 +42,20 @@ type GuardianResellerOrderView struct {
 	DeliveredAt   int64  `json:"delivered_at"`
 }
 
+// The channel statement stays intact; the platform absorbs the IP share and rounding remainder.
+func (order GuardianResellerOrderView) settlementFee() int64 {
+	if order.FeeConfirmedAt == 0 {
+		return order.EstimatedFeeCents
+	}
+	if order.IPOptionPriceCents == 0 {
+		return order.ActualFeeCents
+	}
+	return order.ActualFeeCents * (order.AmountCents - order.IPOptionPriceCents) / order.AmountCents
+}
+
 // Keep customer contact, notes, credentials and internal delivery notes out of this projection.
 func guardianResellerOrders(db *gorm.DB) *gorm.DB {
-	return db.Table("guardian_reseller_sales AS sale").Joins("JOIN guardian_service_orders AS orders ON orders.id = sale.order_id").Select("sale.*, orders.trade_no, orders.service_title, orders.billing_period, orders.amount_cents, orders.status, orders.created_at, orders.paid_at, orders.delivered_at")
+	return db.Table("guardian_reseller_sales AS sale").Joins("JOIN guardian_service_orders AS orders ON orders.id = sale.order_id").Select("sale.*, orders.trade_no, orders.service_title, orders.billing_period, orders.amount_cents, orders.ip_option_price_cents, orders.status, orders.created_at, orders.paid_at, orders.delivered_at")
 }
 
 func ListGuardianResellerOrders(resellerID, page, size int) ([]GuardianResellerOrderView, int64, error) {
@@ -56,16 +69,20 @@ func ListGuardianResellerOrders(resellerID, page, size int) ([]GuardianResellerO
 	}
 	items := []GuardianResellerOrderView{}
 	err := query.Order("orders.id DESC").Limit(size).Offset((page - 1) * size).Scan(&items).Error
+	for i := range items {
+		items[i].SettlementFeeCents = items[i].settlementFee()
+	}
 	return items, total, err
 }
 
 func GetGuardianResellerOrder(orderID int) (*GuardianResellerOrderView, error) {
 	var order GuardianResellerOrderView
 	err := guardianResellerOrders(DB).Where("sale.order_id = ?", orderID).Take(&order).Error
+	order.SettlementFeeCents = order.settlementFee()
 	return &order, err
 }
 
-func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, product GuardianService) (*GuardianResellerSale, int64, int64, error) {
+func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, product GuardianService, ipPrice int64) (*GuardianResellerSale, int64, int64, error) {
 	if req.PaymentMethod != "alipay" || !req.AcceptRefundFee {
 		return nil, 0, 0, errors.New("代理订单仅支持支付宝，请确认退款扣除实际未退手续费的规则")
 	}
@@ -113,11 +130,11 @@ func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, p
 			return nil, 0, 0, errors.New("代理尚未开放 Ultra 加购报价")
 		}
 	}
-	amount := retail + addon
+	amount := retail + addon + ipPrice
 	if req.ExpectedAmountCents == nil || *req.ExpectedAmountCents != amount {
 		return nil, 0, 0, errors.New("报价已变更，请刷新后确认金额")
 	}
-	sale := &GuardianResellerSale{RefundTermsVersion: "deduct_channel_fee_v1", ResellerID: reseller.UserID, SupplyCents: supply + addonSupply, FeeBPS: setting.FeeBPS, EstimatedFeeCents: guardianResaleFeeEstimate(amount, setting.FeeBPS)}
+	sale := &GuardianResellerSale{RefundTermsVersion: "deduct_channel_fee_v1", ResellerID: reseller.UserID, SupplyCents: supply + addonSupply + ipPrice, FeeBPS: setting.FeeBPS, EstimatedFeeCents: guardianResaleFeeEstimate(amount-ipPrice, setting.FeeBPS)}
 	if req.AddClaudePro {
 		sale.ProSupplyCents = addonSupply
 	} else if req.AddClaudeUltra {
@@ -188,10 +205,7 @@ func guardianResellerBalance(tx *gorm.DB, resellerID int, now int64) (GuardianRe
 		if order.RefundState == "completed" || order.Status == "refunded" {
 			continue
 		}
-		fee := order.EstimatedFeeCents
-		if order.FeeConfirmedAt > 0 {
-			fee = order.ActualFeeCents
-		}
+		fee := order.settlementFee()
 		net := order.AmountCents - order.SupplyCents - fee
 		if order.FeeConfirmedAt > 0 && order.DeliveredAt > 0 && now >= order.DeliveredAt+7*86400 {
 			earned += net

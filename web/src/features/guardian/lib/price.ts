@@ -61,7 +61,10 @@ export const GUARDIAN_PERIOD_MONTHS = {
 } as const
 
 export function guardianPeriodPrice(
-  service: GuardianService,
+  service: Pick<
+    GuardianService,
+    'price_cents' | 'quarter_price_cents' | 'annual_price_cents'
+  >,
   period: GuardianBillingPeriod
 ) {
   let total = service.price_cents

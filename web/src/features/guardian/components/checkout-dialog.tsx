@@ -38,7 +38,7 @@ import { toIntlLocale } from '@/i18n/languages'
 import { handleServerError } from '@/lib/handle-server-error'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { createGuardianOrder } from '../api'
+import { createGuardianOrder, getGuardianCatalog } from '../api'
 import { useGuardianLabels } from '../hooks/use-guardian-labels'
 import { formatCny, guardianPeriodPrice } from '../lib/price'
 import { guardianOrderSchema, type GuardianOrderForm } from '../lib/schema'
@@ -51,6 +51,7 @@ import type {
 import { ClaudeSubscriptionAddon } from './claude-subscription-addon'
 import { GuardianContactFields } from './contact-fields'
 import { DiscoveryOptions } from './discovery-options'
+import { GuardianPeriodSelector } from './period-selector'
 
 const FORM_ID = 'guardian-checkout'
 
@@ -73,6 +74,29 @@ export function CheckoutDialog(props: {
   const maskedEmail = email ? email.replace(/^(.).*(@.*)$/, '$1***$2') : ''
   const navigate = useNavigate()
   const [accepted, setAccepted] = useState(false)
+  const [ipOptionId, setIPOptionId] = useState('')
+  const [ipPeriod, setIPPeriod] = useState<GuardianBillingPeriod>('monthly')
+  const ipRequired =
+    !!props.service.ip_enabled && props.service.route !== 'mac_mini'
+  const ipOptions = !ipRequired
+    ? []
+    : (props.service.ip_options ?? []).filter((option) => option.enabled)
+  const ipOption = ipOptions.find((option) => option.id === ipOptionId)
+  const ipPrice = ipOption ? guardianPeriodPrice(ipOption, ipPeriod).total : 0
+  const ipMissing = ipRequired && (!ipOption || ipPrice <= 0)
+
+  const termsQuery = useQuery({
+    queryKey: ['guardian', 'checkout-terms'],
+    queryFn: getGuardianCatalog,
+    staleTime: 0,
+  })
+  const terms =
+    props.service.route === 'mac_mini'
+      ? termsQuery.data?.after_sales_terms.mac
+      : termsQuery.data?.after_sales_terms.deployment
+  const [acceptedTerms, setAcceptedTerms] = useState('')
+  const termsAccepted = !!terms && acceptedTerms === terms
+
   const needsConsent =
     !!props.resellerCode || !!props.directConfirmationRequired
   const [addClaudeMax, setAddClaudeMax] = useState(!!props.addClaudeMax)
@@ -124,16 +148,32 @@ export function CheckoutDialog(props: {
       form.setValue('discovery_channel', previous.data.discovery_channel)
     }
   }, [previous.data, form])
+  const hostingPrice =
+    props.service.route === 'mac_mini'
+      ? guardianPeriodPrice(props.service, props.billingPeriod ?? 'monthly')
+          .total
+      : props.service.price_cents
+  const totalPrice = hostingPrice + addonPrice + ultraPrice + proPrice + ipPrice
+  const price = formatCny(totalPrice, locale)
   const checkout = useMutation({
     mutationFn: (values: GuardianOrderForm) =>
       createGuardianOrder({
         service_id: props.service.id,
+        ...(ipOption || props.resellerCode || props.customerServiceId
+          ? { expected_amount_cents: totalPrice }
+          : {}),
+        ...(ipOption
+          ? {
+              ip_option_id: ipOption.id,
+              ip_billing_period: ipPeriod,
+            }
+          : {}),
+        accept_after_sales_terms: termsAccepted,
+        after_sales_terms: acceptedTerms,
         ...(props.resellerCode || props.customerServiceId
           ? {
               reseller_code: props.resellerCode,
               customer_service_id: props.customerServiceId,
-              expected_amount_cents:
-                hostingPrice + addonPrice + ultraPrice + proPrice,
               accept_refund_fee: accepted,
               accept_direct_renewal:
                 !!props.directConfirmationRequired && accepted,
@@ -161,15 +201,6 @@ export function CheckoutDialog(props: {
     onError: (error) => handleServerError(error, t('Payment request failed')),
   })
   const errors = form.formState.errors
-  const hostingPrice =
-    props.service.route === 'mac_mini'
-      ? guardianPeriodPrice(props.service, props.billingPeriod ?? 'monthly')
-          .total
-      : props.service.price_cents
-  const price = formatCny(
-    hostingPrice + addonPrice + ultraPrice + proPrice,
-    locale
-  )
 
   return (
     <Dialog
@@ -194,7 +225,11 @@ export function CheckoutDialog(props: {
             type='submit'
             form={FORM_ID}
             disabled={
-              unavailable || checkout.isPending || (needsConsent && !accepted)
+              unavailable ||
+              ipMissing ||
+              checkout.isPending ||
+              !termsAccepted ||
+              (needsConsent && !accepted)
             }
           >
             {checkout.isPending
@@ -209,11 +244,69 @@ export function CheckoutDialog(props: {
         className='space-y-5'
         noValidate
         onSubmit={form.handleSubmit((values) => {
-          if (!unavailable && (!needsConsent || accepted)) {
+          if (
+            !unavailable &&
+            !ipMissing &&
+            termsAccepted &&
+            (!needsConsent || accepted)
+          ) {
             checkout.mutate(values)
           }
         })}
       >
+        {ipRequired && (
+          <Field>
+            <FieldLabel id='guardian-ip-label'>{t('IP add-ons')}</FieldLabel>
+            <p className='text-muted-foreground text-sm'>
+              {t('Choose an IP type and billing period')}
+            </p>
+            <RadioGroup
+              aria-labelledby='guardian-ip-label'
+              value={ipOptionId}
+              onValueChange={(value) => setIPOptionId(String(value))}
+              className='grid-cols-1 sm:grid-cols-2'
+            >
+              {ipOptions.map((option) => (
+                <label
+                  key={option.id}
+                  className='flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm has-data-checked:border-[var(--g-ink)]'
+                >
+                  <RadioGroupItem value={option.id} />
+                  <span className='min-w-0 space-y-1'>
+                    <span className='block font-medium'>{option.name}</span>
+                    <span className='block whitespace-pre-wrap text-[var(--g-ink-soft)]'>
+                      {option.description}
+                    </span>
+                    <span className='block font-semibold'>
+                      +
+                      {formatCny(
+                        guardianPeriodPrice(option, ipPeriod).total,
+                        locale
+                      )}{' '}
+                      · {labels.billingPeriod[ipPeriod]}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </RadioGroup>
+            {ipOptions.length === 0 && (
+              <p role='status'>
+                {t('No IP plans available. Ordering is temporarily disabled.')}
+              </p>
+            )}
+            <GuardianPeriodSelector
+              prices={ipOption}
+              value={ipPeriod}
+              onChange={setIPPeriod}
+              label={t('IP billing period')}
+            />
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Setup is charged once. IP is prepaid for the selected period; no automatic renewal.'
+              )}
+            </p>
+          </Field>
+        )}
         {props.service.route === 'mac_mini' && (
           <p className='text-sm font-medium'>
             {labels.billingPeriod[props.billingPeriod ?? 'monthly']} ·{' '}
@@ -390,6 +483,39 @@ export function CheckoutDialog(props: {
             )}
           </AlertDescription>
         </Alert>
+
+        <Field>
+          <FieldLabel>{t('After-sales terms')}</FieldLabel>
+          {terms ? (
+            <>
+              <div
+                className='max-h-48 overflow-y-auto rounded-lg border p-3 text-sm whitespace-pre-wrap'
+                tabIndex={0}
+              >
+                {terms}
+              </div>
+              <label className='flex items-start gap-3 text-sm'>
+                <Checkbox
+                  checked={termsAccepted}
+                  onCheckedChange={(checked) =>
+                    setAcceptedTerms(checked ? terms : '')
+                  }
+                />
+                <span>
+                  {t('I have read and agree to the after-sales terms')}
+                </span>
+              </label>
+            </>
+          ) : (
+            <p className='text-muted-foreground text-sm'>
+              {termsQuery.isPending
+                ? t('Loading...')
+                : t(
+                    'After-sales terms are unavailable. Ordering is temporarily disabled.'
+                  )}
+            </p>
+          )}
+        </Field>
 
         <Field data-invalid={!!errors.payment_method}>
           <FieldLabel id='guardian-pay-label'>{t('Payment method')}</FieldLabel>

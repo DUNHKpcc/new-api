@@ -20,12 +20,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 
+import { getGuardianCatalog } from '../api'
 import { CheckoutDialog } from '../components/checkout-dialog'
 import type { GuardianService } from '../types'
+
+vi.mock('../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  getGuardianCatalog: vi.fn(async () => ({
+    after_sales_terms: { deployment: 'Deployment terms', mac: 'Mac terms' },
+    services: [],
+    pay_methods: [],
+    purchase_enabled: true,
+  })),
+}))
 
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -52,6 +63,12 @@ const payMethods = [
   { type: 'alipay', name: 'Alipay' },
   { type: 'wxpay', name: 'WeChat Pay' },
 ]
+
+beforeEach(() => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: { discovery_channel: '' } },
+  })
+})
 
 const clients: QueryClient[] = []
 function renderDialog(node: ReactNode) {
@@ -125,6 +142,11 @@ it.each(['vps', 'mac_mini'] as const)(
     }
     await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
     await userEvent.click(screen.getByRole('radio', { name: 'WeChat Pay' }))
+    await userEvent.click(
+      await screen.findByRole('checkbox', {
+        name: 'I have read and agree to the after-sales terms',
+      })
+    )
     await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
 
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
@@ -133,6 +155,9 @@ it.each(['vps', 'mac_mini'] as const)(
       invoice_information:
         route === 'mac_mini' ? 'Company name / invoice details' : undefined,
       service_id: 4,
+      accept_after_sales_terms: true,
+      after_sales_terms:
+        route === 'mac_mini' ? 'Mac terms' : 'Deployment terms',
       discovery_channel: 'github',
       payment_method: 'wxpay',
       route,
@@ -168,6 +193,11 @@ it('blocks submission and flags the note when it contains a subscription link', 
   await userEvent.type(
     screen.getByLabelText('Note (optional)'),
     'my node is vmess://abcdef'
+  )
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
   )
   await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
 
@@ -267,6 +297,11 @@ it.each([
       'github'
     )
     await userEvent.type(screen.getByLabelText('Contact'), '@guardian_user')
+    await userEvent.click(
+      await screen.findByRole('checkbox', {
+        name: 'I have read and agree to the after-sales terms',
+      })
+    )
     await userEvent.click(screen.getByRole('button', { name: `Pay ${total}` }))
     await waitFor(() => expect(post).toHaveBeenCalledOnce())
     expect(post.mock.calls[0][1]).toMatchObject({
@@ -302,6 +337,12 @@ it('requires reseller refund consent and sends the displayed quote with attribut
   await userEvent.type(screen.getByLabelText('Contact'), '@customer')
   await userEvent.click(
     screen.getByRole('checkbox', { name: /I agree|original reseller/ })
+  )
+  expect(pay).toBeDisabled()
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
   )
   expect(pay).toBeEnabled()
   await userEvent.click(pay)
@@ -355,6 +396,11 @@ it('requires explicit direct-renewal consent and sends the owned service ID', as
   await userEvent.click(
     screen.getByRole('checkbox', { name: /I agree|original reseller/ })
   )
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
+  )
   await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
   await waitFor(() =>
     expect(post).toHaveBeenCalledWith(
@@ -381,6 +427,11 @@ it('requires a discovery channel before opening payment and keeps contact input'
     />
   )
   await userEvent.type(screen.getByLabelText('Contact'), '@customer')
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
+  )
   await userEvent.click(screen.getByRole('button', { name: /^Pay / }))
   expect(await screen.findByText('Choose how you heard about us')).toBeVisible()
   expect(screen.getByLabelText('Contact')).toHaveValue('@customer')
@@ -450,4 +501,150 @@ it('disables an out-of-stock add-on and blocks submitting a stale selected add-o
       'The selected service or add-on is out of stock. Please choose again.'
     )
   ).toHaveAttribute('role', 'alert')
+})
+
+it('requires explicit consent before enabling payment', async () => {
+  renderDialog(
+    <CheckoutDialog
+      service={service}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  expect(await screen.findByText('Deployment terms')).toBeVisible()
+  const pay = screen.getByRole('button', { name: /^Pay / })
+  expect(pay).toBeDisabled()
+  await userEvent.click(
+    screen.getByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
+  )
+  expect(pay).toBeEnabled()
+})
+it('blocks ordering when the category has no terms', async () => {
+  vi.mocked(getGuardianCatalog).mockResolvedValueOnce({
+    after_sales_terms: { deployment: '', mac: 'Mac terms' },
+    services: [],
+    pay_methods: [],
+    purchase_enabled: true,
+  })
+  renderDialog(
+    <CheckoutDialog
+      service={service}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  expect(
+    await screen.findByText(
+      'After-sales terms are unavailable. Ordering is temporarily disabled.'
+    )
+  ).toBeVisible()
+  expect(screen.getByRole('button', { name: /^Pay / })).toBeDisabled()
+})
+
+it('requires an IP type and prices monthly, quarterly and yearly terms', async () => {
+  const post = vi.spyOn(api, 'post').mockRejectedValue(new Error('test only'))
+  renderDialog(
+    <CheckoutDialog
+      service={{
+        ...service,
+        ip_enabled: true,
+        ip_options: [
+          {
+            id: 'residential',
+            name: 'Residential IP',
+            description: 'One month',
+            price_cents: 5000,
+            quarter_price_cents: 14000,
+            annual_price_cents: 50000,
+            enabled: true,
+          },
+          {
+            id: 'dc',
+            name: 'Datacenter IP',
+            description: '',
+            price_cents: 2000,
+            quarter_price_cents: 5500,
+            annual_price_cents: 20000,
+            enabled: true,
+          },
+          {
+            id: 'disabled',
+            name: 'Disabled IP',
+            description: '',
+            price_cents: 1000,
+            quarter_price_cents: 2700,
+            annual_price_cents: 10000,
+            enabled: false,
+          },
+        ],
+      }}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  expect(screen.getByRole('button', { name: 'Pay ¥599' })).toBeDisabled()
+  expect(
+    screen.queryByRole('radio', { name: 'Disabled IP' })
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('radio', { name: /Residential IP/ }))
+  expect(screen.getByRole('button', { name: 'Pay ¥649' })).toBeVisible()
+  expect(
+    screen.queryByRole('radio', { name: 'No IP add-on' })
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('radio', { name: /^Quarterly/ }))
+  expect(screen.getByRole('button', { name: 'Pay ¥739' })).toBeVisible()
+  expect(screen.getByText(/Equivalent to ¥46\.67\/month/)).toBeVisible()
+  expect(screen.getByText('Save ¥10 (7%) vs monthly payments')).toBeVisible()
+
+  await userEvent.click(screen.getByRole('radio', { name: /^Yearly/ }))
+  expect(screen.getByRole('button', { name: 'Pay ¥1,099' })).toBeVisible()
+  expect(screen.getByText(/Equivalent to ¥41\.67\/month/)).toBeVisible()
+  expect(screen.getByText('Save ¥100 (17%) vs monthly payments')).toBeVisible()
+
+  await userEvent.click(screen.getByRole('radio', { name: /Datacenter IP/ }))
+  expect(screen.getByRole('button', { name: 'Pay ¥799' })).toBeVisible()
+  await userEvent.click(screen.getByRole('radio', { name: /Residential IP/ }))
+  await userEvent.selectOptions(
+    screen.getByLabelText('How did you hear about us?'),
+    'github'
+  )
+  await userEvent.type(screen.getByLabelText('Contact'), '@buyer')
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Pay ¥1,099' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/guardian/orders',
+      expect.objectContaining({
+        ip_option_id: 'residential',
+        ip_billing_period: 'yearly',
+        expected_amount_cents: 109900,
+      })
+    )
+  )
+  expect(post.mock.calls[0][1]).not.toHaveProperty('ip_option_price_cents')
+})
+
+it('blocks ordering when required IP has no available plans', async () => {
+  renderDialog(
+    <CheckoutDialog
+      service={{ ...service, ip_enabled: true, ip_options: [] }}
+      payMethods={payMethods}
+      onClose={() => undefined}
+    />
+  )
+  expect(
+    screen.getByText('No IP plans available. Ordering is temporarily disabled.')
+  ).toBeVisible()
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'I have read and agree to the after-sales terms',
+    })
+  )
+  expect(screen.getByRole('button', { name: /^Pay / })).toBeDisabled()
 })

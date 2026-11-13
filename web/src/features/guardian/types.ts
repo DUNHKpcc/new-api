@@ -38,6 +38,8 @@ export type GuardianMacRegion = 'kr_seoul' | 'au_sydney'
 export type GuardianMacConfig = '16_256'
 
 export interface GuardianService {
+  ip_enabled?: boolean
+  ip_options?: GuardianIPOption[]
   tags?: string[]
   out_of_stock?: boolean
   stock_note?: string
@@ -83,12 +85,17 @@ export interface GuardianPayMethod {
 }
 
 export interface GuardianCatalog {
+  after_sales_terms: GuardianAfterSalesTerms
   services: GuardianService[]
   pay_methods: GuardianPayMethod[]
   purchase_enabled: boolean
 }
 
 export interface GuardianOrderRequest {
+  ip_billing_period?: GuardianBillingPeriod
+  ip_option_id?: string
+  accept_after_sales_terms?: boolean
+  after_sales_terms?: string
   invoice_information?: string
   discovery_channel: string
   reseller_code?: string
@@ -116,6 +123,11 @@ export interface GuardianOrderCheckout {
 }
 
 export interface GuardianOrder {
+  ip_billing_period?: GuardianBillingPeriod
+  ip_option_id?: string
+  ip_option_name?: string
+  ip_option_description?: string
+  ip_option_price_cents?: number
   invoice_information?: string
   discovery_channel?: string
   reseller_code?: string
@@ -229,10 +241,8 @@ export interface GuardianAccountStatus extends GuardianAccountFlags {
   user_id: number
   username: string
   updated_at: number
-  historical_category?: string
 }
 export interface GuardianAccountStatistics {
-  historical_users: number
   healthy_users: number
   all_issues_users: number
   purchased_users: number
@@ -243,18 +253,10 @@ export interface GuardianAccountStatistics {
   updated_at: number
 }
 
-export interface GuardianHistoricalAccounts {
-  total_users: number
-  banned_only: number
-  kyc_only: number
-  phone_only: number
-  banned_kyc: number
-  banned_phone: number
-  kyc_phone: number
-  all_three: number
-}
-
 export interface GuardianReceipt {
+  ip_billing_period?: GuardianBillingPeriod
+  ip_option_name?: string
+  ip_option_price_cents?: number
   order_id: number
   number: string
   trade_no: string
@@ -272,4 +274,19 @@ export interface GuardianReceipt {
   refund_state: string
   refund_cents: number | null
   refunded_at: number
+}
+
+export interface GuardianAfterSalesTerms {
+  deployment: string
+  mac: string
+}
+
+export interface GuardianIPOption {
+  quarter_price_cents: number
+  annual_price_cents: number
+  id: string
+  name: string
+  description: string
+  price_cents: number
+  enabled: boolean
 }

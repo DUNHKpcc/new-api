@@ -103,11 +103,27 @@ export function buildReceiptDocument(props: {
                   data.amount_cents -
                     data.max_cents -
                     data.ultra_cents -
-                    (data.pro_cents ?? 0),
+                    (data.pro_cents ?? 0) -
+                    (data.ip_option_price_cents ?? 0),
                   locale
                 )}
               </td>
             </tr>
+            {(data.ip_option_price_cents ?? 0) > 0 && (
+              <tr>
+                <td>
+                  {t('IP add-ons')} · {data.ip_option_name}
+                  {data.ip_billing_period === 'monthly' && (
+                    <> · {t('Monthly payment')}</>
+                  )}
+                  {data.ip_billing_period === 'quarterly' && (
+                    <> · {t('Quarterly')}</>
+                  )}
+                  {data.ip_billing_period === 'yearly' && <> · {t('Yearly')}</>}
+                </td>
+                <td>{formatCny(data.ip_option_price_cents ?? 0, locale)}</td>
+              </tr>
+            )}
             {data.max_cents > 0 && (
               <tr>
                 <td>{t('Claude MAX subscription')}</td>

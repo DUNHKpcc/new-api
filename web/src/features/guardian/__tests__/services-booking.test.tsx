@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -35,6 +41,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }))
 
 const catalog: GuardianCatalog = {
+  after_sales_terms: { deployment: 'Deployment terms', mac: 'Mac terms' },
   services: [
     {
       id: 7,
@@ -418,4 +425,62 @@ it('edits optional display tags and allows removing all tags', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(put).toHaveBeenCalledTimes(2))
   expect(put.mock.calls[1][1]).toMatchObject({ tags: [] })
+})
+
+it('keeps IP choices off cards and shows them after booking', async () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'alice', role: 1 })
+  const original = catalog.services[0]
+  catalog.services[0] = {
+    ...original,
+    ip_enabled: true,
+    ip_options: [
+      {
+        id: 'home',
+        name: 'Residential IP',
+        description: 'Dedicated address',
+        price_cents: 5000,
+        quarter_price_cents: 14000,
+        annual_price_cents: 50000,
+        enabled: true,
+      },
+      {
+        id: 'dc',
+        name: 'Datacenter IP',
+        description: '',
+        price_cents: 2000,
+        quarter_price_cents: 5500,
+        annual_price_cents: 20000,
+        enabled: true,
+      },
+      {
+        id: 'off',
+        name: 'Hidden IP',
+        description: '',
+        price_cents: 1000,
+        quarter_price_cents: 3000,
+        annual_price_cents: 12000,
+        enabled: false,
+      },
+    ],
+  }
+  try {
+    renderSection({})
+    await screen.findByRole('button', { name: 'Book this service' })
+    expect(screen.queryByText('Residential IP')).not.toBeInTheDocument()
+    expect(screen.queryByText('Datacenter IP')).not.toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Book this service' })
+    )
+    const dialog = within(
+      await screen.findByRole('dialog', { name: original.title })
+    )
+    expect(dialog.getByRole('radio', { name: /Residential IP/ })).toBeVisible()
+    expect(dialog.getByRole('radio', { name: /Datacenter IP/ })).toBeVisible()
+    expect(dialog.queryByText('Hidden IP')).not.toBeInTheDocument()
+    expect(
+      dialog.getByRole('radiogroup', { name: 'IP billing period' })
+    ).toBeVisible()
+  } finally {
+    catalog.services[0] = original
+  }
 })

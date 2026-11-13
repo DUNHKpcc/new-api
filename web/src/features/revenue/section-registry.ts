@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 export const REVENUE_SECTION_IDS = [
   'overview',
   'platform-orders',
+  'guardian',
   'external',
 ] as const
 

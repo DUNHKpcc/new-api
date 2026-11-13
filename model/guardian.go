@@ -37,40 +37,49 @@ func (f *GuardianFeatures) Scan(value any) error {
 }
 
 type GuardianService struct {
-	Tags                  GuardianFeatures `json:"tags" gorm:"type:text"`
-	OutOfStock            bool             `json:"out_of_stock"`
-	StockNote             string           `json:"stock_note" gorm:"type:varchar(255)"`
-	ClaudeProOutOfStock   bool             `json:"claude_pro_out_of_stock"`
-	ClaudeMaxOutOfStock   bool             `json:"claude_max_out_of_stock"`
-	ClaudeUltraOutOfStock bool             `json:"claude_ultra_out_of_stock"`
-	InvoiceEnabled        bool             `json:"invoice_enabled"`
-	ClaudeProPriceCents   int64            `json:"claude_pro_price_cents"`
-	ClaudeUltraPriceCents int64            `json:"claude_ultra_price_cents"`
-	ClaudeMaxPriceCents   int64            `json:"claude_max_price_cents"`
-	QuarterPriceCents     int64            `json:"quarter_price_cents"`
-	AnnualPriceCents      int64            `json:"annual_price_cents"`
-	Region                string           `json:"region" gorm:"type:varchar(16)"`
-	HardwareConfig        string           `json:"hardware_config" gorm:"type:varchar(16)"`
-	Chip                  string           `json:"chip" gorm:"type:varchar(8)"`
-	BaseSales             int64            `json:"base_sales"`
-	ActualSales           *int64           `json:"actual_sales,omitempty" gorm:"-"`
-	SoldCount             *int64           `json:"sold_count,omitempty" gorm:"-"`
-	ID                    int              `json:"id"`
-	Title                 string           `json:"title" gorm:"type:varchar(128);not null"`
-	Subtitle              string           `json:"subtitle" gorm:"type:varchar(255)"`
-	Description           string           `json:"description" gorm:"type:text"`
-	Features              GuardianFeatures `json:"features" gorm:"type:text"`
-	PriceCents            int64            `json:"price_cents" gorm:"not null"`
-	DeliveryNote          string           `json:"delivery_note" gorm:"type:varchar(128)"`
-	Badge                 string           `json:"badge" gorm:"type:varchar(32)"`
-	Route                 string           `json:"route" gorm:"type:varchar(16)"`
-	Enabled               bool             `json:"enabled"`
-	SortOrder             int              `json:"sort_order"`
-	CreatedAt             int64            `json:"created_at"`
-	UpdatedAt             int64            `json:"updated_at"`
+	IPEnabled             bool              `json:"ip_enabled"`
+	IPOptions             GuardianIPOptions `json:"ip_options" gorm:"type:text"`
+	Tags                  GuardianFeatures  `json:"tags" gorm:"type:text"`
+	OutOfStock            bool              `json:"out_of_stock"`
+	StockNote             string            `json:"stock_note" gorm:"type:varchar(255)"`
+	ClaudeProOutOfStock   bool              `json:"claude_pro_out_of_stock"`
+	ClaudeMaxOutOfStock   bool              `json:"claude_max_out_of_stock"`
+	ClaudeUltraOutOfStock bool              `json:"claude_ultra_out_of_stock"`
+	InvoiceEnabled        bool              `json:"invoice_enabled"`
+	ClaudeProPriceCents   int64             `json:"claude_pro_price_cents"`
+	ClaudeUltraPriceCents int64             `json:"claude_ultra_price_cents"`
+	ClaudeMaxPriceCents   int64             `json:"claude_max_price_cents"`
+	QuarterPriceCents     int64             `json:"quarter_price_cents"`
+	AnnualPriceCents      int64             `json:"annual_price_cents"`
+	Region                string            `json:"region" gorm:"type:varchar(16)"`
+	HardwareConfig        string            `json:"hardware_config" gorm:"type:varchar(16)"`
+	Chip                  string            `json:"chip" gorm:"type:varchar(8)"`
+	BaseSales             int64             `json:"base_sales"`
+	ActualSales           *int64            `json:"actual_sales,omitempty" gorm:"-"`
+	SoldCount             *int64            `json:"sold_count,omitempty" gorm:"-"`
+	ID                    int               `json:"id"`
+	Title                 string            `json:"title" gorm:"type:varchar(128);not null"`
+	Subtitle              string            `json:"subtitle" gorm:"type:varchar(255)"`
+	Description           string            `json:"description" gorm:"type:text"`
+	Features              GuardianFeatures  `json:"features" gorm:"type:text"`
+	PriceCents            int64             `json:"price_cents" gorm:"not null"`
+	DeliveryNote          string            `json:"delivery_note" gorm:"type:varchar(128)"`
+	Badge                 string            `json:"badge" gorm:"type:varchar(32)"`
+	Route                 string            `json:"route" gorm:"type:varchar(16)"`
+	Enabled               bool              `json:"enabled"`
+	SortOrder             int               `json:"sort_order"`
+	CreatedAt             int64             `json:"created_at"`
+	UpdatedAt             int64             `json:"updated_at"`
 }
 
 func (s *GuardianService) Validate() error {
+	if err := s.IPOptions.Validate(); err != nil {
+		return err
+	}
+	if s.Route == "mac_mini" {
+		s.IPOptions = GuardianIPOptions{}
+		s.IPEnabled = false
+	}
 	if s.ClaudeProPriceCents < 0 || s.ClaudeProPriceCents > 10000000 {
 		return errors.New("Claude Pro 加购价须在 0 至 100000 元之间")
 	}
@@ -197,6 +206,10 @@ func (s GuardianService) PriceForPeriod(period string) (int64, string, error) {
 }
 
 type GuardianOrderRequest struct {
+	IPBillingPeriod           string `json:"ip_billing_period"`
+	IPOptionID                string `json:"ip_option_id"`
+	AcceptAfterSalesTerms     bool   `json:"accept_after_sales_terms"`
+	AfterSalesTerms           string `json:"after_sales_terms"`
 	InvoiceInformation        string `json:"invoice_information"`
 	DiscoveryChannel          string `json:"discovery_channel"`
 	AddClaudePro              bool   `json:"add_claude_pro"`
@@ -252,6 +265,13 @@ func (r *GuardianOrderRequest) Validate() error {
 }
 
 type GuardianServiceOrder struct {
+	IPBillingPeriod           string `json:"ip_billing_period" gorm:"type:varchar(16)"`
+	IPOptionID                string `json:"ip_option_id" gorm:"type:varchar(64)"`
+	IPOptionName              string `json:"ip_option_name" gorm:"type:varchar(128)"`
+	IPOptionDescription       string `json:"ip_option_description" gorm:"type:text"`
+	IPOptionPriceCents        int64  `json:"ip_option_price_cents"`
+	AfterSalesTerms           string `json:"after_sales_terms" gorm:"type:text"`
+	AfterSalesAcceptedAt      int64  `json:"after_sales_accepted_at"`
 	InvoiceInformation        string `json:"invoice_information" gorm:"type:text"`
 	DiscoveryChannel          string `json:"discovery_channel" gorm:"type:varchar(16)"`
 	ReceiptNotification       bool   `json:"-"`
@@ -327,6 +347,23 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		if (service.Route == "mac_mini") != (req.Route == "mac_mini") {
 			return errors.New("所选路线与服务分类不一致")
 		}
+		terms, err := GetGuardianAfterSalesTerms(tx)
+		if err != nil {
+			return err
+		}
+		currentTerms := terms.Deployment
+		if service.Route == "mac_mini" {
+			currentTerms = terms.Mac
+		}
+		if currentTerms == "" {
+			return errors.New("该分类尚未配置售后条款，暂不可下单")
+		}
+		if !req.AcceptAfterSalesTerms {
+			return errors.New("请阅读并同意售后条款")
+		}
+		if req.AfterSalesTerms != currentTerms {
+			return errors.New("售后条款已更新，请重新打开下单窗口阅读并同意")
+		}
 		amount, period, err := service.PriceForPeriod(req.BillingPeriod)
 		if err != nil {
 			return err
@@ -359,6 +396,42 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 			addonPrice = service.ClaudeUltraPriceCents
 			amount += addonPrice
 		}
+		var ipOption GuardianIPOption
+		var ipPrice int64
+		if service.IPEnabled && req.IPOptionID == "" {
+			return errors.New("该商品必须选择 IP 类型和付款周期")
+		}
+		if req.IPOptionID == "" && req.IPBillingPeriod != "" {
+			return errors.New("请先选择 IP 类型")
+		}
+		if req.IPOptionID != "" {
+			if !service.IPEnabled {
+				return errors.New("该商品未开启 IP 服务")
+			}
+			if service.Route == "mac_mini" {
+				return errors.New("Mac 服务不支持环境部署 IP 加购")
+			}
+			for _, option := range service.IPOptions {
+				if option.ID == req.IPOptionID && option.Enabled {
+					ipOption = option
+					break
+				}
+			}
+			if ipOption.ID == "" {
+				return errors.New("所选 IP 加购已下架，请重新选择")
+			}
+			ipPrice, err = ipOption.PeriodPrice(req.IPBillingPeriod)
+			if err != nil {
+				return err
+			}
+			if ipPrice <= 0 {
+				return errors.New("该 IP 付款周期尚未开放")
+			}
+			amount += ipPrice
+			if req.ResellerCode == "" && (req.ExpectedAmountCents == nil || *req.ExpectedAmountCents != amount) {
+				return errors.New("报价已变更，请刷新后确认金额")
+			}
+		}
 		if req.CustomerServiceID > 0 {
 			if err := guardianRenewalSource(tx, userID, &req); err != nil {
 				return err
@@ -369,13 +442,42 @@ func CreateGuardianOrder(userID int, req GuardianOrderRequest) (*GuardianService
 		}
 		var sale *GuardianResellerSale
 		if req.ResellerCode != "" {
-			sale, amount, addonPrice, err = guardianResaleSnapshot(tx, userID, req, service)
+			sale, amount, addonPrice, err = guardianResaleSnapshot(tx, userID, req, service, ipPrice)
 			if err != nil {
 				return err
 			}
 		}
 		now := time.Now().Unix()
-		*order = GuardianServiceOrder{InvoiceInformation: req.InvoiceInformation, DiscoveryChannel: req.DiscoveryChannel, ReceiptNotification: true, RenewalPreviousResellerID: req.renewalPreviousResellerID, CustomerServiceID: req.CustomerServiceID, ResellerCode: req.ResellerCode, TradeNo: fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now), UserID: userID, ServiceID: service.ID, ServiceTitle: service.Title, AmountCents: amount, BillingPeriod: period, PaymentMethod: req.PaymentMethod, Status: "pending_payment", Route: req.Route, OS: req.OS, ContactType: req.ContactType, Contact: req.Contact, Note: req.Note, CreatedAt: now, UpdatedAt: now}
+		*order = GuardianServiceOrder{
+			IPBillingPeriod:           req.IPBillingPeriod,
+			IPOptionID:                ipOption.ID,
+			IPOptionName:              ipOption.Name,
+			IPOptionDescription:       ipOption.Description,
+			IPOptionPriceCents:        ipPrice,
+			AfterSalesTerms:           currentTerms,
+			AfterSalesAcceptedAt:      now,
+			InvoiceInformation:        req.InvoiceInformation,
+			DiscoveryChannel:          req.DiscoveryChannel,
+			ReceiptNotification:       true,
+			RenewalPreviousResellerID: req.renewalPreviousResellerID,
+			CustomerServiceID:         req.CustomerServiceID,
+			ResellerCode:              req.ResellerCode,
+			TradeNo:                   fmt.Sprintf("SVCUSR%dNO%s%d", userID, common.GetRandomString(6), now),
+			UserID:                    userID,
+			ServiceID:                 service.ID,
+			ServiceTitle:              service.Title,
+			AmountCents:               amount,
+			BillingPeriod:             period,
+			PaymentMethod:             req.PaymentMethod,
+			Status:                    "pending_payment",
+			Route:                     req.Route,
+			OS:                        req.OS,
+			ContactType:               req.ContactType,
+			Contact:                   req.Contact,
+			Note:                      req.Note,
+			CreatedAt:                 now,
+			UpdatedAt:                 now,
+		}
 		if req.AddClaudePro {
 			order.ClaudeProPriceCents = addonPrice
 		} else if req.AddClaudeUltra {

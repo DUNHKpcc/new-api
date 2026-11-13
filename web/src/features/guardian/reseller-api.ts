@@ -120,6 +120,7 @@ export interface ResellerOrder {
   billing_period: GuardianBillingPeriod
   amount_cents: number
   supply_cents: number
+  settlement_fee_cents?: number
   estimated_fee_cents: number
   actual_fee_cents: number
   fee_confirmed_at: number

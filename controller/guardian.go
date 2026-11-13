@@ -37,8 +37,13 @@ func GetGuardianCatalog(c *gin.Context) {
 	if err := model.PopulateGuardianSales(services); err != nil {
 		common.SysError("Guardian sales statistics unavailable: " + err.Error())
 	}
+	terms, err := model.GetGuardianAfterSalesTerms(model.DB)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	methods := guardianPayMethods()
-	common.ApiSuccess(c, gin.H{"services": services, "pay_methods": methods, "purchase_enabled": GetEpayClient() != nil && operation_setting.IsPaymentComplianceConfirmed() && len(methods) > 0})
+	common.ApiSuccess(c, gin.H{"after_sales_terms": terms, "services": services, "pay_methods": methods, "purchase_enabled": GetEpayClient() != nil && operation_setting.IsPaymentComplianceConfirmed() && len(methods) > 0})
 }
 func AdminListGuardianServices(c *gin.Context) {
 	services := []model.GuardianService{}
@@ -97,13 +102,9 @@ func AdminUpdateGuardianService(c *gin.Context) {
 		return
 	}
 	service.ID = id
-	if err := model.ValidateGuardianBaseSalesChange(previous.BaseSales, service.BaseSales); err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	service.CreatedAt = previous.CreatedAt
 	service.UpdatedAt = time.Now().Unix()
-	if err := model.DB.Model(&previous).Select("tags", "out_of_stock", "stock_note", "claude_pro_out_of_stock", "claude_max_out_of_stock", "claude_ultra_out_of_stock", "claude_pro_price_cents", "invoice_enabled", "claude_ultra_price_cents", "claude_max_price_cents", "quarter_price_cents", "annual_price_cents", "region", "hardware_config", "chip", "base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
+	if err := model.DB.Model(&previous).Select("ip_enabled", "ip_options", "tags", "out_of_stock", "stock_note", "claude_pro_out_of_stock", "claude_max_out_of_stock", "claude_ultra_out_of_stock", "claude_pro_price_cents", "invoice_enabled", "claude_ultra_price_cents", "claude_max_price_cents", "quarter_price_cents", "annual_price_cents", "region", "hardware_config", "chip", "base_sales", "title", "subtitle", "description", "features", "price_cents", "delivery_note", "badge", "route", "enabled", "sort_order", "updated_at").Updates(&service).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}

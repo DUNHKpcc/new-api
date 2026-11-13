@@ -71,7 +71,9 @@ export function GuardianOrderResellerFinance({
         : money(
             o.refund_state === 'completed'
               ? 0
-              : o.amount_cents - o.supply_cents - fee
+              : o.amount_cents -
+                  o.supply_cents -
+                  (o.settlement_fee_cents ?? fee)
           ),
     },
     ...(o.refund_state === 'completed'

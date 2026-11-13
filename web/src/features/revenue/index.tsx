@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { GuardianOrdersPanel } from '@/features/guardian/components/admin/orders-panel'
 
 import { ExternalRevenueList } from './components/external-revenue-list'
 import { PlatformOrders } from './components/platform-orders'
@@ -30,6 +31,7 @@ import type { RevenueSectionId } from './section-registry'
 const SECTIONS: Array<{ id: RevenueSectionId; label: string }> = [
   { id: 'overview', label: 'Revenue overview' },
   { id: 'platform-orders', label: 'Platform orders' },
+  { id: 'guardian', label: 'Guardian services' },
   { id: 'external', label: 'External revenue' },
 ]
 
@@ -40,6 +42,7 @@ export function RevenueManagement() {
   const section = params.section as RevenueSectionId
   let content = <RevenueOverview />
   if (section === 'platform-orders') content = <PlatformOrders />
+  if (section === 'guardian') content = <GuardianOrdersPanel />
   if (section === 'external') content = <ExternalRevenueList />
 
   return (

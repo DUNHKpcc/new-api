@@ -70,20 +70,43 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		return nil, err
 	}
 
+	var guardianOrders []GuardianServiceOrder
+	err = DB.Select("amount_cents", "payment_method", "paid_at").
+		Where("paid_at > 0 AND paid_at >= ? AND paid_at < ?", startTime, endTime).
+		Find(&guardianOrders).Error
+	if err != nil {
+		return nil, err
+	}
+	type revenueEntry struct {
+		amountMinor int64
+		currency    string
+		method      string
+		paidAt      int64
+		verified    bool
+	}
+	entries := make([]revenueEntry, 0, len(topUps)+len(guardianOrders))
+	for _, topUp := range topUps {
+		amount, currency, verified, err := platformRevenueAmount(topUp, defaultCurrency)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, revenueEntry{amount, currency, topUp.PaymentMethod, topUp.CompleteTime, verified})
+	}
+	for _, order := range guardianOrders {
+		entries = append(entries, revenueEntry{order.AmountCents, "CNY", order.PaymentMethod, order.PaidAt, true})
+	}
+
 	totalMap := map[string]*PlatformRevenueTotal{}
 	methodMap := map[string]*PlatformRevenueMethodTotal{}
 	timelineMap := map[string]*PlatformRevenueTimelinePoint{}
 	location := time.FixedZone("admin", timezoneOffset*60)
-	for _, topUp := range topUps {
-		amountMinor, currency, verified, amountErr := platformRevenueAmount(topUp, defaultCurrency)
-		if amountErr != nil {
-			return nil, amountErr
-		}
-		method := strings.TrimSpace(topUp.PaymentMethod)
+	for _, entry := range entries {
+		amountMinor, currency := entry.amountMinor, entry.currency
+		method := strings.TrimSpace(entry.method)
 		if method == "" {
 			method = "unknown"
 		}
-		date := time.Unix(topUp.CompleteTime, 0).In(location).Format("2006-01-02")
+		date := time.Unix(entry.paidAt, 0).In(location).Format("2006-01-02")
 		methodKey := strings.Join([]string{method, currency}, "\x00")
 		timelineKey := strings.Join([]string{date, method, currency}, "\x00")
 		if totalMap[currency] == nil {
@@ -102,7 +125,7 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		}
 		totalMap[currency].AmountMinor += amountMinor
 		totalMap[currency].Count++
-		if verified {
+		if entry.verified {
 			totalMap[currency].VerifiedCount++
 		}
 		methodMap[methodKey].AmountMinor += amountMinor

@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { GuardianAccountStatusPanel } from './components/admin/account-status-panel'
-import { GuardianHistoricalAccountsPanel } from './components/admin/historical-accounts-panel'
+import { GuardianAfterSalesTermsPanel } from './components/admin/after-sales-terms-panel'
 import { GuardianOrdersPanel } from './components/admin/orders-panel'
 import { GuardianQueuePanel } from './components/admin/queue-panel'
 import { GuardianResellerAdminPanel } from './components/admin/reseller-panel'
@@ -55,6 +55,9 @@ export function GuardianAdmin() {
             <TabsTrigger value='orders'>{t('Order')}</TabsTrigger>
             <TabsTrigger value='resellers'>{t('Resellers')}</TabsTrigger>
             <TabsTrigger value='queue'>{t('Queue')}</TabsTrigger>
+            <TabsTrigger value='after-sales-terms'>
+              {t('After-sales terms')}
+            </TabsTrigger>
             <TabsTrigger value='services'>{t('Service catalog')}</TabsTrigger>
             <TabsTrigger value='account-status'>
               {t('Account status')}
@@ -69,9 +72,11 @@ export function GuardianAdmin() {
           <TabsContent value='queue' className='mt-4'>
             <GuardianQueuePanel />
           </TabsContent>
-          <TabsContent value='account-status' className='mt-4 space-y-4'>
-            <GuardianHistoricalAccountsPanel />
+          <TabsContent value='account-status' className='mt-4'>
             <GuardianAccountStatusPanel />
+          </TabsContent>
+          <TabsContent value='after-sales-terms' className='mt-4'>
+            <GuardianAfterSalesTermsPanel />
           </TabsContent>
           <TabsContent value='services' className='mt-4'>
             <GuardianServicesPanel />

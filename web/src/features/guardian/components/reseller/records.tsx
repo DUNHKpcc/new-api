@@ -289,9 +289,10 @@ export function ResellerRecords({
                     ? 0
                     : o.amount_cents -
                         o.supply_cents -
-                        (o.fee_confirmed_at
-                          ? o.actual_fee_cents
-                          : o.estimated_fee_cents)
+                        (o.settlement_fee_cents ??
+                          (o.fee_confirmed_at
+                            ? o.actual_fee_cents
+                            : o.estimated_fee_cents))
                 )
               },
             },

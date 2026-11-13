@@ -20,7 +20,7 @@ import { api } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import type {
-  GuardianHistoricalAccounts,
+  GuardianAfterSalesTerms,
   GuardianAccountFlags,
   GuardianAccountStatus,
   GuardianAccountStatistics,
@@ -243,7 +243,7 @@ export async function listGuardianAccountStatuses(
 }
 export async function saveGuardianAccountStatus(
   userId: number,
-  flags: GuardianAccountFlags & { historical_category?: string }
+  flags: GuardianAccountFlags
 ) {
   return requireServerSuccess(
     (
@@ -255,23 +255,23 @@ export async function saveGuardianAccountStatus(
   ).data
 }
 
-export async function getGuardianHistoricalAccounts() {
+export async function getAdminGuardianAfterSalesTerms() {
   return requireServerSuccess(
     (
-      await api.get<
-        Response<{ settings: GuardianHistoricalAccounts; base_sales: number }>
-      >(`${base}/admin/historical-accounts`)
+      await api.get<Response<GuardianAfterSalesTerms>>(
+        `${base}/admin/after-sales-terms`
+      )
     ).data
   ).data
 }
-export async function saveGuardianHistoricalAccounts(
-  values: GuardianHistoricalAccounts
+export async function saveGuardianAfterSalesTerms(
+  terms: GuardianAfterSalesTerms
 ) {
   return requireServerSuccess(
     (
-      await api.put<Response<GuardianHistoricalAccounts>>(
-        `${base}/admin/historical-accounts`,
-        values
+      await api.put<Response<GuardianAfterSalesTerms>>(
+        `${base}/admin/after-sales-terms`,
+        terms
       )
     ).data
   ).data

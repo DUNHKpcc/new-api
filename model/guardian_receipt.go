@@ -10,23 +10,26 @@ import (
 )
 
 type GuardianReceipt struct {
-	OrderID       int    `json:"order_id" gorm:"primaryKey;autoIncrement:false"`
-	Number        string `json:"number" gorm:"type:varchar(96);uniqueIndex"`
-	TradeNo       string `json:"trade_no" gorm:"type:varchar(64)"`
-	ServiceTitle  string `json:"service_title" gorm:"type:varchar(128)"`
-	BillingPeriod string `json:"billing_period" gorm:"type:varchar(16)"`
-	AmountCents   int64  `json:"amount_cents"`
-	MaxCents      int64  `json:"max_cents"`
-	ProCents      int64  `json:"pro_cents"`
-	UltraCents    int64  `json:"ultra_cents"`
-	PaymentMethod string `json:"payment_method" gorm:"type:varchar(32)"`
-	PaidAt        int64  `json:"paid_at"`
-	CreatedAt     int64  `json:"created_at"`
-	Email         string `json:"-" gorm:"type:varchar(254)"`
-	EmailStatus   string `json:"email_status" gorm:"type:varchar(24)"`
-	Attempts      int    `json:"-"`
-	NextAttemptAt int64  `json:"-"`
-	RequestedAt   int64  `json:"-"`
+	IPBillingPeriod    string `json:"ip_billing_period" gorm:"type:varchar(16)"`
+	IPOptionName       string `json:"ip_option_name" gorm:"type:varchar(128)"`
+	IPOptionPriceCents int64  `json:"ip_option_price_cents"`
+	OrderID            int    `json:"order_id" gorm:"primaryKey;autoIncrement:false"`
+	Number             string `json:"number" gorm:"type:varchar(96);uniqueIndex"`
+	TradeNo            string `json:"trade_no" gorm:"type:varchar(64)"`
+	ServiceTitle       string `json:"service_title" gorm:"type:varchar(128)"`
+	BillingPeriod      string `json:"billing_period" gorm:"type:varchar(16)"`
+	AmountCents        int64  `json:"amount_cents"`
+	MaxCents           int64  `json:"max_cents"`
+	ProCents           int64  `json:"pro_cents"`
+	UltraCents         int64  `json:"ultra_cents"`
+	PaymentMethod      string `json:"payment_method" gorm:"type:varchar(32)"`
+	PaidAt             int64  `json:"paid_at"`
+	CreatedAt          int64  `json:"created_at"`
+	Email              string `json:"-" gorm:"type:varchar(254)"`
+	EmailStatus        string `json:"email_status" gorm:"type:varchar(24)"`
+	Attempts           int    `json:"-"`
+	NextAttemptAt      int64  `json:"-"`
+	RequestedAt        int64  `json:"-"`
 }
 
 type GuardianReceiptView struct {
@@ -95,7 +98,24 @@ func ensureGuardianReceipt(tx *gorm.DB, order GuardianServiceOrder) (*GuardianRe
 		return nil, err
 	}
 	now := time.Now().Unix()
-	receipt = GuardianReceipt{OrderID: order.ID, Number: fmt.Sprintf("GRC-%s", order.TradeNo), TradeNo: order.TradeNo, ServiceTitle: order.ServiceTitle, BillingPeriod: order.BillingPeriod, AmountCents: order.AmountCents, MaxCents: order.ClaudeMaxPriceCents, UltraCents: order.ClaudeUltraPriceCents, ProCents: order.ClaudeProPriceCents, PaymentMethod: order.PaymentMethod, PaidAt: order.PaidAt, CreatedAt: now, EmailStatus: "not_requested"}
+	receipt = GuardianReceipt{
+		IPBillingPeriod:    order.IPBillingPeriod,
+		IPOptionName:       order.IPOptionName,
+		IPOptionPriceCents: order.IPOptionPriceCents,
+		OrderID:            order.ID,
+		Number:             fmt.Sprintf("GRC-%s", order.TradeNo),
+		TradeNo:            order.TradeNo,
+		ServiceTitle:       order.ServiceTitle,
+		BillingPeriod:      order.BillingPeriod,
+		AmountCents:        order.AmountCents,
+		MaxCents:           order.ClaudeMaxPriceCents,
+		UltraCents:         order.ClaudeUltraPriceCents,
+		ProCents:           order.ClaudeProPriceCents,
+		PaymentMethod:      order.PaymentMethod,
+		PaidAt:             order.PaidAt,
+		CreatedAt:          now,
+		EmailStatus:        "not_requested",
+	}
 	if order.ReceiptNotification {
 		receipt.Email = user.Email
 		receipt.RequestedAt = now

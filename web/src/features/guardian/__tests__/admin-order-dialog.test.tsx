@@ -364,3 +364,33 @@ it('records a reseller refund inside the order and closes its stale status form'
     undefined
   )
 })
+
+it('excludes the platform IP fee share from reseller earnings while retaining the channel statement', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        order_id: order.id,
+        reseller_id: 7,
+        trade_no: order.trade_no,
+        amount_cents: 76000,
+        supply_cents: 70000,
+        estimated_fee_cents: 156,
+        actual_fee_cents: 760,
+        settlement_fee_cents: 260,
+        fee_confirmed_at: 1761500200,
+        paid_at: order.paid_at,
+        refund_state: '',
+      },
+    },
+  })
+  await renderDialog(
+    <GuardianOrderDialog
+      order={{ ...order, reseller_code: 'agent-seven' }}
+      onClose={() => undefined}
+      onSaved={() => undefined}
+    />
+  )
+  expect(await screen.findByText('¥57.40')).toBeVisible()
+  expect(screen.getByText(/¥7.60/)).toBeVisible()
+})
