@@ -77,7 +77,7 @@ function MetricCard(props: MetricCardProps) {
   return (
     <Card size='sm'>
       <CardContent className='flex items-start justify-between gap-3'>
-        <div className='min-w-0 space-y-1'>
+        <div className='min-w-0 flex-1 space-y-1'>
           <p className='text-muted-foreground text-xs font-medium'>
             {props.label}
           </p>
@@ -85,14 +85,14 @@ function MetricCard(props: MetricCardProps) {
             <Skeleton className='h-7 w-28' />
           ) : (
             <p
-              className={`truncate text-xl font-semibold tabular-nums ${props.valueClassName ?? ''}`}
+              className={`text-xl font-semibold wrap-anywhere tabular-nums ${props.valueClassName ?? ''}`}
             >
               {props.value}
             </p>
           )}
           <p className='text-muted-foreground text-xs'>{props.description}</p>
         </div>
-        <div className='bg-muted rounded-md p-2'>
+        <div className='bg-muted shrink-0 rounded-md p-2'>
           <Icon className='text-muted-foreground h-4 w-4' />
         </div>
       </CardContent>
@@ -268,7 +268,7 @@ export function RevenueOverview() {
         }}
       />
 
-      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7'>
+      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>
         <MetricCard
           label={t('Total revenue')}
           value={formatMinorCurrency(selected.totalAmountMinor, currency)}

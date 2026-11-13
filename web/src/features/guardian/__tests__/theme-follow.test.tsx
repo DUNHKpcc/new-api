@@ -16,12 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import { Checkbox } from '@/components/ui/checkbox'
 import { ThemeProvider } from '@/context/theme-provider'
 import { THEME_STORAGE_KEYS } from '@/lib/theme-storage'
 
@@ -81,4 +85,34 @@ it('switches the whole site to dark from the Guardian header and saves the share
 
   await waitFor(() => expect(document.documentElement).toHaveClass('dark'))
   expect(store.get(THEME_STORAGE_KEYS.mode)).toBe('dark')
+})
+
+it('keeps the checked checkbox background visible in the Guardian theme', async () => {
+  const style = document.createElement('style')
+  style.textContent = readFileSync(
+    path.resolve('src/styles/guardian.css'),
+    'utf8'
+  )
+  document.head.append(style)
+  try {
+    render(
+      <div className='guardian-root'>
+        <Checkbox aria-label='Consent' />
+      </div>
+    )
+    const checkbox = screen.getByRole('checkbox', { name: 'Consent' })
+    await userEvent.click(checkbox)
+    expect(checkbox).toHaveAttribute('aria-checked', 'true')
+    if (!style.sheet) throw new Error('Guardian stylesheet did not load')
+    const matchingRules = [...style.sheet.cssRules].filter(
+      (rule): rule is CSSStyleRule =>
+        rule.type === CSSRule.STYLE_RULE &&
+        checkbox.matches((rule as CSSStyleRule).selectorText)
+    )
+    for (const rule of matchingRules) {
+      expect(rule.style.background).not.toBe('transparent')
+    }
+  } finally {
+    style.remove()
+  }
 })

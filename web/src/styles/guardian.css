@@ -152,8 +152,7 @@ html
   :is(
     [data-slot='input'],
     [data-slot='textarea'],
-    [data-slot='native-select'],
-    [data-slot='checkbox']
+    [data-slot='native-select']
   ) {
   border-width: 1px;
   border-color: var(--input);
