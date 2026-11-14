@@ -113,8 +113,8 @@ it('distinguishes unrecorded purchasers from confirmed zero issues', async () =>
     'text-[var(--g-accent)]'
   )
   expect(screen.getByRole('link', { name: /^Claude-Guardian$/ })).toHaveClass(
-    'bg-[var(--g-accent-wash)]',
-    'text-[var(--g-ink)]'
+    'bg-[var(--g-button)]',
+    'text-[var(--g-button-ink)]'
   )
   expect(screen.getByText('No account statuses recorded yet')).toBeVisible()
   expect(screen.getAllByText('—')).toHaveLength(3)
@@ -123,7 +123,7 @@ it('distinguishes unrecorded purchasers from confirmed zero issues', async () =>
 it('redirects the old URL into the pricing tabs and switches statistics in place', async () => {
   renderStatistics(empty)
   const statusTab = await screen.findByRole('tab', {
-    name: 'Purchased user account status',
+    name: 'Account status',
   })
   expect(statusTab).toHaveAttribute('aria-selected', 'true')
   expect(

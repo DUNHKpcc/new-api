@@ -324,7 +324,11 @@ export function ResellerRecords({
         </Button>
       </div>
       {action && (
-        <ResellerActionDialog action={action} onClose={() => setAction(null)} />
+        <ResellerActionDialog
+          contentClassName='guardian-root'
+          action={action}
+          onClose={() => setAction(null)}
+        />
       )}
     </div>
   )

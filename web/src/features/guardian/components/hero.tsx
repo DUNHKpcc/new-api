@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, BookOpen, Star } from 'lucide-react'
+import { motion, useReducedMotion, useSpring } from 'motion/react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SiGithub } from 'react-icons/si'
 
@@ -29,6 +31,77 @@ import { cn } from '@/lib/utils'
 import { GUARDIAN_LINKS } from '../constants'
 import { useGithubStars } from '../hooks/use-github-stars'
 import { TierChip, type GuardianTier } from './tier-chip'
+
+function ClaudeMascot() {
+  const anchor = useRef<HTMLSpanElement>(null)
+  const reducedMotion = useReducedMotion()
+  const x = useSpring(0, { stiffness: 120, damping: 16 })
+  const y = useSpring(0, { stiffness: 120, damping: 16 })
+
+  useEffect(() => {
+    if (reducedMotion || !window.matchMedia('(pointer: fine)').matches) return
+    const follow = (event: PointerEvent) => {
+      if (!anchor.current || event.pointerType === 'touch') return
+      const rect = anchor.current.getBoundingClientRect()
+      x.set(
+        Math.max(
+          -3,
+          Math.min(3, (event.clientX - rect.x - rect.width / 2) / 60)
+        )
+      )
+      y.set(
+        Math.max(
+          -2,
+          Math.min(2, (event.clientY - rect.y - rect.height / 2) / 80)
+        )
+      )
+    }
+    const reset = () => {
+      x.set(0)
+      y.set(0)
+    }
+    window.addEventListener('pointermove', follow)
+    document.documentElement.addEventListener('pointerleave', reset)
+    return () => {
+      window.removeEventListener('pointermove', follow)
+      document.documentElement.removeEventListener('pointerleave', reset)
+      reset()
+    }
+  }, [reducedMotion, x, y])
+
+  return (
+    <span
+      ref={anchor}
+      aria-hidden='true'
+      className='pointer-events-none absolute bottom-full left-1/2 z-10 -mb-[9px] h-10 w-16 -translate-x-1/2'
+    >
+      <svg
+        viewBox='0 0 80 52'
+        style={{ animationDuration: '0.4s' }}
+        className='size-full origin-bottom overflow-visible transition-transform duration-200 group-focus-within/setup:scale-x-105 group-focus-within/setup:scale-y-110 group-focus-within/setup:animate-bounce group-hover/setup:scale-x-105 group-hover/setup:scale-y-110 group-hover/setup:animate-bounce motion-reduce:scale-100 motion-reduce:animate-none motion-reduce:transition-none'
+      >
+        <path
+          fill='var(--g-button)'
+          d='M10 2H70V22H80V32H70V52H65V42H60V52H55V42H25V52H20V42H15V52H10V32H0V22H10Z'
+        />
+        <motion.g
+          fill='#251A14'
+          style={{ x, y }}
+          className='group-focus-within/setup:opacity-0 group-hover/setup:opacity-0'
+        >
+          <path d='M20 14H25V24H20ZM55 14H60V24H55Z' />
+        </motion.g>
+        <g className='opacity-0 group-focus-within/setup:opacity-100 group-hover/setup:opacity-100'>
+          <path
+            fill='#251A14'
+            d='M18 21V16H22V12H26V16H30V21H26V17H22V21ZM50 21V16H54V12H58V16H62V21H58V17H54V21ZM33 28H37V32H43V28H47V35H33Z'
+          />
+          <path fill='#F6AC91' d='M15 25H27V29H15ZM53 25H65V29H53Z' />
+        </g>
+      </svg>
+    </span>
+  )
+}
 
 const REVEAL_STEP_MS = 420
 
@@ -218,7 +291,7 @@ export function GuardianHero() {
               )}
             </span>
           </p>
-          <div className='mt-9 flex flex-wrap items-center gap-3'>
+          <div className='g-hero-actions mt-9 flex flex-wrap items-center gap-3'>
             <Button
               className='g-pill h-11 gap-2 px-5 text-[0.9375rem]'
               render={
@@ -232,14 +305,17 @@ export function GuardianHero() {
               <SiGithub aria-hidden='true' />
               {t('Install the Skill for free')}
             </Button>
-            <Button
-              variant='outline'
-              className='g-pill h-11 gap-2 px-5 text-[0.9375rem]'
-              render={<Link to='/guardian/services' />}
-            >
-              {t('Book a setup service')}
-              <ArrowRight aria-hidden='true' />
-            </Button>
+            <span className='group/setup relative inline-flex'>
+              <ClaudeMascot />
+              <Button
+                variant='outline'
+                className='g-pill h-11 gap-2 px-5 text-[0.9375rem]'
+                render={<Link to='/guardian/services' />}
+              >
+                {t('Book a setup service')}
+                <ArrowRight aria-hidden='true' />
+              </Button>
+            </span>
           </div>
           <div className='mt-6 flex flex-wrap items-center gap-x-7 gap-y-3 pl-1'>
             <StarOnGithub />

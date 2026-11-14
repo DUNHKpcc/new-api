@@ -72,9 +72,11 @@ function GuardianHeader(props: { resellerCode?: string }) {
       <div className='mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6 2xl:max-w-7xl'>
         <Link
           to='/guardian'
-          className='flex shrink-0 items-center gap-2.5 rounded-lg bg-[var(--g-accent-wash)] px-3 py-1.5 text-[var(--g-ink)] outline-none focus-visible:ring-3 focus-visible:ring-[var(--g-accent)]/40'
+          className='flex shrink-0 items-center gap-2.5 rounded-lg bg-[var(--g-button)] px-3 py-1.5 text-[var(--g-button-ink)] outline-none focus-visible:ring-3 focus-visible:ring-[var(--g-accent)]/40'
         >
-          <span className='g-heading text-[1.0625rem]'>Claude-Guardian</span>
+          <span className='g-heading text-[1.0625rem] font-semibold!'>
+            Claude-Guardian
+          </span>
         </Link>
 
         <nav
@@ -122,7 +124,6 @@ function GuardianHeader(props: { resellerCode?: string }) {
             </Button>
           ) : (
             <Button
-              variant='outline'
               className='h-9 px-3.5'
               render={
                 <Link to='/sign-in' search={{ redirect: '/guardian/orders' }} />

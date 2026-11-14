@@ -237,7 +237,11 @@ export function ResellerOffersPanel({
         />
       )}
       {action && (
-        <ResellerActionDialog action={action} onClose={() => setAction(null)} />
+        <ResellerActionDialog
+          contentClassName='guardian-root'
+          action={action}
+          onClose={() => setAction(null)}
+        />
       )}
     </div>
   )

@@ -509,3 +509,18 @@ it('excludes unassigned resellers from the following-tier filter', async () => {
     screen.getByRole('checkbox', { name: 'Select tier-agent' })
   ).toBeVisible()
 })
+
+it.each([undefined, 'guardian-root'])(
+  'only applies the public theme when requested: %s',
+  async (contentClassName) => {
+    renderPanel(
+      <ResellerActionDialog
+        action={{ title: 'Edit offer', fields: [], submit: vi.fn() }}
+        onClose={vi.fn()}
+        contentClassName={contentClassName}
+      />
+    )
+    const dialog = await screen.findByRole('dialog', { name: 'Edit offer' })
+    expect(dialog.classList.contains('guardian-root')).toBe(!!contentClassName)
+  }
+)

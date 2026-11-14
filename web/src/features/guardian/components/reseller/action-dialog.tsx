@@ -50,9 +50,11 @@ export interface ResellerAction {
 export function ResellerActionDialog({
   action,
   onClose,
+  contentClassName,
 }: {
   action: ResellerAction
   onClose: () => void
+  contentClassName?: string
 }) {
   const { t } = useTranslation()
   const client = useQueryClient()
@@ -97,6 +99,7 @@ export function ResellerActionDialog({
   })
   return (
     <Dialog
+      contentClassName={contentClassName}
       open
       onOpenChange={(v) => {
         if (!v && !mutation.isPending) onClose()

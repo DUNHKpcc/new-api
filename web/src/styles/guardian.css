@@ -36,6 +36,9 @@ For commercial licensing, please contact support@quantumnous.com
   --g-rule-strong: #c4bba9;
   --g-accent: #b4552f;
   --g-accent-wash: #f2e1d6;
+  --g-button: #e5704c;
+  --g-button-hover: #d96240;
+  --g-button-ink: #fff;
   --g-tier-a: #4c6a44;
   --g-tier-b: #87600f;
   --g-tier-c: #a3392b;
@@ -110,6 +113,9 @@ html .guardian-root.guardian-root :is(h1, h2, h3, h4) {
 
 html .guardian-root.guardian-root [data-slot='button'] {
   border-width: 1px;
+  border-color: transparent;
+  background: var(--g-button);
+  color: var(--g-button-ink);
   border-radius: var(--radius-lg);
   font-family: var(--g-font-sans);
   font-weight: 500;
@@ -117,28 +123,9 @@ html .guardian-root.guardian-root [data-slot='button'] {
   box-shadow: none;
 }
 
-html .guardian-root.guardian-root [data-slot='button'].bg-primary {
-  border-color: transparent;
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-
-html .guardian-root.guardian-root [data-slot='button'].bg-primary:hover {
-  background: color-mix(in srgb, var(--primary) 86%, var(--g-paper));
-}
-
-html
-  .guardian-root.guardian-root
-  [data-slot='button']:is(.border-border, .bg-secondary) {
-  border-color: var(--g-rule-strong);
-  background: transparent;
-  color: var(--g-ink);
-}
-
-html
-  .guardian-root.guardian-root
-  [data-slot='button']:is(.border-border, .bg-secondary):hover {
-  background: var(--g-paper-sunk);
+html .guardian-root.guardian-root [data-slot='button']:hover {
+  background: var(--g-button-hover);
+  color: var(--g-button-ink);
 }
 
 html
@@ -354,6 +341,23 @@ html .guardian-root.guardian-root .g-heading {
 /* Pill-shaped buttons; lifted to the same specificity as the preset reset. */
 html .guardian-root.guardian-root [data-slot='button'].g-pill {
   border-radius: 999px;
+}
+
+html .guardian-root.guardian-root .g-hero-actions [data-slot='button'] {
+  --g-button: transparent;
+  --g-button-hover: var(--g-paper-sunk);
+  --g-button-ink: var(--g-ink);
+  border-color: var(--g-rule-strong);
+}
+
+html
+  .guardian-root.guardian-root
+  .g-hero-actions
+  [data-slot='button'].bg-primary {
+  --g-button: var(--g-ink);
+  --g-button-hover: color-mix(in srgb, var(--g-ink) 86%, var(--g-paper));
+  --g-button-ink: var(--g-paper);
+  border-color: transparent;
 }
 
 /* Second headline line fades from ink to the muted tone. */

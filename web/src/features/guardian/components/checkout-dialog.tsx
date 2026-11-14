@@ -210,7 +210,8 @@ export function CheckoutDialog(props: {
       }}
       title={props.service.title}
       description={props.service.subtitle || undefined}
-      contentClassName='guardian-root max-sm:w-[calc(100vw-1.5rem)] sm:max-w-lg'
+      contentClassName='guardian-root no-scrollbar **:no-scrollbar max-sm:w-[calc(100vw-1.5rem)] sm:max-w-xl lg:h-[calc(100dvh-2rem)] lg:max-w-5xl lg:overflow-hidden lg:[&>div:has(form)]:flex-1 lg:[&>div:has(form)]:overflow-hidden'
+      bodyClassName='lg:h-full'
       titleClassName='g-heading text-xl'
       footer={
         <>
@@ -241,7 +242,7 @@ export function CheckoutDialog(props: {
     >
       <form
         id={FORM_ID}
-        className='space-y-5'
+        className='grid gap-6 lg:h-full lg:min-h-0 lg:grid-cols-2 lg:gap-8'
         noValidate
         onSubmit={form.handleSubmit((values) => {
           if (
@@ -254,297 +255,313 @@ export function CheckoutDialog(props: {
           }
         })}
       >
-        {ipRequired && (
-          <Field>
-            <FieldLabel id='guardian-ip-label'>{t('IP add-ons')}</FieldLabel>
-            <p className='text-muted-foreground text-sm'>
-              {t('Choose an IP type and billing period')}
-            </p>
-            <RadioGroup
-              aria-labelledby='guardian-ip-label'
-              value={ipOptionId}
-              onValueChange={(value) => setIPOptionId(String(value))}
-              className='grid-cols-1 sm:grid-cols-2'
-            >
-              {ipOptions.map((option) => (
-                <label
-                  key={option.id}
-                  className='flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm has-data-checked:border-[var(--g-ink)]'
-                >
-                  <RadioGroupItem value={option.id} />
-                  <span className='min-w-0 space-y-1'>
-                    <span className='block font-medium'>{option.name}</span>
-                    <span className='block whitespace-pre-wrap text-[var(--g-ink-soft)]'>
-                      {option.description}
-                    </span>
-                    <span className='block font-semibold'>
-                      +
-                      {formatCny(
-                        guardianPeriodPrice(option, ipPeriod).total,
-                        locale
-                      )}{' '}
-                      · {labels.billingPeriod[ipPeriod]}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </RadioGroup>
-            {ipOptions.length === 0 && (
-              <p role='status'>
-                {t('No IP plans available. Ordering is temporarily disabled.')}
+        <div className='min-w-0 space-y-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:px-1 lg:pb-1'>
+          {ipRequired && (
+            <Field>
+              <FieldLabel id='guardian-ip-label'>{t('IP add-ons')}</FieldLabel>
+              <p className='text-muted-foreground text-sm'>
+                {t('Choose an IP type and billing period')}
               </p>
-            )}
-            <GuardianPeriodSelector
-              prices={ipOption}
-              value={ipPeriod}
-              onChange={setIPPeriod}
-              label={t('IP billing period')}
-            />
-            <p className='text-muted-foreground text-sm'>
+              <RadioGroup
+                aria-labelledby='guardian-ip-label'
+                value={ipOptionId}
+                onValueChange={(value) => setIPOptionId(String(value))}
+                className='auto-rows-fr grid-cols-1 sm:grid-cols-2'
+              >
+                {ipOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    className='flex h-full cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm has-data-checked:border-[var(--g-ink)]'
+                  >
+                    <RadioGroupItem value={option.id} />
+                    <span className='flex min-w-0 flex-1 flex-col gap-1 self-stretch'>
+                      <span className='block font-medium'>{option.name}</span>
+                      <span className='block whitespace-pre-wrap text-[var(--g-ink-soft)]'>
+                        {option.description}
+                      </span>
+                      <span className='mt-auto block pt-1 font-semibold'>
+                        +
+                        {formatCny(
+                          guardianPeriodPrice(option, ipPeriod).total,
+                          locale
+                        )}{' '}
+                        · {labels.billingPeriod[ipPeriod]}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+              {ipOptions.length === 0 && (
+                <p role='status'>
+                  {t(
+                    'No IP plans available. Ordering is temporarily disabled.'
+                  )}
+                </p>
+              )}
+              <GuardianPeriodSelector
+                prices={ipOption}
+                value={ipPeriod}
+                onChange={setIPPeriod}
+                label={t('IP billing period')}
+              />
+              <p className='text-muted-foreground text-sm'>
+                {t(
+                  'Setup is charged once. IP is prepaid for the selected period; no automatic renewal.'
+                )}
+              </p>
+            </Field>
+          )}
+          {props.service.route === 'mac_mini' && (
+            <p className='text-sm font-medium'>
+              {labels.billingPeriod[props.billingPeriod ?? 'monthly']} ·{' '}
+              {formatCny(hostingPrice, locale)}
+            </p>
+          )}
+          {props.service.route === 'mac_mini' && (
+            <div className='grid auto-rows-fr grid-cols-3 gap-2 sm:gap-3'>
+              <ClaudeSubscriptionAddon
+                variant='pro'
+                outOfStock={props.service.claude_pro_out_of_stock}
+                disabled={
+                  props.service.out_of_stock && !props.customerServiceId
+                }
+                priceCents={props.service.claude_pro_price_cents ?? 0}
+                checked={addClaudePro}
+                onCheckedChange={(checked) => {
+                  setAddClaudePro(checked)
+                  if (checked) {
+                    setAddClaudeMax(false)
+                    setAddClaudeUltra(false)
+                  }
+                }}
+              />
+              <ClaudeSubscriptionAddon
+                variant='max'
+                outOfStock={props.service.claude_max_out_of_stock}
+                disabled={
+                  props.service.out_of_stock && !props.customerServiceId
+                }
+                priceCents={props.service.claude_max_price_cents ?? 0}
+                checked={addClaudeMax}
+                onCheckedChange={(checked) => {
+                  setAddClaudeMax(checked)
+                  if (checked) {
+                    setAddClaudeUltra(false)
+                    setAddClaudePro(false)
+                  }
+                }}
+              />
+              <ClaudeSubscriptionAddon
+                variant='ultra'
+                outOfStock={props.service.claude_ultra_out_of_stock}
+                disabled={
+                  props.service.out_of_stock && !props.customerServiceId
+                }
+                priceCents={props.service.claude_ultra_price_cents ?? 0}
+                checked={addClaudeUltra}
+                onCheckedChange={(checked) => {
+                  setAddClaudeUltra(checked)
+                  if (checked) {
+                    setAddClaudeMax(false)
+                    setAddClaudePro(false)
+                  }
+                }}
+              />
+            </div>
+          )}
+          {unavailable && (
+            <p role='alert'>
               {t(
-                'Setup is charged once. IP is prepaid for the selected period; no automatic renewal.'
+                'The selected service or add-on is out of stock. Please choose again.'
               )}
             </p>
-          </Field>
-        )}
-        {props.service.route === 'mac_mini' && (
-          <p className='text-sm font-medium'>
-            {labels.billingPeriod[props.billingPeriod ?? 'monthly']} ·{' '}
-            {formatCny(hostingPrice, locale)}
-          </p>
-        )}
-        {props.service.route === 'mac_mini' && (
-          <div className='grid auto-rows-fr grid-cols-3 gap-2 sm:gap-3'>
-            <ClaudeSubscriptionAddon
-              variant='pro'
-              outOfStock={props.service.claude_pro_out_of_stock}
-              disabled={props.service.out_of_stock && !props.customerServiceId}
-              priceCents={props.service.claude_pro_price_cents ?? 0}
-              checked={addClaudePro}
-              onCheckedChange={(checked) => {
-                setAddClaudePro(checked)
-                if (checked) {
-                  setAddClaudeMax(false)
-                  setAddClaudeUltra(false)
-                }
-              }}
-            />
-            <ClaudeSubscriptionAddon
-              variant='max'
-              outOfStock={props.service.claude_max_out_of_stock}
-              disabled={props.service.out_of_stock && !props.customerServiceId}
-              priceCents={props.service.claude_max_price_cents ?? 0}
-              checked={addClaudeMax}
-              onCheckedChange={(checked) => {
-                setAddClaudeMax(checked)
-                if (checked) {
-                  setAddClaudeUltra(false)
-                  setAddClaudePro(false)
-                }
-              }}
-            />
-            <ClaudeSubscriptionAddon
-              variant='ultra'
-              outOfStock={props.service.claude_ultra_out_of_stock}
-              disabled={props.service.out_of_stock && !props.customerServiceId}
-              priceCents={props.service.claude_ultra_price_cents ?? 0}
-              checked={addClaudeUltra}
-              onCheckedChange={(checked) => {
-                setAddClaudeUltra(checked)
-                if (checked) {
-                  setAddClaudeMax(false)
-                  setAddClaudePro(false)
-                }
-              }}
-            />
-          </div>
-        )}
-        {unavailable && (
-          <p role='alert'>
-            {t(
-              'The selected service or add-on is out of stock. Please choose again.'
-            )}
-          </p>
-        )}
-        {props.service.description && (
-          <div className='max-h-40 space-y-3 overflow-y-auto rounded-lg bg-[var(--g-paper-sunk)] p-4 text-sm leading-6 text-[var(--g-ink-soft)]'>
-            {props.service.description.split(/\n{2,}/).map((paragraph) => (
-              <p key={paragraph} className='whitespace-pre-line'>
-                {paragraph}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {props.service.route !== 'mac_mini' && (
-          <div className='grid gap-4 sm:grid-cols-2'>
-            <Field>
-              <FieldLabel htmlFor='guardian-route'>{t('Route')}</FieldLabel>
-              <NativeSelect id='guardian-route' {...form.register('route')}>
-                {Object.entries(labels.orderRoute)
-                  .filter(([value]) => value !== 'mac_mini')
-                  .map(([value, label]) => (
+          )}
+          {props.service.description && (
+            <div className='max-h-40 space-y-3 overflow-y-auto rounded-lg bg-[var(--g-paper-sunk)] p-4 text-sm leading-6 text-[var(--g-ink-soft)] lg:max-h-none lg:overflow-visible'>
+              {props.service.description.split(/\n{2,}/).map((paragraph) => (
+                <p key={paragraph} className='whitespace-pre-line'>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className='min-w-0 space-y-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:border-l lg:pr-1 lg:pb-1 lg:pl-8'>
+          {props.service.route !== 'mac_mini' && (
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <Field>
+                <FieldLabel htmlFor='guardian-route'>{t('Route')}</FieldLabel>
+                <NativeSelect id='guardian-route' {...form.register('route')}>
+                  {Object.entries(labels.orderRoute)
+                    .filter(([value]) => value !== 'mac_mini')
+                    .map(([value, label]) => (
+                      <NativeSelectOption key={value} value={value}>
+                        {label}
+                      </NativeSelectOption>
+                    ))}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor='guardian-os'>
+                  {t('Operating system')}
+                </FieldLabel>
+                <NativeSelect id='guardian-os' {...form.register('os')}>
+                  {Object.entries(labels.os).map(([value, label]) => (
                     <NativeSelectOption key={value} value={value}>
                       {label}
                     </NativeSelectOption>
                   ))}
-              </NativeSelect>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor='guardian-os'>
-                {t('Operating system')}
-              </FieldLabel>
-              <NativeSelect id='guardian-os' {...form.register('os')}>
-                {Object.entries(labels.os).map(([value, label]) => (
-                  <NativeSelectOption key={value} value={value}>
-                    {label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </Field>
-          </div>
-        )}
+                </NativeSelect>
+              </Field>
+            </div>
+          )}
 
-        {needsConsent && (
-          <label className='flex items-start gap-3 rounded-lg border p-3 text-sm'>
-            <Checkbox
-              checked={accepted}
-              onCheckedChange={(v) => setAccepted(!!v)}
-            />
-            <span>
-              {props.directConfirmationRequired
-                ? t(
-                    'The original reseller is suspended. I agree to renew directly with the platform; future renewals will also be direct.'
-                  )
-                : t(
-                    'I agree that all refunds deduct the actual payment fee not returned by the channel. The platform handles delivery and support.'
-                  )}
-            </span>
-          </label>
-        )}
-        {props.service.invoice_enabled && (
-          <Field data-invalid={!!errors.invoice_information}>
-            <FieldLabel htmlFor='guardian-invoice-information'>
-              {t('Invoice information')}
-            </FieldLabel>
-            <Textarea
-              id='guardian-invoice-information'
-              aria-invalid={!!errors.invoice_information}
-              maxLength={2000}
-              rows={4}
-              placeholder={t(
-                'Enter your invoice information if you need an invoice; otherwise leave blank.'
+          {needsConsent && (
+            <label className='flex items-start gap-3 rounded-lg border p-3 text-sm'>
+              <Checkbox
+                checked={accepted}
+                onCheckedChange={(v) => setAccepted(!!v)}
+              />
+              <span>
+                {props.directConfirmationRequired
+                  ? t(
+                      'The original reseller is suspended. I agree to renew directly with the platform; future renewals will also be direct.'
+                    )
+                  : t(
+                      'I agree that all refunds deduct the actual payment fee not returned by the channel. The platform handles delivery and support.'
+                    )}
+              </span>
+            </label>
+          )}
+          {props.service.invoice_enabled && (
+            <Field data-invalid={!!errors.invoice_information}>
+              <FieldLabel htmlFor='guardian-invoice-information'>
+                {t('Invoice information')}
+              </FieldLabel>
+              <Textarea
+                id='guardian-invoice-information'
+                aria-invalid={!!errors.invoice_information}
+                maxLength={2000}
+                rows={4}
+                placeholder={t(
+                  'Enter your invoice information if you need an invoice; otherwise leave blank.'
+                )}
+                {...form.register('invoice_information')}
+              />
+              {errors.invoice_information && (
+                <FieldError>
+                  {t('Message must be at most 2000 characters')}
+                </FieldError>
               )}
-              {...form.register('invoice_information')}
-            />
-            {errors.invoice_information && (
-              <FieldError>
-                {t('Message must be at most 2000 characters')}
-              </FieldError>
+            </Field>
+          )}
+          <Field data-invalid={!!errors.discovery_channel}>
+            <FieldLabel htmlFor='guardian-discovery'>
+              {t('How did you hear about us?')}
+            </FieldLabel>
+            <NativeSelect
+              id='guardian-discovery'
+              aria-invalid={!!errors.discovery_channel}
+              defaultValue=''
+              {...form.register('discovery_channel')}
+            >
+              <NativeSelectOption value='' disabled>
+                {t('Please select')}
+              </NativeSelectOption>
+              <DiscoveryOptions />
+            </NativeSelect>
+            {errors.discovery_channel && (
+              <FieldError>{t('Choose how you heard about us')}</FieldError>
             )}
           </Field>
-        )}
-        <Field data-invalid={!!errors.discovery_channel}>
-          <FieldLabel htmlFor='guardian-discovery'>
-            {t('How did you hear about us?')}
-          </FieldLabel>
-          <NativeSelect
-            id='guardian-discovery'
-            aria-invalid={!!errors.discovery_channel}
-            defaultValue=''
-            {...form.register('discovery_channel')}
-          >
-            <NativeSelectOption value='' disabled>
-              {t('Please select')}
-            </NativeSelectOption>
-            <DiscoveryOptions />
-          </NativeSelect>
-          {errors.discovery_channel && (
-            <FieldError>{t('Choose how you heard about us')}</FieldError>
-          )}
-        </Field>
-        <p className='text-muted-foreground text-sm'>
-          {maskedEmail
-            ? t('Your payment receipt will be emailed to {{email}}.', {
-                email: maskedEmail,
-              })
-            : t(
-                'View your receipt in My orders after payment. Bind an account email to receive it by email.'
+          <p className='text-muted-foreground text-sm'>
+            {maskedEmail
+              ? t('Your payment receipt will be emailed to {{email}}.', {
+                  email: maskedEmail,
+                })
+              : t(
+                  'View your receipt in My orders after payment. Bind an account email to receive it by email.'
+                )}
+          </p>
+          <FormProvider {...form}>
+            <GuardianContactFields />
+          </FormProvider>
+          <Alert className='border-[color-mix(in_srgb,var(--g-tier-c)_35%,transparent)]'>
+            <ShieldAlert
+              className='text-[var(--g-tier-c)]'
+              aria-hidden='true'
+            />
+            <AlertDescription>
+              {t(
+                'Never put passwords, keys or subscription links in this form. We arrange remote access privately after payment, and you can revoke it at any time.'
               )}
-        </p>
-        <FormProvider {...form}>
-          <GuardianContactFields />
-        </FormProvider>
-        <Alert className='border-[color-mix(in_srgb,var(--g-tier-c)_35%,transparent)]'>
-          <ShieldAlert className='text-[var(--g-tier-c)]' aria-hidden='true' />
-          <AlertDescription>
-            {t(
-              'Never put passwords, keys or subscription links in this form. We arrange remote access privately after payment, and you can revoke it at any time.'
-            )}
-          </AlertDescription>
-        </Alert>
+            </AlertDescription>
+          </Alert>
 
-        <Field>
-          <FieldLabel>{t('After-sales terms')}</FieldLabel>
-          {terms ? (
-            <>
-              <div
-                className='max-h-48 overflow-y-auto rounded-lg border p-3 text-sm whitespace-pre-wrap'
-                tabIndex={0}
-              >
-                {terms}
-              </div>
-              <label className='flex items-start gap-3 text-sm'>
-                <Checkbox
-                  checked={termsAccepted}
-                  onCheckedChange={(checked) =>
-                    setAcceptedTerms(checked ? terms : '')
-                  }
-                />
-                <span>
-                  {t('I have read and agree to the after-sales terms')}
-                </span>
-              </label>
-            </>
-          ) : (
-            <p className='text-muted-foreground text-sm'>
-              {termsQuery.isPending
-                ? t('Loading...')
-                : t(
-                    'After-sales terms are unavailable. Ordering is temporarily disabled.'
-                  )}
-            </p>
-          )}
-        </Field>
-
-        <Field data-invalid={!!errors.payment_method}>
-          <FieldLabel id='guardian-pay-label'>{t('Payment method')}</FieldLabel>
-          <Controller
-            control={form.control}
-            name='payment_method'
-            render={({ field }) => (
-              <RadioGroup
-                aria-labelledby='guardian-pay-label'
-                value={field.value}
-                onValueChange={(value) => field.onChange(String(value))}
-                className='grid-cols-2'
-              >
-                {props.payMethods.map((method) => (
-                  <label
-                    key={method.type}
-                    className='g-rule flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm has-data-checked:border-[var(--g-ink)]'
-                  >
-                    <RadioGroupItem value={method.type} />
-                    {method.name || method.type}
-                  </label>
-                ))}
-              </RadioGroup>
+          <Field>
+            <FieldLabel>{t('After-sales terms')}</FieldLabel>
+            {terms ? (
+              <>
+                <div
+                  className='max-h-48 overflow-y-auto rounded-lg border p-3 text-sm whitespace-pre-wrap'
+                  tabIndex={0}
+                >
+                  {terms}
+                </div>
+                <label className='flex items-start gap-3 text-sm'>
+                  <Checkbox
+                    checked={termsAccepted}
+                    onCheckedChange={(checked) =>
+                      setAcceptedTerms(checked ? terms : '')
+                    }
+                  />
+                  <span>
+                    {t('I have read and agree to the after-sales terms')}
+                  </span>
+                </label>
+              </>
+            ) : (
+              <p className='text-muted-foreground text-sm'>
+                {termsQuery.isPending
+                  ? t('Loading...')
+                  : t(
+                      'After-sales terms are unavailable. Ordering is temporarily disabled.'
+                    )}
+              </p>
             )}
-          />
-          {errors.payment_method && (
-            <FieldError>{t(errors.payment_method.message ?? '')}</FieldError>
-          )}
-        </Field>
+          </Field>
+
+          <Field data-invalid={!!errors.payment_method}>
+            <FieldLabel id='guardian-pay-label'>
+              {t('Payment method')}
+            </FieldLabel>
+            <Controller
+              control={form.control}
+              name='payment_method'
+              render={({ field }) => (
+                <RadioGroup
+                  aria-labelledby='guardian-pay-label'
+                  value={field.value}
+                  onValueChange={(value) => field.onChange(String(value))}
+                  className='grid-cols-2'
+                >
+                  {props.payMethods.map((method) => (
+                    <label
+                      key={method.type}
+                      className='g-rule flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm has-data-checked:border-[var(--g-ink)]'
+                    >
+                      <RadioGroupItem value={method.type} />
+                      {method.name || method.type}
+                    </label>
+                  ))}
+                </RadioGroup>
+              )}
+            />
+            {errors.payment_method && (
+              <FieldError>{t(errors.payment_method.message ?? '')}</FieldError>
+            )}
+          </Field>
+        </div>
       </form>
     </Dialog>
   )

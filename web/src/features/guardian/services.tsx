@@ -200,7 +200,7 @@ export function GuardianServices(props: {
           >
             <TabsIndicator className='g-service-tab-indicator' />
             <TabsTrigger value='account_status'>
-              {t('Purchased user account status')}
+              {t('Account status')}
             </TabsTrigger>
             <TabsTrigger value='setup'>{t('Environment setup')}</TabsTrigger>
             <TabsTrigger value='mac_mini'>{t('Overseas Mac mini')}</TabsTrigger>

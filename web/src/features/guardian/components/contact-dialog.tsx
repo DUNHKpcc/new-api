@@ -72,6 +72,7 @@ function ContactDialog(props: { order: GuardianOrder; onClose: () => void }) {
   })
   return (
     <Dialog
+      contentClassName='guardian-root'
       open
       onOpenChange={(open) => {
         if (!open && !save.isPending) props.onClose()
