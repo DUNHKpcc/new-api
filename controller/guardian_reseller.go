@@ -148,7 +148,11 @@ func AdminGetGuardianResellerOrder(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, order)
+	common.ApiSuccess(c, struct {
+		*model.GuardianResellerOrderView
+		FeeReference    string `json:"fee_reference,omitempty"`
+		RefundReference string `json:"refund_reference,omitempty"`
+	}{order, order.FeeReference, order.RefundReference})
 }
 
 func AdminConfirmGuardianFee(c *gin.Context) {
@@ -176,12 +180,15 @@ func AdminGuardianResellerRefund(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req model.GuardianResellerRefundRequest
+	var req struct {
+		Action string `json:"action" binding:"required,oneof=mark"`
+		Reason string `json:"reason"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiErrorMsg(c, "参数错误")
 		return
 	}
-	if err := model.UpdateGuardianResellerRefund(id, c.GetInt("id"), req); err != nil {
+	if err := model.MarkGuardianResellerOrderRefunded(id, c.GetInt("id"), req.Reason); err != nil {
 		common.ApiError(c, err)
 		return
 	}

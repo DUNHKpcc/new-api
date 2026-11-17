@@ -229,21 +229,28 @@ func TestGuardianPlatformRevenue(t *testing.T) {
 			require.NoError(t, db.Create(&orders).Error)
 			topups := []TopUp{
 				{TradeNo: "revenue-cny", Status: "success", PaidCurrency: "CNY", PaidAmountMinor: 250, CompleteTime: start, PaymentMethod: "alipay"},
+				{TradeNo: "revenue-subscription", Status: "success", Money: 5, CompleteTime: start, PaymentMethod: "alipay"},
 				{TradeNo: "revenue-usd", Status: "success", PaidCurrency: "USD", PaidAmountMinor: 900, CompleteTime: start, PaymentMethod: "stripe"},
 			}
 			require.NoError(t, db.Create(&topups).Error)
 			summary, err := GetPlatformRevenueSummary(start, end, 480)
 			require.NoError(t, err)
-			assert.Equal(t, []PlatformRevenueTotal{{Currency: "CNY", AmountMinor: 3850, Count: 9, VerifiedCount: 9}, {Currency: "USD", AmountMinor: 900, Count: 1, VerifiedCount: 1}}, summary.Totals)
-			assert.Contains(t, summary.ByPaymentMethod, PlatformRevenueMethodTotal{PaymentMethod: "alipay", Currency: "CNY", AmountMinor: 3850, Count: 9})
-			assert.Contains(t, summary.Timeline, PlatformRevenueTimelinePoint{Date: "2024-09-01", PaymentMethod: "alipay", Currency: "CNY", AmountMinor: 3850, Count: 9})
+			assert.Equal(t, []PlatformRevenueTotal{{Currency: "CNY", AmountMinor: 4350, Count: 10, VerifiedCount: 9}, {Currency: "USD", AmountMinor: 900, Count: 1, VerifiedCount: 1}}, summary.Totals)
+			assert.Equal(t, []PlatformRevenueSourceTotal{
+				{Source: "guardian", PlatformRevenueTotal: PlatformRevenueTotal{Currency: "CNY", AmountMinor: 3600, Count: 8, VerifiedCount: 8}},
+				{Source: "recharge_subscription", PlatformRevenueTotal: PlatformRevenueTotal{Currency: "CNY", AmountMinor: 750, Count: 2, VerifiedCount: 1}},
+				{Source: "recharge_subscription", PlatformRevenueTotal: PlatformRevenueTotal{Currency: "USD", AmountMinor: 900, Count: 1, VerifiedCount: 1}},
+			}, summary.BySource)
+			assert.Contains(t, summary.ByPaymentMethod, PlatformRevenueMethodTotal{PaymentMethod: "alipay", Currency: "CNY", AmountMinor: 4350, Count: 10})
+			assert.Contains(t, summary.Timeline, PlatformRevenueTimelinePoint{Date: "2024-09-01", PaymentMethod: "alipay", Currency: "CNY", AmountMinor: 4350, Count: 10})
 			next, err := GetPlatformRevenueSummary(end+86400, end+172800, 480)
 			require.NoError(t, err)
 			assert.Empty(t, next.Totals, "refund date must not count the original payment twice")
+			assert.Empty(t, next.BySource)
 			previousDay, err := GetPlatformRevenueSummary(start, end, -480)
 			require.NoError(t, err)
 			assert.Equal(t, summary.Totals, previousDay.Totals, "timezone changes date labels, not selected receipts")
-			assert.Contains(t, previousDay.Timeline, PlatformRevenueTimelinePoint{Date: "2024-08-31", PaymentMethod: "alipay", Currency: "CNY", AmountMinor: 3850, Count: 9})
+			assert.Contains(t, previousDay.Timeline, PlatformRevenueTimelinePoint{Date: "2024-08-31", PaymentMethod: "alipay", Currency: "CNY", AmountMinor: 4350, Count: 10})
 			adjacent, err := GetPlatformRevenueSummary(end, end+86400, 480)
 			require.NoError(t, err)
 			assert.Equal(t, []PlatformRevenueTotal{{Currency: "CNY", AmountMinor: 99999, Count: 1, VerifiedCount: 1}}, adjacent.Totals, "receipt at the end boundary belongs only to the next period")

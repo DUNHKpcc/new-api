@@ -24,6 +24,11 @@ type PlatformRevenueMethodTotal struct {
 	Count         int64  `json:"count"`
 }
 
+type PlatformRevenueSourceTotal struct {
+	Source string `json:"source"`
+	PlatformRevenueTotal
+}
+
 type PlatformRevenueTimelinePoint struct {
 	Date          string `json:"date"`
 	PaymentMethod string `json:"payment_method"`
@@ -34,6 +39,7 @@ type PlatformRevenueTimelinePoint struct {
 
 type PlatformRevenueSummary struct {
 	Totals             []PlatformRevenueTotal         `json:"totals"`
+	BySource           []PlatformRevenueSourceTotal   `json:"by_source"`
 	ByPaymentMethod    []PlatformRevenueMethodTotal   `json:"by_payment_method"`
 	Timeline           []PlatformRevenueTimelinePoint `json:"timeline"`
 	DefaultCurrency    string                         `json:"default_currency"`
@@ -83,6 +89,7 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		method      string
 		paidAt      int64
 		verified    bool
+		source      string
 	}
 	entries := make([]revenueEntry, 0, len(topUps)+len(guardianOrders))
 	for _, topUp := range topUps {
@@ -90,13 +97,15 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, revenueEntry{amount, currency, topUp.PaymentMethod, topUp.CompleteTime, verified})
+		entries = append(entries, revenueEntry{amount, currency, topUp.PaymentMethod, topUp.CompleteTime, verified, "recharge_subscription"})
 	}
 	for _, order := range guardianOrders {
-		entries = append(entries, revenueEntry{order.AmountCents, "CNY", order.PaymentMethod, order.PaidAt, true})
+		entries = append(entries, revenueEntry{order.AmountCents, "CNY", order.PaymentMethod, order.PaidAt, true, "guardian"})
 	}
 
 	totalMap := map[string]*PlatformRevenueTotal{}
+	type sourceCurrency struct{ source, currency string }
+	sourceMap := map[sourceCurrency]*PlatformRevenueSourceTotal{}
 	methodMap := map[string]*PlatformRevenueMethodTotal{}
 	timelineMap := map[string]*PlatformRevenueTimelinePoint{}
 	location := time.FixedZone("admin", timezoneOffset*60)
@@ -109,6 +118,7 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		date := time.Unix(entry.paidAt, 0).In(location).Format("2006-01-02")
 		methodKey := strings.Join([]string{method, currency}, "\x00")
 		timelineKey := strings.Join([]string{date, method, currency}, "\x00")
+		sourceKey := sourceCurrency{entry.source, currency}
 		if totalMap[currency] == nil {
 			totalMap[currency] = &PlatformRevenueTotal{Currency: currency}
 		}
@@ -118,15 +128,24 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		if timelineMap[timelineKey] == nil {
 			timelineMap[timelineKey] = &PlatformRevenueTimelinePoint{Date: date, PaymentMethod: method, Currency: currency}
 		}
+		sourceTotal := sourceMap[sourceKey]
+		if sourceTotal == nil {
+			sourceTotal = &PlatformRevenueSourceTotal{Source: entry.source, PlatformRevenueTotal: PlatformRevenueTotal{Currency: currency}}
+			sourceMap[sourceKey] = sourceTotal
+		}
 		if totalMap[currency].AmountMinor > math.MaxInt64-amountMinor ||
+			sourceTotal.AmountMinor > math.MaxInt64-amountMinor ||
 			methodMap[methodKey].AmountMinor > math.MaxInt64-amountMinor ||
 			timelineMap[timelineKey].AmountMinor > math.MaxInt64-amountMinor {
 			return nil, errors.New("platform revenue summary exceeds supported range")
 		}
 		totalMap[currency].AmountMinor += amountMinor
 		totalMap[currency].Count++
+		sourceTotal.AmountMinor += amountMinor
+		sourceTotal.Count++
 		if entry.verified {
 			totalMap[currency].VerifiedCount++
+			sourceTotal.VerifiedCount++
 		}
 		methodMap[methodKey].AmountMinor += amountMinor
 		methodMap[methodKey].Count++
@@ -136,6 +155,7 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 
 	summary := &PlatformRevenueSummary{
 		Totals:             make([]PlatformRevenueTotal, 0, len(totalMap)),
+		BySource:           make([]PlatformRevenueSourceTotal, 0, len(sourceMap)),
 		ByPaymentMethod:    make([]PlatformRevenueMethodTotal, 0, len(methodMap)),
 		Timeline:           make([]PlatformRevenueTimelinePoint, 0, len(timelineMap)),
 		DefaultCurrency:    defaultCurrency,
@@ -147,6 +167,9 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 	for _, total := range totalMap {
 		summary.Totals = append(summary.Totals, *total)
 	}
+	for _, total := range sourceMap {
+		summary.BySource = append(summary.BySource, *total)
+	}
 	for _, total := range methodMap {
 		summary.ByPaymentMethod = append(summary.ByPaymentMethod, *total)
 	}
@@ -154,6 +177,13 @@ func GetPlatformRevenueSummary(startTime int64, endTime int64, timezoneOffset in
 		summary.Timeline = append(summary.Timeline, *point)
 	}
 	sort.Slice(summary.Totals, func(i, j int) bool { return summary.Totals[i].Currency < summary.Totals[j].Currency })
+	sort.Slice(summary.BySource, func(i, j int) bool {
+		a, b := summary.BySource[i], summary.BySource[j]
+		if a.Source == b.Source {
+			return a.Currency < b.Currency
+		}
+		return a.Source < b.Source
+	})
 	sort.Slice(summary.ByPaymentMethod, func(i, j int) bool {
 		if summary.ByPaymentMethod[i].Currency == summary.ByPaymentMethod[j].Currency {
 			return summary.ByPaymentMethod[i].PaymentMethod < summary.ByPaymentMethod[j].PaymentMethod

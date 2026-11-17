@@ -653,7 +653,7 @@ func UpdateGuardianOrder(id, actorID int, status, note string) (*GuardianService
 		now := time.Now().Unix()
 		if status == "refunded" && order.Status != status {
 			if order.ResellerCode != "" {
-				return errors.New("代理订单请使用专用退款流程，核对实际手续费及退款凭证")
+				return errors.New("请在代理结算中标记退款并填写原因")
 			}
 			order.RefundedAt = now
 		}

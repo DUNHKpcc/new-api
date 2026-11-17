@@ -309,7 +309,7 @@ it('manages direct and reseller orders together and reconciles the selected rese
   ).toBeVisible()
 })
 
-it('records a reseller refund inside the order and closes its stale status form', async () => {
+it('marks a paid reseller order refunded without fee reconciliation or a reference', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({
     data: {
       success: true,
@@ -320,10 +320,10 @@ it('records a reseller refund inside the order and closes its stale status form'
         amount_cents: 26000,
         supply_cents: 20000,
         estimated_fee_cents: 156,
-        actual_fee_cents: 156,
-        fee_confirmed_at: 1761500200,
+        actual_fee_cents: 0,
+        fee_confirmed_at: 0,
         paid_at: order.paid_at,
-        refund_state: 'processing',
+        refund_state: '',
       },
     },
   })
@@ -340,25 +340,20 @@ it('records a reseller refund inside the order and closes its stale status form'
     />
   )
   await userEvent.click(
-    await screen.findByRole('button', { name: 'Record completed refund' })
+    await screen.findByRole('button', { name: 'Mark as refunded' })
   )
-  expect(
-    screen.getByText('Confirm actual customer refund: ¥258.44')
-  ).toBeVisible()
+  expect(screen.queryByLabelText('Refund transaction reference')).toBeNull()
   await userEvent.type(
-    screen.getByLabelText('Refund transaction reference'),
-    'refund-9'
+    screen.getByLabelText('Refund reason'),
+    'Customer request'
   )
-  await userEvent.type(screen.getByLabelText('Reason'), 'Customer request')
   await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
   expect(onSaved).toHaveBeenCalledOnce()
   expect(post).toHaveBeenCalledWith(
     '/api/guardian/admin/reseller-orders/9/refund',
     {
-      action: 'complete',
-      returned_fee_cents: 0,
-      reference: 'refund-9',
+      action: 'mark',
       reason: 'Customer request',
     },
     undefined

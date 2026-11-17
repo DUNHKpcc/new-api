@@ -285,7 +285,7 @@ export function ResellerRecords({
               cell: (o) => {
                 if (!o.paid_at) return '—'
                 return money(
-                  o.refund_state === 'completed'
+                  o.status === 'refunded'
                     ? 0
                     : o.amount_cents -
                         o.supply_cents -
@@ -299,10 +299,18 @@ export function ResellerRecords({
             {
               id: 'status',
               header: t('Status'),
-              cell: (o) =>
-                o.refund_state === 'processing'
-                  ? t('Refund processing')
-                  : labels.status[o.status],
+              cell: (o) => (
+                <div>
+                  {o.refund_state === 'processing'
+                    ? t('Refund processing')
+                    : labels.status[o.status]}
+                  {o.refund_reason && (
+                    <p className='text-muted-foreground max-w-64 text-xs wrap-break-word whitespace-normal'>
+                      {t('Refund reason')}: {o.refund_reason}
+                    </p>
+                  )}
+                </div>
+              ),
             },
           ]}
         />

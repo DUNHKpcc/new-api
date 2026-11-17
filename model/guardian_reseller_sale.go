@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +33,7 @@ type GuardianResellerOrderView struct {
 	IPOptionPriceCents int64 `json:"ip_option_price_cents"`
 	SettlementFeeCents int64 `json:"settlement_fee_cents" gorm:"-"`
 	GuardianResellerSale
+	RefundReason  string `json:"refund_reason,omitempty" gorm:"-"`
 	TradeNo       string `json:"trade_no"`
 	ServiceTitle  string `json:"service_title"`
 	BillingPeriod string `json:"billing_period"`
@@ -68,18 +70,61 @@ func ListGuardianResellerOrders(resellerID, page, size int) ([]GuardianResellerO
 		return nil, 0, err
 	}
 	items := []GuardianResellerOrderView{}
-	err := query.Order("orders.id DESC").Limit(size).Offset((page - 1) * size).Scan(&items).Error
+	if err := query.Order("orders.id DESC").Limit(size).Offset((page - 1) * size).Scan(&items).Error; err != nil {
+		return nil, 0, err
+	}
 	for i := range items {
 		items[i].SettlementFeeCents = items[i].settlementFee()
 	}
-	return items, total, err
+	return items, total, loadGuardianRefundReasons(items)
 }
 
 func GetGuardianResellerOrder(orderID int) (*GuardianResellerOrderView, error) {
-	var order GuardianResellerOrderView
-	err := guardianResellerOrders(DB).Where("sale.order_id = ?", orderID).Take(&order).Error
+	orders := make([]GuardianResellerOrderView, 1)
+	order := &orders[0]
+	if err := guardianResellerOrders(DB).Where("sale.order_id = ?", orderID).Take(order).Error; err != nil {
+		return nil, err
+	}
 	order.SettlementFeeCents = order.settlementFee()
-	return &order, err
+	return order, loadGuardianRefundReasons(orders)
+}
+
+func loadGuardianRefundReasons(orders []GuardianResellerOrderView) error {
+	refunded := make(map[int]*GuardianResellerOrderView)
+	resellerIDs := make([]int, 0, len(orders))
+	for i := range orders {
+		order := &orders[i]
+		if order.Status == "refunded" {
+			refunded[order.OrderID] = order
+			resellerIDs = append(resellerIDs, order.ResellerID)
+		}
+	}
+	if len(refunded) == 0 {
+		return nil
+	}
+	var operations []GuardianResellerOperation
+	if err := DB.Select("reseller_id", "detail").Where("reseller_id IN ? AND action IN ?", resellerIDs, []string{"refund_mark", "refund_complete"}).Order("id DESC").Find(&operations).Error; err != nil {
+		return err
+	}
+	for _, operation := range operations {
+		var detail struct {
+			OrderID int `json:"order_id"`
+			Request struct {
+				Reason string `json:"reason"`
+			} `json:"request"`
+		}
+		if err := common.UnmarshalJsonStr(operation.Detail, &detail); err != nil {
+			return err
+		}
+		if order := refunded[detail.OrderID]; order != nil && order.ResellerID == operation.ResellerID {
+			order.RefundReason = detail.Request.Reason
+			delete(refunded, detail.OrderID)
+			if len(refunded) == 0 {
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func guardianResaleSnapshot(tx *gorm.DB, userID int, req GuardianOrderRequest, product GuardianService, ipPrice int64) (*GuardianResellerSale, int64, int64, error) {
@@ -235,17 +280,10 @@ func guardianResellerBalance(tx *gorm.DB, resellerID int, now int64) (GuardianRe
 	return balance, nil
 }
 
-type GuardianResellerRefundRequest struct {
-	Action           string `json:"action"`
-	ReturnedFeeCents int64  `json:"returned_fee_cents"`
-	Reference        string `json:"reference"`
-	Reason           string `json:"reason"`
-}
-
-func UpdateGuardianResellerRefund(orderID, actorID int, req GuardianResellerRefundRequest) error {
-	req.Reference, req.Reason = strings.TrimSpace(req.Reference), strings.TrimSpace(req.Reason)
-	if (req.Action != "start" && req.Action != "complete" && req.Action != "cancel") || req.ReturnedFeeCents < 0 || req.ReturnedFeeCents > 20000000 || req.Reason == "" || utf8.RuneCountInString(req.Reason) > 500 || utf8.RuneCountInString(req.Reference) > 128 || (req.Action == "complete" && req.Reference == "") {
-		return errors.New("退款操作、原因或凭证无效")
+func MarkGuardianResellerOrderRefunded(orderID, actorID int, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" || utf8.RuneCountInString(reason) > 500 {
+		return errors.New("请填写 1 至 500 字的退款原因")
 	}
 	var owner GuardianResellerSale
 	if err := DB.First(&owner, orderID).Error; err != nil {
@@ -264,14 +302,11 @@ func UpdateGuardianResellerRefund(orderID, actorID int, req GuardianResellerRefu
 		if err := lockForUpdate(tx).First(&sale, orderID).Error; err != nil {
 			return err
 		}
-		if order.PaidAt == 0 || sale.FeeConfirmedAt == 0 || req.ReturnedFeeCents > sale.ActualFeeCents {
-			return errors.New("请先核对已付款订单的实际手续费")
+		if order.PaidAt == 0 {
+			return errors.New("仅已付款订单可标记退款")
 		}
-		if sale.RefundState == "completed" {
-			if req.Action == "complete" && req.Reference == sale.RefundReference && req.ReturnedFeeCents == sale.ReturnedFeeCents {
-				return nil
-			}
-			return errors.New("该订单退款已完成")
+		if order.Status == "refunded" || sale.RefundState == "completed" {
+			return nil
 		}
 		var open int64
 		if err := tx.Model(&GuardianResellerWithdrawal{}).Where("reseller_id = ? AND status IN ?", sale.ResellerID, []string{"pending", "processing"}).Count(&open).Error; err != nil {
@@ -280,35 +315,21 @@ func UpdateGuardianResellerRefund(orderID, actorID int, req GuardianResellerRefu
 		if open > 0 {
 			return errors.New("请先处理该代理未完成的提现申请，再操作退款")
 		}
-		switch req.Action {
-		case "start":
-			if sale.RefundState != "" {
-				return errors.New("退款已在处理中")
-			}
-			sale.RefundState = "processing"
-		case "cancel":
-			if sale.RefundState != "processing" {
-				return errors.New("没有处理中的退款")
-			}
-			sale.RefundState = ""
-		case "complete":
-			if sale.RefundState != "processing" {
-				return errors.New("请先发起退款并核对实际退款结果")
-			}
-			sale.RefundState, sale.ReturnedFeeCents, sale.RefundReference = "completed", req.ReturnedFeeCents, req.Reference
-			sale.RefundCents = order.AmountCents - sale.ActualFeeCents + req.ReturnedFeeCents
-			before := order
-			order.Status, order.RefundedAt, order.UpdatedAt = "refunded", time.Now().Unix(), time.Now().Unix()
-			if err := tx.Model(&order).Select("status", "refunded_at", "updated_at").Updates(&order).Error; err != nil {
-				return err
-			}
-			if err := recordGuardianOrderEvent(tx, before, order, actorID, "admin", "reseller_refund"); err != nil {
-				return err
-			}
-		}
-		if err := tx.Model(&sale).Select("refund_state", "refund_cents", "returned_fee_cents", "refund_reference").Updates(&sale).Error; err != nil {
+		before := order
+		now := time.Now().Unix()
+		order.Status, order.RefundedAt, order.UpdatedAt = "refunded", now, now
+		if err := tx.Model(&order).Select("status", "refunded_at", "updated_at").Updates(&order).Error; err != nil {
 			return err
 		}
-		return recordGuardianResellerOperation(tx, actorID, sale.ResellerID, "refund_"+req.Action, map[string]any{"order_id": orderID, "request": req, "refund_cents": sale.RefundCents})
+		if err := recordGuardianOrderEvent(tx, before, order, actorID, "admin", "reseller_refund"); err != nil {
+			return err
+		}
+		if err := tx.Model(&sale).Update("refund_state", "marked").Error; err != nil {
+			return err
+		}
+		return recordGuardianResellerOperation(tx, actorID, sale.ResellerID, "refund_mark", map[string]any{
+			"order_id": orderID,
+			"request":  map[string]string{"reason": reason},
+		})
 	})
 }

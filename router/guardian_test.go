@@ -1739,8 +1739,8 @@ func TestGuardianLifecycle(t *testing.T) {
 				_, err = model.CreateGuardianWithdrawal(resellerID, overdraw)
 				require.Error(t, err)
 				require.Error(t, model.UpdateGuardianWithdrawal(wID, buyerID, false, model.GuardianWithdrawalUpdate{Status: "cancelled", Note: "wrong owner"}))
-				refund := model.GuardianResellerRefundRequest{Action: "start", Reason: "Customer refund"}
-				require.Error(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund), "reserve must be resolved first")
+				const refundReason = "Customer refund"
+				require.ErrorContains(t, model.MarkGuardianResellerOrderRefunded(order.ID, adminID, refundReason), "未完成的提现")
 				require.NoError(t, model.UpdateGuardianWithdrawal(wID, adminID, true, model.GuardianWithdrawalUpdate{Status: "processing", FeeCents: 50, Note: "Verified recipient"}))
 				require.Error(t, model.UpdateGuardianWithdrawal(wID, resellerID, false, model.GuardianWithdrawalUpdate{Status: "cancelled", Note: "too late"}))
 				require.NoError(t, model.UpdateGuardianWithdrawal(wID, adminID, true, model.GuardianWithdrawalUpdate{Status: "paid", Reference: "transfer-" + suffix, Note: "Sent 49.50"}))
@@ -1751,22 +1751,21 @@ func TestGuardianLifecycle(t *testing.T) {
 				assert.EqualValues(t, 5000, balance.PaidCents)
 				_, err = model.UpdateGuardianOrder(order.ID, adminID, "refunded", "bypass")
 				require.Error(t, err)
-				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
+				// Orders written by the old refund flow must still affect settlement and show their history.
+				saleRecord := db.Model(&model.GuardianResellerSale{}).Where("order_id = ?", order.ID)
+				require.NoError(t, saleRecord.Update("refund_state", "processing").Error)
 				held, err := model.GetGuardianResellerBalance(resellerID)
 				require.NoError(t, err)
 				assert.EqualValues(t, 5844, held.HeldCents)
 				assert.Zero(t, held.AvailableCents)
 				assert.Zero(t, held.DebtCents)
-				cancelledRefund := refund
-				cancelledRefund.Action = "cancel"
-				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, cancelledRefund))
-				restored, err := model.GetGuardianResellerBalance(resellerID)
+				refundReference := "refund-" + suffix
+				refundedAt := time.Now().Unix()
+				require.NoError(t, saleRecord.Updates(map[string]any{"refund_state": "completed", "refund_cents": 25844, "refund_reference": refundReference}).Error)
+				require.NoError(t, db.Model(order).Updates(map[string]any{"status": "refunded", "refunded_at": refundedAt}).Error)
+				detail, err := common.Marshal(map[string]any{"order_id": order.ID, "request": map[string]string{"reason": refundReason}})
 				require.NoError(t, err)
-				assert.EqualValues(t, 844, restored.AvailableCents)
-				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
-				refund.Action, refund.Reference = "complete", "refund-"+suffix
-				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
-				require.NoError(t, model.UpdateGuardianResellerRefund(order.ID, adminID, refund))
+				require.NoError(t, db.Create(&model.GuardianResellerOperation{ResellerID: resellerID, ActorID: adminID, Action: "refund_complete", Detail: string(detail), CreatedAt: refundedAt}).Error)
 				var sale model.GuardianResellerSale
 				require.NoError(t, db.First(&sale, order.ID).Error)
 				assert.EqualValues(t, 25844, sale.RefundCents)
@@ -1774,6 +1773,51 @@ func TestGuardianLifecycle(t *testing.T) {
 				require.NoError(t, err)
 				assert.Zero(t, balance.AvailableCents)
 				assert.EqualValues(t, 5000, balance.DebtCents)
+				legacyDetail := decode(request("GET", financePath, tokens[1], ""))["data"].(map[string]any)
+				assert.Equal(t, refundReason, legacyDetail["refund_reason"])
+				assert.Equal(t, refundReference, legacyDetail["refund_reference"])
+				assert.NotEmpty(t, legacyDetail["fee_reference"])
+
+				t.Run("mark refund once without a channel record", func(t *testing.T) {
+					currentPrice := int64(27000)
+					markReq := req
+					markReq.ExpectedAmountCents = &currentPrice
+					marked, err := model.CreateGuardianOrder(buyerID, markReq)
+					require.NoError(t, err)
+					path := fmt.Sprintf("/api/guardian/admin/reseller-orders/%d/refund", marked.ID)
+					body := `{"action":"mark","reason":"Customer changed plans"}`
+					assert.Equal(t, false, decode(request("POST", path, tokens[1], body))["success"])
+					require.NoError(t, model.CompleteGuardianOrder(marked.TradeNo, "fixture", "270.00", "alipay"))
+					require.NoError(t, db.First(marked, marked.ID).Error)
+					paidAt := marked.PaidAt
+					for _, action := range []string{"start", "cancel", "complete"} {
+						oldBody := fmt.Sprintf(`{"action":%q,"reason":"Legacy request","reference":"legacy-reference"}`, action)
+						assert.Equal(t, false, decode(request("POST", path, tokens[1], oldBody))["success"], action)
+					}
+					require.Equal(t, true, decode(request("POST", path, tokens[1], body))["success"])
+					require.Equal(t, true, decode(request("POST", path, tokens[1], `{"action":"mark","reason":"Retry"}`))["success"])
+					require.NoError(t, db.First(marked, marked.ID).Error)
+					assert.Equal(t, "refunded", marked.Status)
+					assert.Positive(t, marked.RefundedAt)
+					assert.Equal(t, paidAt, marked.PaidAt)
+					assert.Equal(t, currentPrice, marked.AmountCents)
+					var audit []model.GuardianResellerOperation
+					require.NoError(t, db.Where("reseller_id = ? AND action = ?", resellerID, "refund_mark").Find(&audit).Error)
+					require.Len(t, audit, 1)
+					assert.Equal(t, adminID, audit[0].ActorID)
+					receipt, err := model.GetGuardianReceipt(marked.ID, buyerID, false)
+					require.NoError(t, err)
+					assert.Equal(t, "refunded", receipt.RefundState)
+					assert.Nil(t, receipt.RefundCents)
+					response := request("GET", "/api/guardian/reseller/orders", tokens[2], "")
+					items := decode(response)["data"].(map[string]any)["items"].([]any)
+					first := items[0].(map[string]any)
+					assert.EqualValues(t, marked.ID, first["order_id"])
+					assert.Equal(t, "refunded", first["status"])
+					assert.Equal(t, "Customer changed plans", first["refund_reason"])
+					assert.NotContains(t, response.Body.String(), refundReference)
+					assert.NotContains(t, response.Body.String(), "fee_reference")
+				})
 				_, err = model.SetGuardianResellerAccess(resellerID, adminID, model.GuardianResellerAccessRequest{Status: "suspended", Reason: "Pause"})
 				require.NoError(t, err)
 				require.Equal(t, true, decode(request("GET", "/api/guardian/reseller/orders", tokens[2], ""))["success"])

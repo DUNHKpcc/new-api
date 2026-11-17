@@ -38,7 +38,30 @@ test('shows complete large revenue amounts and allows wrapping instead of ellips
   client.setQueryDefaults(['revenue', 'platform-summary'], {
     initialData: {
       data: {
-        totals: [{ currency: 'CNY', amount_minor: '123456789', count: 12345 }],
+        totals: [
+          { currency: 'CNY', amount_minor: '123456789', count: 12345 },
+          { currency: 'USD', amount_minor: '54321', count: 1 },
+        ],
+        by_source: [
+          {
+            source: 'guardian',
+            currency: 'CNY',
+            amount_minor: '100000000',
+            count: 12300,
+          },
+          {
+            source: 'recharge_subscription',
+            currency: 'CNY',
+            amount_minor: '23456789',
+            count: 45,
+          },
+          {
+            source: 'recharge_subscription',
+            currency: 'USD',
+            amount_minor: '54321',
+            count: 1,
+          },
+        ],
         by_payment_method: [],
         timeline: [],
       },
@@ -58,6 +81,12 @@ test('shows complete large revenue amounts and allows wrapping instead of ellips
     </QueryClientProvider>
   )
   client.clear()
+  assert.match(markup, /Guardian revenue<\/p><p[^>]*>CNY 1,000,000\.00<\/p>/)
+  assert.match(
+    markup,
+    /Recharge and subscription revenue<\/p><p[^>]*>CNY 234,567\.89<\/p>/
+  )
+  assert.doesNotMatch(markup, /USD 543\.21/)
   const values = [
     ...markup.matchAll(/<p class="([^"]*)">CNY 1,234,567\.89<\/p>/g),
   ]

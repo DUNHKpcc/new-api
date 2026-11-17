@@ -61,6 +61,7 @@ export function GuardianOrderHistory(props: { orderId: number }) {
     paid: t('Paid'),
     cancelled: t('Cancelled'),
     admin_updated: t('Order updated'),
+    reseller_refund: t('Refunded'),
     contact_updated: t('Edit contact and note'),
   }
   const fields = {

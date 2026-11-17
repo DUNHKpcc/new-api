@@ -29,7 +29,7 @@ import { formatCny } from '../../lib/price'
 import {
   resellerRead,
   resellerWrite,
-  type ResellerOrder,
+  type AdminResellerOrder,
 } from '../../reseller-api'
 import {
   ResellerActionDialog,
@@ -50,7 +50,7 @@ export function GuardianOrderResellerFinance({
   const query = useQuery({
     queryKey: ['guardian', 'order-reseller-finance', orderId],
     queryFn: () =>
-      resellerRead<ResellerOrder>(`/admin/orders/${orderId}/reseller`),
+      resellerRead<AdminResellerOrder>(`/admin/orders/${orderId}/reseller`),
   })
   if (query.isPending) return <LoadingState />
   if (query.isError) return <ErrorState onRetry={() => void query.refetch()} />
@@ -69,7 +69,7 @@ export function GuardianOrderResellerFinance({
       value: !o.paid_at
         ? '—'
         : money(
-            o.refund_state === 'completed'
+            o.status === 'refunded'
               ? 0
               : o.amount_cents -
                   o.supply_cents -
@@ -79,6 +79,20 @@ export function GuardianOrderResellerFinance({
     ...(o.refund_state === 'completed'
       ? [{ label: t('Refund amount'), value: money(o.refund_cents) }]
       : []),
+    ...(o.refund_reason
+      ? [{ label: t('Refund reason'), value: o.refund_reason }]
+      : []),
+    ...(o.fee_reference
+      ? [{ label: t('Channel statement reference'), value: o.fee_reference }]
+      : []),
+    ...(o.refund_reference
+      ? [
+          {
+            label: t('Refund transaction reference'),
+            value: o.refund_reference,
+          },
+        ]
+      : []),
   ]
   return (
     <section className='space-y-3 rounded-lg border p-3'>
@@ -87,7 +101,7 @@ export function GuardianOrderResellerFinance({
         {details.map(({ label, value }) => (
           <div key={label}>
             <dt className='text-muted-foreground'>{label}</dt>
-            <dd>{value}</dd>
+            <dd className='wrap-break-word'>{value}</dd>
           </div>
         ))}
       </dl>
@@ -95,7 +109,7 @@ export function GuardianOrderResellerFinance({
         <p className='text-destructive text-sm'>{t('Refund processing')}</p>
       )}
       <div className='flex gap-2'>
-        {!!o.paid_at && !o.fee_confirmed_at && (
+        {!!o.paid_at && o.status !== 'refunded' && !o.fee_confirmed_at && (
           <Button
             variant='outline'
             onClick={() =>
@@ -125,85 +139,29 @@ export function GuardianOrderResellerFinance({
             {t('Reconcile')}
           </Button>
         )}
-        {!!o.fee_confirmed_at &&
-          o.refund_state !== 'completed' &&
-          (o.refund_state === 'processing'
-            ? ['complete', 'cancel']
-            : ['start']
-          ).map((step) => (
-            <Button
-              variant='outline'
-              key={step}
-              onClick={() =>
-                setAction({
-                  title: (
-                    {
-                      start: 'Start refund',
-                      cancel: 'Cancel refund',
-                      complete: 'Record completed refund',
-                    } as Record<string, string>
-                  )[step],
-                  description: t(
-                    'Refund equals payment minus actual channel fee plus any fee returned by the channel. Reseller earnings become zero. Record the external refund only after it succeeds.'
-                  ),
-                  fields: [
-                    ...(step === 'complete'
-                      ? [
-                          {
-                            name: 'returned_fee_cents',
-                            label: 'Fee returned by channel (CNY)',
-                            kind: 'money' as const,
-                            value: '0',
-                          },
-                          {
-                            name: 'reference',
-                            label: 'Refund transaction reference',
-                          },
-                        ]
-                      : []),
-                    { name: 'reason', label: 'Reason' },
-                  ],
-                  preview:
-                    step === 'complete'
-                      ? (v) =>
-                          t('Confirm actual customer refund: {{amount}}', {
-                            amount: money(
-                              o.amount_cents -
-                                o.actual_fee_cents +
-                                Math.round(
-                                  Number(v.returned_fee_cents || 0) * 100
-                                )
-                            ),
-                          })
-                      : undefined,
-                  submit: async (v) => {
-                    await resellerWrite(
-                      `${path}/${o.order_id}/refund`,
-                      {
-                        ...v,
-                        action: step,
-                        returned_fee_cents: Math.round(
-                          Number(v.returned_fee_cents ?? 0) * 100
-                        ),
-                      },
-                      'post'
-                    )
-                    if (step === 'complete') onRefundCompleted()
-                  },
-                })
-              }
-            >
-              {
-                (
-                  {
-                    start: t('Start refund'),
-                    cancel: t('Cancel refund'),
-                    complete: t('Record completed refund'),
-                  } as Record<string, string>
-                )[step]
-              }
-            </Button>
-          ))}
+        {!!o.paid_at && o.status !== 'refunded' && (
+          <Button
+            variant='outline'
+            onClick={() =>
+              setAction({
+                title: 'Mark as refunded',
+                description:
+                  'The reason is visible to the reseller. This removes their earnings for the order and does not issue a payment refund.',
+                fields: [{ name: 'reason', label: 'Refund reason' }],
+                submit: async ({ reason }) => {
+                  await resellerWrite(
+                    `${path}/${o.order_id}/refund`,
+                    { action: 'mark', reason },
+                    'post'
+                  )
+                  onRefundCompleted()
+                },
+              })
+            }
+          >
+            {t('Mark as refunded')}
+          </Button>
+        )}
       </div>
       {action && (
         <ResellerActionDialog action={action} onClose={() => setAction(null)} />

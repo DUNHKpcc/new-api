@@ -23,7 +23,13 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState, type ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -319,6 +325,38 @@ it('does not present unpaid orders as earned income', async () => {
   renderPanel(<ResellerRecords />)
   expect(await screen.findByRole('cell', { name: '—' })).toBeVisible()
   expect(screen.queryByText('¥58.44')).not.toBeInTheDocument()
+})
+
+it('shows the refund reason and zero earnings on the reseller order', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        items: [
+          {
+            order_id: 2,
+            trade_no: 'REFUNDED-2',
+            service_title: 'Mac mini',
+            amount_cents: 26000,
+            supply_cents: 20000,
+            estimated_fee_cents: 156,
+            paid_at: 1761500100,
+            status: 'refunded',
+            refund_state: 'marked',
+            refund_reason: 'Customer changed plans',
+          },
+        ],
+        total: 1,
+      },
+    },
+  })
+  renderPanel(<ResellerRecords />)
+  const row = await screen.findByRole('row', { name: /REFUNDED-2/ })
+  expect(within(row).getByText('Refunded')).toBeVisible()
+  expect(
+    within(row).getByText('Refund reason: Customer changed plans')
+  ).toBeVisible()
+  expect(within(row).getByRole('cell', { name: '¥0' })).toBeVisible()
 })
 
 it('selects a named reseller before editing their product supply prices', async () => {

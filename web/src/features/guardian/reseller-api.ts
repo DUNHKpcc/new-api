@@ -128,7 +128,12 @@ export interface ResellerOrder {
   status: GuardianOrderStatus
   refund_state: string
   refund_cents: number
+  refund_reason?: string
   delivered_at: number
+}
+export interface AdminResellerOrder extends ResellerOrder {
+  fee_reference?: string
+  refund_reference?: string
 }
 export interface Withdrawal {
   id: number

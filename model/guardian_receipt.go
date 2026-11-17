@@ -70,7 +70,7 @@ func GetGuardianReceipt(orderID, userID int, admin bool) (*GuardianReceiptView, 
 		}
 		var sale GuardianResellerSale
 		err = tx.First(&sale, "order_id = ?", order.ID).Error
-		if err == nil {
+		if err == nil && sale.RefundState != "marked" {
 			view.RefundState = sale.RefundState
 			if sale.RefundState == "completed" {
 				view.RefundCents = &sale.RefundCents

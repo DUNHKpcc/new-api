@@ -22,8 +22,10 @@ import {
   CircleDollarSign,
   Landmark,
   ReceiptText,
+  ShieldCheck,
   TrendingDown,
   TrendingUp,
+  Wallet,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -43,6 +45,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSavedChartPreferences } from '@/features/dashboard/lib'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatMinorCurrency, formatNumber, formatPercent } from '@/lib/format'
 import { getRollingDateRange } from '@/lib/time'
 
@@ -101,7 +104,8 @@ function MetricCard(props: MetricCardProps) {
 }
 
 export function RevenueOverview() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const queryClient = useQueryClient()
   const chartPreferences = useMemo(() => getSavedChartPreferences(), [])
   const [filters, setFilters] = useState<TimeRangeFilterValue>(() => {
@@ -167,6 +171,7 @@ export function RevenueOverview() {
     platformCount: 0,
     externalCount: 0,
   }
+  const platformSources = platform?.by_source
   const costRecords = useMemo(
     () => (costItems ?? []).filter((item) => item.currency === currency),
     [costItems, currency]
@@ -332,6 +337,44 @@ export function RevenueOverview() {
           loading={loading}
         />
       </div>
+
+      {(platformQuery.isLoading || platformSources) && (
+        <div className='grid gap-3 sm:grid-cols-2'>
+          {(
+            [
+              {
+                source: 'guardian',
+                label: t('Guardian revenue'),
+                icon: ShieldCheck,
+              },
+              {
+                source: 'recharge_subscription',
+                label: t('Recharge and subscription revenue'),
+                icon: Wallet,
+              },
+            ] as const
+          ).map(({ source, label, icon }) => {
+            const total = platformSources?.find(
+              (item) => item.source === source && item.currency === currency
+            )
+            return (
+              <MetricCard
+                key={source}
+                label={label}
+                value={formatMinorCurrency(
+                  total?.amount_minor ?? '0',
+                  currency
+                )}
+                description={t('{{count}} successful orders', {
+                  count: formatNumber(total?.count ?? 0, locale),
+                })}
+                icon={icon}
+                loading={platformQuery.isLoading}
+              />
+            )
+          })}
+        </div>
+      )}
 
       <RevenueVisualization
         currency={currency}

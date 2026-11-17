@@ -105,6 +105,10 @@ export interface PlatformRevenueTotal extends RevenueTotal {
   verified_count: number
 }
 
+export interface PlatformRevenueSourceTotal extends PlatformRevenueTotal {
+  source: 'guardian' | 'recharge_subscription'
+}
+
 export interface PlatformRevenueMethodTotal extends RevenueTotal {
   payment_method: string
 }
@@ -116,6 +120,7 @@ export interface PlatformRevenueTimelinePoint extends RevenueTotal {
 
 export interface PlatformRevenueSummary {
   totals: PlatformRevenueTotal[] | null
+  by_source?: PlatformRevenueSourceTotal[]
   by_payment_method: PlatformRevenueMethodTotal[] | null
   timeline: PlatformRevenueTimelinePoint[] | null
   default_currency: string
